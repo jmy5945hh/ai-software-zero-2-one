@@ -1,0 +1,163 @@
+.operation-data-page {
+  width: 100%;
+}
+
+/* 页面标题 */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.page-header h1 {
+  font-size: 24px;
+  font-weight: bold;
+  color: #333333;
+  margin: 0;
+}
+
+/* 维度切换区 */
+.dimension-switch-card {
+  margin-bottom: 24px;
+  background-color: #fafafa;
+}
+
+.dimension-switch {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.time-dimension, .date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dimension-switch .label {
+  font-size: 14px;
+  color: #666666;
+  white-space: nowrap;
+}
+
+/* 关键指标概览区 */
+.key-metrics-row {
+  margin-bottom: 24px;
+}
+
+.metric-card {
+  height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* 图表区 */
+.chart-card {
+  margin-bottom: 24px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* 统计数字样式 */
+.ant-statistic-title {
+  font-size: 16px;
+  color: #666666;
+}
+
+.ant-statistic-content {
+  font-size: 28px;
+  font-weight: bold;
+  color: #333333;
+}
+
+.ant-statistic-content-prefix {
+  font-size: 16px;
+}
+
+.ant-statistic-extra {
+  font-size: 12px;
+  color: #666666;
+}
+
+/* 自定义统计组件样式 */
+.custom-statistic {
+  text-align: center;
+  padding: 20px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.statistic-title {
+  font-size: 16px;
+  color: #666666;
+  margin-bottom: 8px;
+}
+
+.statistic-content {
+  font-size: 28px;
+  font-weight: bold;
+  color: #333333;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+}
+
+.statistic-extra {
+  font-size: 12px;
+  color: #666666;
+  margin-top: 4px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .dimension-switch {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .time-dimension, .date-range {
+    width: 100%;
+  }
+  
+  .time-dimension .ant-radio-group {
+    flex: 1;
+  }
+  
+  .date-range .ant-picker {
+    flex: 1;
+    width: 100%;
+  }
+  
+  .key-metrics-row .ant-col {
+    margin-bottom: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header h1 {
+    font-size: 20px;
+  }
+  
+  .ant-statistic-content {
+    font-size: 24px;
+  }
+}

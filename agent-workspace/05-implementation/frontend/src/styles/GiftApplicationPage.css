@@ -1,0 +1,133 @@
+.gift-application-page {
+  width: 100%;
+}
+
+.application-card {
+  margin-bottom: 16px;
+}
+
+/* 操作按钮区 */
+.action-buttons {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+/* 筛选搜索区 */
+.filter-card {
+  margin-bottom: 16px;
+  background-color: #fafafa;
+}
+
+.filter-card .ant-form-inline .ant-form-item {
+  margin-right: 16px;
+  margin-bottom: 16px;
+}
+
+/* 数据列表区 */
+.table-container {
+  margin-top: 16px;
+}
+
+.record-count {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #666666;
+}
+
+/* 表格样式 */
+.ant-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ant-table-thead > tr > th {
+  background-color: #fafafa;
+  font-weight: bold;
+}
+
+/* 状态标签样式 */
+.status-tag {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.status-pending {
+  background-color: #fffbe6;
+  color: #faad14;
+  border: 1px solid #ffe58f;
+}
+
+.status-approved {
+  background-color: #f6ffed;
+  color: #52c41a;
+  border: 1px solid #b7eb8f;
+}
+
+.status-rejected {
+  background-color: #fff2f0;
+  color: #ff4d4f;
+  border: 1px solid #ffccc7;
+}
+
+/* 查看详情按钮样式 */
+.view-button {
+  color: #1E90FF;
+}
+
+.view-button:hover {
+  color: #40a9ff;
+  text-decoration: underline;
+}
+
+/* 分页控件 */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 16px;
+  gap: 16px;
+}
+
+.page-info {
+  font-size: 14px;
+  color: #666666;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .filter-card .ant-form-inline {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .filter-card .ant-form-inline .ant-form-item {
+    margin-right: 0;
+    width: 100%;
+  }
+  
+  .filter-card .ant-form-inline .ant-form-item-control-wrapper {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .action-buttons {
+    justify-content: center;
+  }
+  
+  .pagination {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .page-info {
+    order: -1;
+    width: 100%;
+    text-align: center;
+  }
+}

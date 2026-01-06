@@ -1,0 +1,108 @@
+.main-layout {
+  min-height: 100vh;
+}
+
+.main-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 0 24px;
+  z-index: 100;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.menu-toggle {
+  margin-right: 16px;
+  font-size: 18px;
+}
+
+.system-logo {
+  font-size: 18px;
+  font-weight: bold;
+  color: #1E90FF;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.ai-toggle {
+  margin-right: 16px;
+  font-size: 18px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.user-info:hover {
+  background-color: #f5f5f5;
+}
+
+.user-name {
+  margin-left: 8px;
+  font-size: 14px;
+  color: #333333;
+}
+
+.main-sider {
+  background-color: #ffffff;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+}
+
+.main-content-wrapper {
+  background-color: #f0f2f5;
+}
+
+.main-content {
+  margin: 24px;
+  padding: 24px;
+  background-color: #ffffff;
+  min-height: 280px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .system-logo {
+    font-size: 16px;
+  }
+  
+  .user-name {
+    display: none;
+  }
+  
+  .main-content {
+    margin: 16px;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-header {
+    padding: 0 16px;
+  }
+  
+  .system-logo {
+    font-size: 14px;
+  }
+  
+  .menu-toggle,
+  .ai-toggle {
+    margin-right: 8px;
+    font-size: 16px;
+  }
+}

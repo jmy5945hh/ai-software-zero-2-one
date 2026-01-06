@@ -1,0 +1,1085 @@
+openapi: 3.0.0
+info:
+  title: 分行客户管理系统API
+  description: 分行客户管理系统的RESTful API定义
+  version: 1.0.0
+  contact:
+    name: 技术团队
+    email: tech@example.com
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: 本地开发环境
+  - url: http://dev.example.com/api/v1
+    description: 开发环境
+  - url: http://prod.example.com/api/v1
+    description: 生产环境
+
+paths:
+  # 认证授权服务API
+  /auth/login:
+    post:
+      summary: 用户登录
+      description: 用户使用账号密码登录系统
+      tags:
+        - 认证授权
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: 登录失败，用户名或密码错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      summary: 用户登出
+      description: 用户退出登录
+      tags:
+        - 认证授权
+      responses:
+        '200':
+          description: 登出成功
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      summary: 刷新会话
+      description: 刷新用户会话
+      tags:
+        - 认证授权
+      responses:
+        '200':
+          description: 刷新成功
+        '401':
+          description: 会话已过期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # 客户拜访服务API
+  /visits:
+    get:
+      summary: 获取拜访记录列表
+      description: 根据条件查询客户拜访记录
+      tags:
+        - 客户拜访管理
+      parameters:
+        - name: customerName
+          in: query
+          description: 客户名称
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          description: 开始日期
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          description: 每页大小
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitListResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: 创建拜访记录
+      description: 创建新的客户拜访记录
+      tags:
+        - 客户拜访管理
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /visits/{id}:
+    get:
+      summary: 获取拜访记录详情
+      description: 根据ID获取客户拜访记录详情
+      tags:
+        - 客户拜访管理
+      parameters:
+        - name: id
+          in: path
+          description: 拜访记录ID
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitResponse'
+        '404':
+          description: 拜访记录不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: 更新拜访记录
+      description: 更新客户拜访记录
+      tags:
+        - 客户拜访管理
+      parameters:
+        - name: id
+          in: path
+          description: 拜访记录ID
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 拜访记录不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: 删除拜访记录
+      description: 删除客户拜访记录
+      tags:
+        - 客户拜访管理
+      parameters:
+        - name: id
+          in: path
+          description: 拜访记录ID
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: 删除成功
+        '404':
+          description: 拜访记录不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # 礼品管理服务API
+  /gifts/applications:
+    get:
+      summary: 获取礼品申请列表
+      description: 根据条件查询礼品申请
+      tags:
+        - 礼品管理
+      parameters:
+        - name: status
+          in: query
+          description: 申请状态
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+        - name: applicantName
+          in: query
+          description: 申请人姓名
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          description: 开始日期
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          description: 每页大小
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftApplicationListResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: 创建礼品申请
+      description: 创建新的礼品申请
+      tags:
+        - 礼品管理
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GiftApplicationRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftApplicationResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /gifts/applications/{id}:
+    get:
+      summary: 获取礼品申请详情
+      description: 根据ID获取礼品申请详情
+      tags:
+        - 礼品管理
+      parameters:
+        - name: id
+          in: path
+          description: 礼品申请ID
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftApplicationResponse'
+        '404':
+          description: 礼品申请不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: 更新礼品申请
+      description: 更新礼品申请信息
+      tags:
+        - 礼品管理
+      parameters:
+        - name: id
+          in: path
+          description: 礼品申请ID
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GiftApplicationRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftApplicationResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 礼品申请不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /gifts/applications/{id}/approve:
+    post:
+      summary: 审批礼品申请
+      description: 审批礼品申请，设置审批结果
+      tags:
+        - 礼品管理
+      parameters:
+        - name: id
+          in: path
+          description: 礼品申请ID
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GiftApprovalRequest'
+      responses:
+        '200':
+          description: 审批成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftApplicationResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: 礼品申请不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # 内容管理服务API
+  /content/banners:
+    get:
+      summary: 获取轮播图列表
+      description: 获取首页轮播图列表
+      tags:
+        - 内容管理
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BannerResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /content/news:
+    get:
+      summary: 获取新闻列表
+      description: 获取系统新闻列表
+      tags:
+        - 内容管理
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          description: 每页大小
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsListResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /content/news/{id}:
+    get:
+      summary: 获取新闻详情
+      description: 根据ID获取新闻详情
+      tags:
+        - 内容管理
+      parameters:
+        - name: id
+          in: path
+          description: 新闻ID
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsResponse'
+        '404':
+          description: 新闻不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # 数据统计服务API
+  /stats/visit:
+    get:
+      summary: 获取客户拜访统计数据
+      description: 获取客户拜访的统计数据，支持按时间维度查询
+      tags:
+        - 数据统计
+      parameters:
+        - name: timeDimension
+          in: query
+          description: 时间维度（day, week, month, quarter, year）
+          required: true
+          schema:
+            type: string
+            enum: [day, week, month, quarter, year]
+        - name: startDate
+          in: query
+          description: 开始日期
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: 结束日期
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitStatsResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /stats/gift:
+    get:
+      summary: 获取礼品申请统计数据
+      description: 获取礼品申请的统计数据，支持按时间维度查询
+      tags:
+        - 数据统计
+      parameters:
+        - name: timeDimension
+          in: query
+          description: 时间维度（day, week, month, quarter, year）
+          required: true
+          schema:
+            type: string
+            enum: [day, week, month, quarter, year]
+        - name: startDate
+          in: query
+          description: 开始日期
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: 结束日期
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftStatsResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # AI集成服务API
+  /ai/chat:
+    post:
+      summary: AI聊天问答
+      description: 与AI问答助理进行聊天，获取系统使用咨询
+      tags:
+        - AI问答
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIChatRequest'
+      responses:
+        '200':
+          description: 聊天成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIChatResponse'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器内部错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    # 认证授权相关
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: 用户名
+        password:
+          type: string
+          description: 密码
+          format: password
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: 会话令牌
+        userInfo:
+          $ref: '#/components/schemas/UserInfo'
+
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 用户ID
+        username:
+          type: string
+          description: 用户名
+        realName:
+          type: string
+          description: 真实姓名
+        role:
+          type: string
+          description: 用户角色
+        department:
+          type: string
+          description: 所属部门
+
+    # 客户拜访相关
+    VisitRequest:
+      type: object
+      required:
+        - customerName
+        - visitDate
+        - visitContent
+      properties:
+        customerName:
+          type: string
+          description: 客户名称
+        visitDate:
+          type: string
+          format: date-time
+          description: 拜访日期时间
+        visitContent:
+          type: string
+          description: 拜访内容
+        customerContact:
+          type: string
+          description: 客户联系方式
+        nextVisitPlan:
+          type: string
+          description: 下次拜访计划
+
+    VisitResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 拜访记录ID
+        customerName:
+          type: string
+          description: 客户名称
+        visitDate:
+          type: string
+          format: date-time
+          description: 拜访日期时间
+        visitContent:
+          type: string
+          description: 拜访内容
+        customerContact:
+          type: string
+          description: 客户联系方式
+        nextVisitPlan:
+          type: string
+          description: 下次拜访计划
+        createdBy:
+          type: string
+          description: 创建人
+        createdTime:
+          type: string
+          format: date-time
+          description: 创建时间
+        updatedBy:
+          type: string
+          description: 更新人
+        updatedTime:
+          type: string
+          format: date-time
+          description: 更新时间
+
+    VisitListResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: 总记录数
+        page:
+          type: integer
+          description: 当前页码
+        size:
+          type: integer
+          description: 每页大小
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/VisitResponse'
+
+    # 礼品管理相关
+    GiftApplicationRequest:
+      type: object
+      required:
+        - customerName
+        - giftName
+        - quantity
+        - reason
+      properties:
+        customerName:
+          type: string
+          description: 客户名称
+        giftName:
+          type: string
+          description: 礼品名称
+        quantity:
+          type: integer
+          description: 礼品数量
+        reason:
+          type: string
+          description: 申请理由
+
+    GiftApplicationResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 礼品申请ID
+        customerName:
+          type: string
+          description: 客户名称
+        giftName:
+          type: string
+          description: 礼品名称
+        quantity:
+          type: integer
+          description: 礼品数量
+        reason:
+          type: string
+          description: 申请理由
+        status:
+          type: string
+          description: 申请状态
+          enum: [pending, approved, rejected]
+        applicantName:
+          type: string
+          description: 申请人姓名
+        approveName:
+          type: string
+          description: 审批人姓名
+          nullable: true
+        approveComment:
+          type: string
+          description: 审批意见
+          nullable: true
+        approveTime:
+          type: string
+          format: date-time
+          description: 审批时间
+          nullable: true
+        createdTime:
+          type: string
+          format: date-time
+          description: 创建时间
+
+    GiftApplicationListResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: 总记录数
+        page:
+          type: integer
+          description: 当前页码
+        size:
+          type: integer
+          description: 每页大小
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GiftApplicationResponse'
+
+    GiftApprovalRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          description: 审批结果
+          enum: [approved, rejected]
+        comment:
+          type: string
+          description: 审批意见
+
+    # 内容管理相关
+    BannerResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 轮播图ID
+        title:
+          type: string
+          description: 轮播图标题
+        imageUrl:
+          type: string
+          description: 图片URL
+        linkUrl:
+          type: string
+          description: 链接URL
+        orderNum:
+          type: integer
+          description: 排序号
+        isActive:
+          type: boolean
+          description: 是否激活
+
+    NewsResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: 新闻ID
+        title:
+          type: string
+          description: 新闻标题
+        content:
+          type: string
+          description: 新闻内容
+        author:
+          type: string
+          description: 作者
+        publishTime:
+          type: string
+          format: date-time
+          description: 发布时间
+
+    NewsListResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: 总记录数
+        page:
+          type: integer
+          description: 当前页码
+        size:
+          type: integer
+          description: 每页大小
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NewsResponse'
+
+    # 数据统计相关
+    VisitStatsResponse:
+      type: object
+      properties:
+        timeDimension:
+          type: string
+          description: 时间维度
+        startDate:
+          type: string
+          format: date
+          description: 开始日期
+        endDate:
+          type: string
+          format: date
+          description: 结束日期
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              time:
+                type: string
+                description: 时间点
+              count:
+                type: integer
+                description: 拜访次数
+
+    GiftStatsResponse:
+      type: object
+      properties:
+        timeDimension:
+          type: string
+          description: 时间维度
+        startDate:
+          type: string
+          format: date
+          description: 开始日期
+        endDate:
+          type: string
+          format: date
+          description: 结束日期
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              time:
+                type: string
+                description: 时间点
+              total:
+                type: integer
+                description: 申请总数
+              approved:
+                type: integer
+                description: 审批通过数
+              rejected:
+                type: integer
+                description: 审批拒绝数
+
+    # AI聊天相关
+    AIChatRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: 用户消息
+        sessionId:
+          type: string
+          description: 会话ID，用于保持对话上下文
+          nullable: true
+
+    AIChatResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: AI回复
+        sessionId:
+          type: string
+          description: 会话ID，用于保持对话上下文
+
+    # 通用响应
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          description: 错误代码
+        message:
+          type: string
+          description: 错误信息
+        details:
+          type: string
+          description: 错误详情
+          nullable: true
+
+  securitySchemes:
+    SessionAuth:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+      description: 会话Cookie
+
+security:
+  - SessionAuth: []
