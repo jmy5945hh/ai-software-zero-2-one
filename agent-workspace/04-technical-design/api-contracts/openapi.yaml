@@ -1,0 +1,1400 @@
+openapi: 3.0.0
+info:
+  title: 招财银行北京分行运营门户 API
+  description: 招财银行北京分行运营门户系统API接口文档
+  version: 1.0.0
+  contact:
+    name: 招财银行技术团队
+    email: tech@zhaocai-bank.com
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: 开发环境
+  - url: https://test.zhaocai-bank.com/api/v1
+    description: 测试环境
+  - url: https://portal.zhaocai-bank.com/api/v1
+    description: 生产环境
+
+tags:
+  - name: auth
+    description: 认证授权相关接口
+  - name: users
+    description: 用户管理相关接口
+  - name: customer-visits
+    description: 客户拜访相关接口
+  - name: gift-management
+    description: 礼品管理相关接口
+  - name: dashboard
+    description: 运营数据大屏相关接口
+  - name: ai
+    description: AI问答相关接口
+  - name: content
+    description: 内容管理相关接口
+
+paths:
+  /auth/login:
+    post:
+      tags:
+        - auth
+      summary: 用户登录
+      description: 用户通过用户名和密码进行登录认证
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  description: 用户名
+                  example: "zhangsan"
+                password:
+                  type: string
+                  description: 密码
+                  example: "password123"
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      access_token:
+                        type: string
+                        description: JWT访问令牌
+                        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      token_type:
+                        type: string
+                        description: 令牌类型
+                        example: "bearer"
+                      user:
+                        $ref: '#/components/schemas/User'
+                  message:
+                    type: string
+                    example: "登录成功"
+                  code:
+                    type: integer
+                    example: 200
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags:
+        - auth
+      summary: 用户登出
+      description: 用户登出，使当前令牌失效
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "登出成功"
+                  code:
+                    type: integer
+                    example: 200
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/me:
+    get:
+      tags:
+        - users
+      summary: 获取当前用户信息
+      description: 获取当前登录用户的基本信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+                  message:
+                    type: string
+                    example: "获取成功"
+                  code:
+                    type: integer
+                    example: 200
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users:
+    get:
+      tags:
+        - users
+      summary: 获取用户列表
+      description: 获取用户列表（仅运营人员和管理者可访问）
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          description: 每页数量
+          required: false
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: role
+          in: query
+          description: 角色过滤
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: 状态过滤
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: 搜索关键词
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  message:
+                    type: string
+                    example: "获取成功"
+                  code:
+                    type: integer
+                    example: 200
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /customer-visits:
+    get:
+      tags:
+        - customer-visits
+      summary: 获取拜访记录列表
+      description: 获取客户拜访记录列表
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          description: 每页数量
+          required: false
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: status
+          in: query
+          description: 状态过滤
+          required: false
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          description: 开始日期
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: 结束日期
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: customer_id
+          in: query
+          description: 客户ID过滤
+          required: false
+          schema:
+            type: string
+        - name: creator_id
+          in: query
+          description: 创建人ID过滤
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CustomerVisit'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  message:
+                    type: string
+                    example: "获取成功"
+                  code:
+                    type: integer
+                    example: 200
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - customer-visits
+      summary: 创建拜访记录
+      description: 创建客户拜访记录
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerVisitRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/CustomerVisit'
+                  message:
+                    type: string
+                    example: "拜访记录创建成功"
+                  code:
+                    type: integer
+                    example: 201
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /customer-visits/{visit_id}:
+    get:
+      tags:
+        - customer-visits
+      summary: 获取拜访记录详情
+      description: 获取指定拜访记录的详细信息
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: visit_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/CustomerVisit'
+                  message:
+                    type: string
+                    example: "获取成功"
+                  code:
+                    type: integer
+                    example: 200
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - customer-visits
+      summary: 更新拜访记录
+      description: 更新指定拜访记录的信息
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: visit_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerVisitRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/CustomerVisit'
+                  message:
+                    type: string
+                    example: "拜访记录更新成功"
+                  code:
+                    type: integer
+                    example: 200
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - customer-visits
+      summary: 删除拜访记录
+      description: 删除指定拜访记录（逻辑删除）
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: visit_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "拜访记录删除成功"
+                  code:
+                    type: integer
+                    example: 200
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /gift-applications:
+    get:
+      tags:
+        - gift-management
+      summary: 获取礼品申请列表
+      description: 获取礼品申请列表
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          description: 每页数量
+          required: false
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - name: status
+          in: query
+          description: 状态过滤
+          required: false
+          schema:
+            type: string
+        - name: applicant_id
+          in: query
+          description: 申请人ID过滤
+          required: false
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          description: 开始日期
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: 结束日期
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/GiftApplication'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+                  message:
+                    type: string
+                    example: "获取成功"
+                  code:
+                    type: integer
+                    example: 200
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - gift-management
+      summary: 创建礼品申请
+      description: 创建礼品申请
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGiftApplicationRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/GiftApplication'
+                  message:
+                    type: string
+                    example: "礼品申请创建成功"
+                  code:
+                    type: integer
+                    example: 201
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /gift-applications/{application_id}/approve:
+    post:
+      tags:
+        - gift-management
+      summary: 审批礼品申请（通过）
+      description: 审批礼品申请，批准申请
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: application_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                approval_notes:
+                  type: string
+                  description: 审批备注
+                  example: "符合礼品申请标准，批准"
+      responses:
+        '200':
+          description: 审批成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/GiftApplication'
+                  message:
+                    type: string
+                    example: "礼品申请审批成功"
+                  code:
+                    type: integer
+                    example: 200
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /gift-applications/{application_id}/reject:
+    post:
+      tags:
+        - gift-management
+      summary: 驳回礼品申请
+      description: 驳回礼品申请
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: application_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rejection_reason
+              properties:
+                rejection_reason:
+                  type: string
+                  description: 驳回原因
+                  minLength: 10
+                  example: "申请理由不充分，不符合礼品申请标准"
+      responses:
+        '200':
+          description: 驳回成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/GiftApplication'
+                  message:
+                    type: string
+                    example: "礼品申请已驳回"
+                  code:
+                    type: integer
+                    example: 200
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /dashboard/overview:
+    get:
+      tags:
+        - dashboard
+      summary: 获取运营概览数据
+      description: 获取运营概览数据
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      total_visits:
+                        type: integer
+                        description: 总拜访次数
+                        example: 150
+                      completed_visits:
+                        type: integer
+                        description: 完成拜访次数
+                        example: 120
+                      pending_visits:
+                        type: integer
+                        description: 待拜访次数
+                        example: 30
+                      total_gift_applications:
+                        type: integer
+                        description: 总礼品申请数
+                        example: 80
+                      approved_gift_applications:
+                        type: integer
+                        description: 已批准礼品申请数
+                        example: 70
+                      total_gift_expense:
+                        type: number
+                        description: 总礼品支出
+                        example: 25000.00
+                      recent_news_count:
+                        type: integer
+                        description: 近期新闻数量
+                        example: 5
+                  message:
+                    type: string
+                    example: "获取成功"
+                  code:
+                    type: integer
+                    example: 200
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /dashboard/visit-trends:
+    get:
+      tags:
+        - dashboard
+      summary: 获取拜访趋势数据
+      description: 获取拜访趋势数据
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: time_range
+          in: query
+          description: 时间范围
+          required: false
+          schema:
+            type: string
+            enum: [7d, 30d, 90d]
+            default: 30d
+        - name: group_by
+          in: query
+          description: 分组方式
+          required: false
+          schema:
+            type: string
+            enum: [day, week, month]
+            default: day
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      labels:
+                        type: array
+                        items:
+                          type: string
+                        description: X轴标签
+                        example: ["2023-01-01", "2023-01-02", "2023-01-03"]
+                      datasets:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            label:
+                              type: string
+                              description: 数据集标签
+                              example: "新增拜访"
+                            data:
+                              type: array
+                              items:
+                                type: integer
+                              description: 数据值
+                              example: [10, 15, 8]
+                  message:
+                    type: string
+                    example: "获取成功"
+                  code:
+                    type: integer
+                    example: 200
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /ai/chat:
+    post:
+      tags:
+        - ai
+      summary: AI问答接口
+      description: 与AI助手进行对话
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+                  description: 用户消息
+                  example: "如何创建客户拜访记录？"
+                session_id:
+                  type: string
+                  description: 会话ID，可选，不提供则自动生成
+                  example: "session-12345"
+      responses:
+        '200':
+          description: 问答成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      response:
+                        type: string
+                        description: AI回复
+                        example: "要创建客户拜访记录，请点击左侧菜单的'客户拜访'，然后点击'新建拜访'按钮..."
+                      session_id:
+                        type: string
+                        description: 会话ID
+                        example: "session-12345"
+                      timestamp:
+                        type: string
+                        format: date-time
+                        description: 时间戳
+                        example: "2023-01-01T10:00:00Z"
+                  message:
+                    type: string
+                    example: "问答成功"
+                  code:
+                    type: integer
+                    example: 200
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          description: 用户唯一标识
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        username:
+          type: string
+          description: 用户名
+          example: "zhangsan"
+        real_name:
+          type: string
+          description: 真实姓名
+          example: "张三"
+        role:
+          type: string
+          description: 用户角色
+          enum: [customer_manager, operations_staff, approver, branch_manager]
+          example: "customer_manager"
+        email:
+          type: string
+          description: 邮箱
+          example: "zhangsan@zhaocai-bank.com"
+        department:
+          type: string
+          description: 部门
+          example: "公司业务部"
+        phone:
+          type: string
+          description: 电话
+          example: "13800138000"
+        status:
+          type: string
+          description: 账户状态
+          enum: [active, inactive]
+          example: "active"
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: "2023-01-01T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+          example: "2023-01-01T10:00:00Z"
+
+    CustomerVisit:
+      type: object
+      properties:
+        visit_id:
+          type: string
+          format: uuid
+          description: 拜访记录唯一标识
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        customer_id:
+          type: string
+          description: 客户ID
+          example: "CUST001"
+        customer_name:
+          type: string
+          description: 企业名称
+          example: "北京科技有限公司"
+        planned_date:
+          type: string
+          format: date
+          description: 计划拜访日期
+          example: "2023-12-25"
+        actual_date:
+          type: string
+          format: date
+          description: 实际拜访日期
+          example: "2023-12-25"
+        visit_method:
+          type: string
+          description: 拜访方式
+          enum: [phone, face_to_face, video]
+          example: "face_to_face"
+        products_interested:
+          type: array
+          items:
+            type: string
+          description: 意向理财产品
+          example: ["理财产品A", "理财产品B"]
+        participants:
+          type: array
+          items:
+            type: string
+          description: 参与人员
+          example: ["张三", "李四"]
+        status:
+          type: string
+          description: 状态
+          enum: [pending, completed, cancelled]
+          example: "completed"
+        visit_notes:
+          type: string
+          description: 拜访备注
+          example: "客户对理财产品A很感兴趣"
+        creator_id:
+          type: string
+          format: uuid
+          description: 创建人ID
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        creator_name:
+          type: string
+          description: 创建人姓名
+          example: "张三"
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: "2023-01-01T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+          example: "2023-01-01T10:00:00Z"
+
+    GiftApplication:
+      type: object
+      properties:
+        application_id:
+          type: string
+          format: uuid
+          description: 申请唯一标识
+          example: "123e4567-e89b-12d3-a456-426614174002"
+        applicant_id:
+          type: string
+          format: uuid
+          description: 申请人ID
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        applicant_name:
+          type: string
+          description: 申请人姓名
+          example: "张三"
+        recipient_id:
+          type: string
+          format: uuid
+          description: 领用人ID
+          example: "123e4567-e89b-12d3-a456-426614174003"
+        recipient_name:
+          type: string
+          description: 领用人员姓名
+          example: "李四"
+        gift_items:
+          type: array
+          items:
+            type: object
+            properties:
+              gift_id:
+                type: string
+                description: 礼品ID
+                example: "GIFT001"
+              name:
+                type: string
+                description: 礼品名称
+                example: "定制笔记本"
+              quantity:
+                type: integer
+                description: 数量
+                example: 10
+              unit_price:
+                type: number
+                description: 单价
+                example: 25.00
+              subtotal:
+                type: number
+                description: 小计
+                example: 250.00
+          description: 礼品列表
+        total_amount:
+          type: number
+          description: 总金额
+          example: 250.00
+        planned_pickup_date:
+          type: string
+          format: date
+          description: 计划领用日期
+          example: "2023-12-30"
+        purpose_type:
+          type: string
+          description: 目的类型
+          enum: [customer_maintenance, marketing_activity, other]
+          example: "customer_maintenance"
+        related_visit_id:
+          type: string
+          format: uuid
+          description: 关联客户拜访记录ID
+          example: "123e4567-e89b-12d3-a456-426614174001"
+        application_status:
+          type: string
+          description: 申请状态
+          enum: [pending, approved, rejected, cancelled]
+          example: "pending"
+        application_date:
+          type: string
+          format: date
+          description: 申请日期
+          example: "2023-12-20"
+        approver_id:
+          type: string
+          format: uuid
+          description: 审批人ID
+          example: "123e4567-e89b-12d3-a456-426614174004"
+        approver_name:
+          type: string
+          description: 审批人姓名
+          example: "王五"
+        approval_date:
+          type: string
+          format: date-time
+          description: 审批日期
+          example: "2023-12-21T10:00:00Z"
+        rejection_reason:
+          type: string
+          description: 驳回原因
+          example: "申请理由不充分"
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: "2023-01-01T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: 更新时间
+          example: "2023-01-01T10:00:00Z"
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: 当前页码
+          example: 1
+        size:
+          type: integer
+          description: 每页数量
+          example: 10
+        total:
+          type: integer
+          description: 总数量
+          example: 100
+        total_pages:
+          type: integer
+          description: 总页数
+          example: 10
+
+    CreateCustomerVisitRequest:
+      type: object
+      required:
+        - customer_id
+        - customer_name
+        - planned_date
+        - visit_method
+      properties:
+        customer_id:
+          type: string
+          description: 客户ID
+          example: "CUST001"
+        customer_name:
+          type: string
+          description: 企业名称
+          example: "北京科技有限公司"
+        planned_date:
+          type: string
+          format: date
+          description: 计划拜访日期
+          example: "2023-12-25"
+        visit_method:
+          type: string
+          description: 拜访方式
+          enum: [phone, face_to_face, video]
+          example: "face_to_face"
+        products_interested:
+          type: array
+          items:
+            type: string
+          description: 意向理财产品
+          example: ["理财产品A", "理财产品B"]
+        participants:
+          type: array
+          items:
+            type: string
+          description: 参与人员
+          example: ["张三", "李四"]
+        status:
+          type: string
+          description: 状态
+          enum: [pending]
+          default: "pending"
+        visit_notes:
+          type: string
+          description: 拜访备注
+          example: "客户对理财产品A很感兴趣"
+
+    UpdateCustomerVisitRequest:
+      type: object
+      properties:
+        customer_name:
+          type: string
+          description: 企业名称
+          example: "北京科技有限公司"
+        planned_date:
+          type: string
+          format: date
+          description: 计划拜访日期
+          example: "2023-12-25"
+        actual_date:
+          type: string
+          format: date
+          description: 实际拜访日期
+          example: "2023-12-25"
+        visit_method:
+          type: string
+          description: 拜访方式
+          enum: [phone, face_to_face, video]
+          example: "face_to_face"
+        products_interested:
+          type: array
+          items:
+            type: string
+          description: 意向理财产品
+          example: ["理财产品A", "理财产品B"]
+        participants:
+          type: array
+          items:
+            type: string
+          description: 参与人员
+          example: ["张三", "李四"]
+        status:
+          type: string
+          description: 状态
+          enum: [pending, completed, cancelled]
+          example: "completed"
+        visit_notes:
+          type: string
+          description: 拜访备注
+          example: "客户对理财产品A很感兴趣"
+
+    CreateGiftApplicationRequest:
+      type: object
+      required:
+        - gift_items
+        - planned_pickup_date
+        - purpose_type
+      properties:
+        recipient_id:
+          type: string
+          format: uuid
+          description: 领用人ID
+          example: "123e4567-e89b-12d3-a456-426614174003"
+        gift_items:
+          type: array
+          items:
+            type: object
+            required:
+              - gift_id
+              - name
+              - quantity
+              - unit_price
+            properties:
+              gift_id:
+                type: string
+                description: 礼品ID
+                example: "GIFT001"
+              name:
+                type: string
+                description: 礼品名称
+                example: "定制笔记本"
+              quantity:
+                type: integer
+                description: 数量
+                minimum: 1
+                example: 10
+              unit_price:
+                type: number
+                description: 单价
+                minimum: 0
+                example: 25.00
+          description: 礼品列表
+        planned_pickup_date:
+          type: string
+          format: date
+          description: 计划领用日期
+          example: "2023-12-30"
+        purpose_type:
+          type: string
+          description: 目的类型
+          enum: [customer_maintenance, marketing_activity, other]
+          example: "customer_maintenance"
+        related_visit_id:
+          type: string
+          format: uuid
+          description: 关联客户拜访记录ID
+          example: "123e4567-e89b-12d3-a456-426614174001"
+
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "VALIDATION_ERROR"
+                  message:
+                    type: string
+                    example: "验证失败"
+                  details:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                          example: "username"
+                        message:
+                          type: string
+                          example: "用户名不能为空"
+              code:
+                type: integer
+                example: 400
+
+    Unauthorized:
+      description: 未认证
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "NOT_AUTHENTICATED"
+                  message:
+                    type: string
+                    example: "未认证，请先登录"
+              code:
+                type: integer
+                example: 401
+
+    Forbidden:
+      description: 无权限访问
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "PERMISSION_DENIED"
+                  message:
+                    type: string
+                    example: "无权限访问此资源"
+              code:
+                type: integer
+                example: 403
+
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    example: "RESOURCE_NOT_FOUND"
+                  message:
+                    type: string
+                    example: "资源不存在"
+              code:
+                type: integer
+                example: 404
