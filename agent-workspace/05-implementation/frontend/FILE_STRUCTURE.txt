@@ -1,0 +1,52 @@
+src/
+├── components/
+│   ├── MainLayout.tsx          # 主布局组件（侧边栏+顶栏+内容区）
+│   └── MainLayout.css          # 主布局样式
+│
+├── pages/
+│   ├── Dashboard/
+│   │   └── index.tsx           # 工作台首页
+│   │
+│   ├── Visits/                 # 拜访管理模块
+│   │   ├── List.tsx            # 拜访记录列表页
+│   │   ├── Detail.tsx          # 拜访记录详情页
+│   │   └── Form.tsx            # 拜访记录表单（新建/编辑）
+│   │
+│   ├── Gifts/                  # 礼品管理模块
+│   │   ├── RequisitionList.tsx # 礼品申请列表页
+│   │   ├── RequisitionForm.tsx # 礼品申请表单
+│   │   ├── Approval.tsx        # 礼品审批页
+│   │   └── Ledger.tsx          # 礼品台账页
+│   │
+│   ├── Home/                   # 临时首页（已废弃）
+│   │   ├── index.tsx
+│   │   └── style.css
+│   │
+│   └── Login/                  # 登录页
+│       ├── index.tsx
+│       └── style.css
+│
+├── router/
+│   ├── index.tsx               # 路由配置（包含所有业务路由）
+│   └── AuthGuard.tsx           # 路由守卫（认证检查）
+│
+├── services/
+│   ├── authService.ts          # 认证 API 服务
+│   ├── visitService.ts         # 拜访管理 API 服务（新增）
+│   └── giftService.ts          # 礼品管理 API 服务（新增）
+│
+├── stores/
+│   └── authStore.ts            # 认证状态管理（Zustand）
+│
+├── types/
+│   ├── auth.ts                 # 认证相关类型定义
+│   ├── visit.ts                # 拜访管理类型定义（新增）
+│   └── gift.ts                 # 礼品管理类型定义（新增）
+│
+├── utils/
+│   ├── auth.ts                 # 认证工具函数（token 操作）
+│   └── request.ts              # Axios 封装（拦截器）
+│
+├── index.css                   # 全局样式
+└── main.tsx                    # 应用入口
+

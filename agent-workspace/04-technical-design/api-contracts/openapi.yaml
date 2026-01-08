@@ -1,0 +1,2024 @@
+openapi: 3.0.3
+info:
+  title: 招财银行北京分行运营门户系统 API
+  description: |
+    招财银行北京分行运营门户系统的 RESTful API 规范文档。
+
+    **认证方式**: JWT Token (Bearer Token)
+
+    **Base URL**: `http://localhost:8000` (开发环境)
+
+    **API 版本**: v1
+
+    **主要功能模块**:
+    - 认证授权
+    - 拜访管理
+    - 礼品申请与审批
+    - 内容管理
+    - 数据大屏
+    - AI 助理
+
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:8000
+    description: 开发环境
+  - url: https://api.example.com
+    description: 生产环境
+
+tags:
+  - name: Auth
+    description: 认证授权
+  - name: Visits
+    description: 拜访管理
+  - name: Gifts
+    description: 礼品管理
+  - name: Content
+    description: 内容管理
+  - name: Dashboard
+    description: 数据大屏
+  - name: AI
+    description: AI 助理
+
+paths:
+  /api/v1/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: 用户登录
+      description: 使用账号和密码登录系统
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              normal:
+                summary: 正常登录
+                value:
+                  username: user001
+                  password: password123
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              example:
+                code: 200
+                message: success
+                data:
+                  access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  token_type: bearer
+                  user:
+                    user_id: USER001
+                    username: user001
+                    name: 张三
+                    role: CUSTOMER_MANAGER
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/auth/me:
+    get:
+      tags:
+        - Auth
+      summary: 获取当前用户信息
+      description: 获取当前登录用户的详细信息
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 成功获取用户信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      tags:
+        - Auth
+      summary: 更新当前用户信息
+      description: 更新当前登录用户的信息
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/auth/me/password:
+    put:
+      tags:
+        - Auth
+      summary: 修改密码
+      description: 修改当前登录用户的密码
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordUpdateRequest'
+      responses:
+        '200':
+          description: 密码修改成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/visits:
+    get:
+      tags:
+        - Visits
+      summary: 查询拜访记录列表
+      description: 查询客户拜访记录列表,支持分页、筛选和排序
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - $ref: '#/components/parameters/SortParam'
+        - $ref: '#/components/parameters/OrderParam'
+        - name: customer_id
+          in: query
+          description: 客户ID
+          schema:
+            type: string
+          example: CUST001
+        - name: planned_date_start
+          in: query
+          description: 计划拜访日期(起始)
+          schema:
+            type: string
+            format: date
+          example: "2026-01-01"
+        - name: planned_date_end
+          in: query
+          description: 计划拜访日期(结束)
+          schema:
+            type: string
+            format: date
+          example: "2026-01-31"
+        - name: status
+          in: query
+          description: 拜访状态
+          schema:
+            $ref: '#/components/schemas/VisitStatus'
+        - name: create_by
+          in: query
+          description: 创建人ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedVisitsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - Visits
+      summary: 新增拜访记录
+      description: 创建新的客户拜访记录
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitCreateRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/visits/{visit_id}:
+    get:
+      tags:
+        - Visits
+      summary: 获取拜访记录详情
+      description: 根据拜访记录ID获取详细信息
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/VisitIdParam'
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Visits
+      summary: 更新拜访记录
+      description: 更新拜访记录信息(仅创建人可编辑)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/VisitIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisitUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/gifts/applications:
+    get:
+      tags:
+        - Gifts
+      summary: 查询礼品申请列表
+      description: 查询礼品申请列表,支持分页和筛选
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: approval_status
+          in: query
+          description: 审批状态
+          schema:
+            $ref: '#/components/schemas/ApprovalStatus'
+        - name: planned_date_start
+          in: query
+          description: 计划领用日期(起始)
+          schema:
+            type: string
+            format: date
+        - name: planned_date_end
+          in: query
+          description: 计划领用日期(结束)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGiftApplicationsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags:
+        - Gifts
+      summary: 提交礼品申请
+      description: 客户经理提交新的礼品领用申请
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GiftApplicationCreateRequest'
+      responses:
+        '201':
+          description: 申请提交成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftApplicationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/gifts/applications/{requisition_id}:
+    get:
+      tags:
+        - Gifts
+      summary: 获取礼品申请详情
+      description: 根据礼品申请ID获取详细信息
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequisitionIdParam'
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftApplicationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/gifts/approvals:
+    get:
+      tags:
+        - Gifts
+      summary: 查询待审批申请列表
+      description: 审批人员查询所有待审批的礼品申请
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - $ref: '#/components/parameters/SortParam'
+        - $ref: '#/components/parameters/OrderParam'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGiftApplicationsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/gifts/approvals/{requisition_id}/approve:
+    post:
+      tags:
+        - Gifts
+      summary: 审批通过
+      description: 审批人员通过礼品申请
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequisitionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  type: string
+                  description: 审批意见
+                  example: 审批通过
+            required:
+              - comment
+      responses:
+        '200':
+          description: 审批成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftApplicationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: 业务逻辑错误(如状态不正确)
+          content:
+            application/json:
+              $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/gifts/approvals/{requisition_id}/reject:
+    post:
+      tags:
+        - Gifts
+      summary: 审批驳回
+      description: 审批人员驳回礼品申请(必须填写驳回原因)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequisitionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rejection_reason
+              properties:
+                rejection_reason:
+                  type: string
+                  description: 驳回原因(必填)
+                  example: 预算不足
+                  minLength: 1
+                  maxLength: 500
+      responses:
+        '200':
+          description: 驳回成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftApplicationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/gifts/approvals/history:
+    get:
+      tags:
+        - Gifts
+      summary: 查询审批历史
+      description: 审批人员查看已审批的申请记录
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - $ref: '#/components/parameters/SortParam'
+        - $ref: '#/components/parameters/OrderParam'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGiftApplicationsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/gifts/ledger:
+    get:
+      tags:
+        - Gifts
+      summary: 查询礼品台账
+      description: 运营人员和管理者查询所有已审批通过的礼品记录
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - $ref: '#/components/parameters/SortParam'
+        - $ref: '#/components/parameters/OrderParam'
+        - name: gift_category
+          in: query
+          description: 礼品分类
+          schema:
+            type: string
+        - name: planned_date_start
+          in: query
+          description: 计划领用日期(起始)
+          schema:
+            type: string
+            format: date
+        - name: planned_date_end
+          in: query
+          description: 计划领用日期(结束)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGiftLedgerResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/content/carousels:
+    get:
+      tags:
+        - Content
+      summary: 查询轮播图列表
+      description: 查询所有轮播图
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 200
+                  message:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CarouselResponse'
+
+    post:
+      tags:
+        - Content
+      summary: 新增轮播图
+      description: 运营人员新增轮播图
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CarouselCreateRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarouselResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/content/carousels/{carousel_id}:
+    put:
+      tags:
+        - Content
+      summary: 更新轮播图
+      description: 运营人员更新轮播图
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CarouselIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CarouselUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CarouselResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Content
+      summary: 删除轮播图
+      description: 运营人员删除轮播图
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CarouselIdParam'
+      responses:
+        '204':
+          description: 删除成功
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/content/news:
+    get:
+      tags:
+        - Content
+      summary: 查询新闻列表
+      description: 查询所有新闻(仅返回已发布)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNewsResponse'
+
+    post:
+      tags:
+        - Content
+      summary: 新增新闻
+      description: 运营人员新增新闻
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewsCreateRequest'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/content/news/{news_id}:
+    put:
+      tags:
+        - Content
+      summary: 更新新闻
+      description: 运营人员更新新闻
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/NewsIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewsUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Content
+      summary: 删除新闻
+      description: 运营人员删除新闻
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/NewsIdParam'
+      responses:
+        '204':
+          description: 删除成功
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/content/news/{news_id}/publish:
+    post:
+      tags:
+        - Content
+      summary: 发布新闻
+      description: 运营人员发布新闻
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/NewsIdParam'
+      responses:
+        '200':
+          description: 发布成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NewsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/dashboard/metrics:
+    get:
+      tags:
+        - Dashboard
+      summary: 获取关键运营指标
+      description: 获取数据大屏的关键运营指标
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: dimension
+          in: query
+          description: 时间维度
+          schema:
+            $ref: '#/components/schemas/TimeDimension'
+          example: month
+        - name: start_date
+          in: query
+          description: 起始日期
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardMetricsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/dashboard/visit_trend:
+    get:
+      tags:
+        - Dashboard
+      summary: 获取拜访趋势数据
+      description: 获取拜访次数趋势数据(用于折线图)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: dimension
+          in: query
+          description: 时间维度
+          schema:
+            $ref: '#/components/schemas/TimeDimension'
+          example: month
+        - name: start_date
+          in: query
+          description: 起始日期
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitTrendResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/dashboard/gift_spending:
+    get:
+      tags:
+        - Dashboard
+      summary: 获取礼品支出数据
+      description: 获取礼品支出数据(用于条形图)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: dimension
+          in: query
+          description: 时间维度
+          schema:
+            $ref: '#/components/schemas/TimeDimension'
+          example: month
+        - name: start_date
+          in: query
+          description: 起始日期
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftSpendingResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/dashboard/gift_dist:
+    get:
+      tags:
+        - Dashboard
+      summary: 获取礼品分类占比
+      description: 获取礼品分类支出占比数据(用于饼图)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: start_date
+          in: query
+          description: 起始日期
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: 结束日期
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GiftDistributionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/ai/chat:
+    post:
+      tags:
+        - AI
+      summary: AI 对话
+      description: 发送消息给AI助理并获取回复
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+                  description: 用户消息
+                  example: 如何登录系统?
+                  minLength: 1
+                  maxLength: 1000
+                history:
+                  type: array
+                  description: 对话历史(可选)
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                        enum: [user, assistant]
+                      content:
+                        type: string
+                  maxItems: 10
+            examples:
+              normal:
+                value:
+                  message: 如何登录系统?
+      responses:
+        '200':
+          description: 对话成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIChatResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: AI 服务错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Token 认证
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: 页码(从1开始)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      example: 1
+
+    PageSizeParam:
+      name: page_size
+      in: query
+      description: 每页记录数
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+      example: 10
+
+    SortParam:
+      name: sort
+      in: query
+      description: 排序字段
+      schema:
+        type: string
+        default: create_time
+      example: create_time
+
+    OrderParam:
+      name: order
+      in: query
+      description: 排序方向
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+      example: desc
+
+    VisitIdParam:
+      name: visit_id
+      in: path
+      description: 拜访记录ID
+      required: true
+      schema:
+        type: string
+      example: VISIT001
+
+    RequisitionIdParam:
+      name: requisition_id
+      in: path
+      description: 礼品申请ID
+      required: true
+      schema:
+        type: string
+      example: GIFT001
+
+    CarouselIdParam:
+      name: carousel_id
+      in: path
+      description: 轮播图ID
+      required: true
+      schema:
+        type: string
+      example: CAROUSEL001
+
+    NewsIdParam:
+      name: news_id
+      in: path
+      description: 新闻ID
+      required: true
+      schema:
+        type: string
+      example: NEWS001
+
+  schemas:
+    # ========== 认证相关 ==========
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          description: 登录账号
+          minLength: 1
+          maxLength: 50
+          example: user001
+        password:
+          type: string
+          description: 登录密码
+          format: password
+          minLength: 1
+          maxLength: 100
+          example: password123
+
+    LoginResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                access_token:
+                  type: string
+                  description: JWT Token
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                token_type:
+                  type: string
+                  example: bearer
+                user:
+                  $ref: '#/components/schemas/UserResponse'
+
+    UserResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          description: 用户ID
+          example: USER001
+        username:
+          type: string
+          description: 登录账号
+          example: user001
+        name:
+          type: string
+          description: 用户姓名
+          example: 张三
+        role:
+          $ref: '#/components/schemas/UserRole'
+        department:
+          type: string
+          description: 所属部门
+          example: 零售业务部
+        status:
+          $ref: '#/components/schemas/UserStatus'
+
+    UserUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 用户姓名
+          minLength: 1
+          maxLength: 50
+          example: 张三
+        department:
+          type: string
+          description: 所属部门
+          maxLength: 100
+          example: 零售业务部
+
+    PasswordUpdateRequest:
+      type: object
+      required:
+        - old_password
+        - new_password
+      properties:
+        old_password:
+          type: string
+          description: 旧密码
+          format: password
+          minLength: 1
+          maxLength: 100
+        new_password:
+          type: string
+          description: 新密码
+          format: password
+          minLength: 8
+          maxLength: 100
+
+    # ========== 枚举类型 ==========
+    UserRole:
+      type: string
+      enum:
+        - CUSTOMER_MANAGER
+        - OPERATIONS
+        - APPROVER
+        - MANAGER
+      description: |
+        用户角色:
+        - `CUSTOMER_MANAGER`: 客户经理
+        - `OPERATIONS`: 运营人员
+        - `APPROVER`: 审批人员
+        - `MANAGER`: 分行管理者
+
+    UserStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - INACTIVE
+        - LOCKED
+      description: |
+        用户状态:
+        - `ACTIVE`: 在职
+        - `INACTIVE`: 离职
+        - `LOCKED`: 禁用
+
+    VisitMethod:
+      type: string
+      enum:
+        - ON_SITE
+        - PHONE
+        - VIDEO
+        - EMAIL
+        - OTHER
+      description: |
+        拜访方式:
+        - `ON_SITE`: 现场
+        - `PHONE`: 电话
+        - `VIDEO`: 视频
+        - `EMAIL`: 邮件
+        - `OTHER`: 其他
+
+    VisitStatus:
+      type: string
+      enum:
+        - NEW
+        - IN_PROGRESS
+        - SUCCESS
+        - FAILED
+        - CANCELLED
+      description: |
+        拜访状态:
+        - `NEW`: 新建
+        - `IN_PROGRESS`: 进行中
+        - `SUCCESS`: 成功
+        - `FAILED`: 失败
+        - `CANCELLED`: 已取消
+
+    ApprovalStatus:
+      type: string
+      enum:
+        - PENDING
+        - APPROVED
+        - REJECTED
+      description: |
+        审批状态:
+        - `PENDING`: 待审批
+        - `APPROVED`: 已通过
+        - `REJECTED`: 已驳回
+
+    PurposeType:
+      type: string
+      enum:
+        - CUSTOMER_VISIT
+        - HOLIDAY
+        - MARKETING
+        - OTHER
+      description: |
+        目的类型:
+        - `CUSTOMER_VISIT`: 客户拜访
+        - `HOLIDAY`: 节日慰问
+        - `MARKETING`: 营销活动
+        - `OTHER`: 其他
+
+    TimeDimension:
+      type: string
+      enum:
+        - day
+        - week
+        - month
+      description: |
+        时间维度:
+        - `day`: 天
+        - `week`: 周
+        - `month`: 月
+
+    # ========== 拜访管理相关 ==========
+    VisitCreateRequest:
+      type: object
+      required:
+        - customer_id
+        - company_name
+        - planned_date
+        - actual_date
+        - visit_method
+        - status
+      properties:
+        customer_id:
+          type: string
+          description: 客户ID
+          minLength: 1
+          maxLength: 50
+          example: CUST001
+        company_name:
+          type: string
+          description: 企业名称
+          minLength: 1
+          maxLength: 200
+          example: 某某科技有限公司
+        planned_date:
+          type: string
+          format: date
+          description: 计划拜访日期
+          example: "2026-01-10"
+        actual_date:
+          type: string
+          format: date
+          description: 实际拜访日期
+          example: "2026-01-10"
+        visit_method:
+          $ref: '#/components/schemas/VisitMethod'
+        interested_products:
+          type: array
+          description: 意向理财产品列表
+          items:
+            type: string
+          maxItems: 10
+          example: ["理财产品A", "理财产品B"]
+        participants:
+          type: array
+          description: 参与人员列表(用户ID数组)
+          items:
+            type: string
+          maxItems: 10
+          example: ["USER001", "USER002"]
+        status:
+          $ref: '#/components/schemas/VisitStatus'
+        notes:
+          type: string
+          description: 备注信息
+          maxLength: 1000
+          example: 客户对产品很感兴趣
+
+    VisitUpdateRequest:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          minLength: 1
+          maxLength: 50
+        company_name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        planned_date:
+          type: string
+          format: date
+        actual_date:
+          type: string
+          format: date
+        visit_method:
+          $ref: '#/components/schemas/VisitMethod'
+        interested_products:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+        participants:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+        status:
+          $ref: '#/components/schemas/VisitStatus'
+        notes:
+          type: string
+          maxLength: 1000
+
+    VisitResponse:
+      type: object
+      properties:
+        visit_id:
+          type: string
+          description: 拜访记录ID
+          example: VISIT001
+        customer_id:
+          type: string
+          example: CUST001
+        company_name:
+          type: string
+          example: 某某科技有限公司
+        planned_date:
+          type: string
+          format: date
+          example: "2026-01-10"
+        actual_date:
+          type: string
+          format: date
+          example: "2026-01-10"
+        visit_method:
+          $ref: '#/components/schemas/VisitMethod'
+        interested_products:
+          type: array
+          items:
+            type: string
+        participants:
+          type: array
+          items:
+            type: string
+        status:
+          $ref: '#/components/schemas/VisitStatus'
+        notes:
+          type: string
+          example: 客户对产品很感兴趣
+        create_by:
+          type: string
+          description: 创建人ID
+          example: USER001
+        create_time:
+          type: string
+          format: date-time
+          example: "2026-01-08T10:00:00"
+        update_time:
+          type: string
+          format: date-time
+          example: "2026-01-08T10:00:00"
+
+    PaginatedVisitsResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/VisitResponse'
+                total:
+                  type: integer
+                  description: 总记录数
+                  example: 100
+                page:
+                  type: integer
+                  description: 当前页码
+                  example: 1
+                page_size:
+                  type: integer
+                  description: 每页记录数
+                  example: 10
+                total_pages:
+                  type: integer
+                  description: 总页数
+                  example: 10
+
+    # ========== 礼品管理相关 ==========
+    GiftApplicationCreateRequest:
+      type: object
+      required:
+        - recipient
+        - gift_items
+        - planned_date
+        - purpose_type
+      properties:
+        recipient:
+          type: string
+          description: 领用人ID
+          minLength: 1
+          maxLength: 32
+          example: USER001
+        gift_items:
+          type: array
+          description: 礼品列表
+          minItems: 1
+          items:
+            type: object
+            required:
+              - gift_id
+              - quantity
+            properties:
+              gift_id:
+                type: string
+                description: 礼品ID
+                example: GIFT001
+              quantity:
+                type: integer
+                description: 数量
+                minimum: 1
+                example: 2
+        planned_date:
+          type: string
+          format: date
+          description: 计划领用日期
+          example: "2026-01-15"
+        purpose_type:
+          $ref: '#/components/schemas/PurposeType'
+        related_visit_id:
+          type: string
+          description: 关联客户拜访记录ID(可选)
+          example: VISIT001
+
+    GiftApplicationResponse:
+      type: object
+      properties:
+        requisition_id:
+          type: string
+          description: 申请单ID
+          example: GIFT001
+        applicant:
+          type: string
+          description: 申请人ID
+          example: USER001
+        recipient:
+          type: string
+          description: 领用人ID
+          example: USER001
+        total_amount:
+          type: number
+          format: decimal
+          description: 总金额(元)
+          example: 200.00
+        planned_date:
+          type: string
+          format: date
+          example: "2026-01-15"
+        purpose_type:
+          $ref: '#/components/schemas/PurposeType'
+        related_visit_id:
+          type: string
+          example: VISIT001
+        approval_status:
+          $ref: '#/components/schemas/ApprovalStatus'
+        rejection_reason:
+          type: string
+          description: 驳回原因
+          example: 预算不足
+        approver:
+          type: string
+          description: 审批人ID
+          example: APPROVER001
+        approval_time:
+          type: string
+          format: date-time
+          example: "2026-01-08T12:00:00"
+        create_time:
+          type: string
+          format: date-time
+          example: "2026-01-08T10:00:00"
+        update_time:
+          type: string
+          format: date-time
+          example: "2026-01-08T10:00:00"
+        gift_items:
+          type: array
+          description: 礼品列表
+          items:
+            type: object
+            properties:
+              gift_id:
+                type: string
+                example: GIFT001
+              gift_name:
+                type: string
+                example: 茶叶礼盒
+              quantity:
+                type: integer
+                example: 2
+              unit_price:
+                type: number
+                format: decimal
+                example: 100.00
+              subtotal:
+                type: number
+                format: decimal
+                example: 200.00
+
+    PaginatedGiftApplicationsResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/GiftApplicationResponse'
+                total:
+                  type: integer
+                  example: 50
+                page:
+                  type: integer
+                  example: 1
+                page_size:
+                  type: integer
+                  example: 10
+                total_pages:
+                  type: integer
+                  example: 5
+
+    PaginatedGiftLedgerResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/GiftApplicationResponse'
+                total:
+                  type: integer
+                  example: 30
+                page:
+                  type: integer
+                  example: 1
+                page_size:
+                  type: integer
+                  example: 10
+                total_pages:
+                  type: integer
+                  example: 3
+
+    # ========== 内容管理相关 ==========
+    CarouselCreateRequest:
+      type: object
+      required:
+        - title
+        - image_url
+      properties:
+        title:
+          type: string
+          description: 标题
+          minLength: 1
+          maxLength: 200
+          example: 春节营销活动
+        description:
+          type: string
+          description: 描述
+          maxLength: 500
+          example: 2026年春节客户关怀活动
+        image_url:
+          type: string
+          format: uri
+          description: 图片URL
+          example: https://example.com/images/carousel1.jpg
+        link_url:
+          type: string
+          format: uri
+          description: 点击跳转链接(可选)
+          example: https://example.com/news/123
+        sort_order:
+          type: integer
+          description: 排序序号(数字越小越靠前)
+          default: 0
+          example: 1
+
+    CarouselUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 500
+        image_url:
+          type: string
+          format: uri
+        link_url:
+          type: string
+          format: uri
+        sort_order:
+          type: integer
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+          description: 状态
+
+    CarouselResponse:
+      type: object
+      properties:
+        carousel_id:
+          type: string
+          example: CAROUSEL001
+        title:
+          type: string
+          example: 春节营销活动
+        description:
+          type: string
+          example: 2026年春节客户关怀活动
+        image_url:
+          type: string
+          example: https://example.com/images/carousel1.jpg
+        link_url:
+          type: string
+          example: https://example.com/news/123
+        sort_order:
+          type: integer
+          example: 1
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+          example: ACTIVE
+        create_by:
+          type: string
+          example: USER001
+        create_time:
+          type: string
+          format: date-time
+          example: "2026-01-08T10:00:00"
+        update_time:
+          type: string
+          format: date-time
+          example: "2026-01-08T10:00:00"
+
+    NewsCreateRequest:
+      type: object
+      required:
+        - title
+        - summary
+        - content
+      properties:
+        title:
+          type: string
+          description: 新闻标题
+          minLength: 1
+          maxLength: 200
+          example: 关于开展2026年第一季度营销活动的通知
+        summary:
+          type: string
+          description: 新闻摘要
+          minLength: 1
+          maxLength: 500
+          example: 为推动第一季度业务发展,现将相关活动安排通知如下
+        content:
+          type: string
+          description: 新闻正文内容(支持富文本)
+          minLength: 1
+          example: <p>详细内容...</p>
+
+    NewsUpdateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 500
+        content:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED, WITHDRAWN]
+          description: 状态
+
+    NewsResponse:
+      type: object
+      properties:
+        news_id:
+          type: string
+          example: NEWS001
+        title:
+          type: string
+          example: 关于开展2026年第一季度营销活动的通知
+        summary:
+          type: string
+          example: 为推动第一季度业务发展,现将相关活动安排通知如下
+        content:
+          type: string
+          example: <p>详细内容...</p>
+        publish_time:
+          type: string
+          format: date-time
+          example: "2026-01-08T10:00:00"
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED, WITHDRAWN]
+          example: PUBLISHED
+        create_by:
+          type: string
+          example: USER001
+        create_time:
+          type: string
+          format: date-time
+          example: "2026-01-08T10:00:00"
+        update_time:
+          type: string
+          format: date-time
+          example: "2026-01-08T10:00:00"
+
+    PaginatedNewsResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/NewsResponse'
+                total:
+                  type: integer
+                  example: 20
+                page:
+                  type: integer
+                  example: 1
+                page_size:
+                  type: integer
+                  example: 10
+                total_pages:
+                  type: integer
+                  example: 2
+
+    # ========== 数据大屏相关 ==========
+    DashboardMetricsResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                visit_count:
+                  type: integer
+                  description: 客户拜访次数
+                  example: 150
+                success_count:
+                  type: integer
+                  description: 营销成功次数
+                  example: 80
+                gift_count:
+                  type: integer
+                  description: 礼品领用数量
+                  example: 50
+                gift_amount:
+                  type: number
+                  format: decimal
+                  description: 礼品支出金额(元)
+                  example: 15000.00
+
+    VisitTrendResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                dates:
+                  type: array
+                  description: 时间点列表
+                  items:
+                    type: string
+                  example: ["2026-01-01", "2026-01-02", "2026-01-03"]
+                new_visits:
+                  type: array
+                  description: 新增拜访次数
+                  items:
+                    type: integer
+                  example: [10, 15, 20]
+                total_visits:
+                  type: array
+                  description: 累计拜访次数
+                  items:
+                    type: integer
+                  example: [10, 25, 45]
+
+    GiftSpendingResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                periods:
+                  type: array
+                  description: 时间周期列表
+                  items:
+                    type: string
+                  example: ["2026-01", "2026-02", "2026-03"]
+                amounts:
+                  type: array
+                  description: 礼品支出金额(元)
+                  items:
+                    type: number
+                    format: decimal
+                  example: [5000.00, 6000.00, 4000.00]
+
+    GiftDistributionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                categories:
+                  type: array
+                  description: 礼品分类列表
+                  items:
+                    type: string
+                  example: ["电子产品", "日用品", "食品"]
+                amounts:
+                  type: array
+                  description: 各分类支出金额(元)
+                  items:
+                    type: number
+                    format: decimal
+                  example: [5000.00, 3000.00, 2000.00]
+                percentages:
+                  type: array
+                  description: 各分类占比
+                  items:
+                    type: number
+                    format: decimal
+                  example: [50.0, 30.0, 20.0]
+
+    # ========== AI 相关 ==========
+    AIChatResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                reply:
+                  type: string
+                  description: AI 回复
+                  example: 您可以使用账号和密码登录系统...
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: "2026-01-08T12:00:00"
+
+    # ========== 通用响应 ==========
+    ApiResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: HTTP 状态码
+          example: 200
+        message:
+          type: string
+          description: 响应消息
+          example: success
+        data:
+          type: object
+          description: 响应数据
+
+    SuccessResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              nullable: true
+              example: null
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: HTTP 错误状态码
+          example: 400
+        message:
+          type: string
+          description: 错误消息
+          example: validation error
+        errors:
+          type: array
+          description: 错误详情数组
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                description: 错误字段
+                example: customer_id
+              message:
+                type: string
+                description: 错误消息
+                example: customer_id is required
+
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 400
+            message: validation error
+            errors:
+              - field: customer_id
+                message: customer_id is required
+
+    Unauthorized:
+      description: 未认证(Token无效或过期)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 401
+            message: invalid or expired token
+
+    Forbidden:
+      description: 无权限访问
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 403
+            message: permission denied
+
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 404
+            message: visit not found

@@ -1,0 +1,141 @@
+# 工作流状态机
+
+**最后更新时间**：2026-01-07
+
+---
+
+## 当前阶段
+
+```yaml
+current_phase: "Step 1 - 澄清目标与范围"
+status: "completed"
+output_artifacts:
+  - agent-workspace/00-orchestration/project-scope.md
+  - agent-workspace/00-orchestration/workflow-state.yaml
+  - agent-workspace/00-orchestration/decisions-log.md
+```
+
+---
+
+## 标准工作流状态
+
+```yaml
+workflow_steps:
+  - step: 1
+    name: "澄清目标与范围"
+    status: "completed"
+    entry_date: "2026-01-07"
+
+  - step: 2
+    name: "调度 BA Subagent"
+    status: "in_progress"
+    entry_date: "2026-01-07"
+    output_location: "agent-workspace/01-requirements/"
+
+  - step: 3
+    name: "调度 UX Subagent"
+    status: "pending"
+    dependencies: ["Step 2 completed"]
+    output_location: "agent-workspace/02-ux/"
+
+  - step: 4
+    name: "调度 Arch Subagent"
+    status: "pending"
+    dependencies: ["Step 3 completed"]
+    output_location: "agent-workspace/03-architecture/"
+
+  - step: 5
+    name: "调度 TL Subagent"
+    status: "pending"
+    dependencies: ["Step 4 completed"]
+    output_location: "agent-workspace/04-technical-design/"
+
+  - step: 6
+    name: "调度 Dev Subagent"
+    status: "pending"
+    dependencies: ["Step 5 completed"]
+    output_location: "agent-workspace/05-implementation/"
+
+  - step: 7
+    name: "调度 Test Subagent"
+    status: "pending"
+    dependencies: ["Step 6 completed"]
+    output_location: "agent-workspace/06-testing/"
+```
+
+---
+
+## Review 节点定义
+
+```yaml
+review_checkpoints:
+  - checkpoint: "RC1"
+    name: "需求 Review"
+    after_step: 2
+    reviewers: ["Product Owner", "Stakeholder"]
+    criteria:
+      - 所有 User Story 清晰明确
+      - Acceptance Criteria 可验证
+      - 业务规则无歧义
+
+  - checkpoint: "RC2"
+    name: "架构 Review"
+    after_step: 4
+    reviewers: ["Tech Lead", "Architect"]
+    criteria:
+      - 技术选型合理
+      - 可实现性确认
+      - 非功能性需求已考虑
+
+  - checkpoint: "RC3"
+    name: "设计 Review"
+    after_step: 5
+    reviewers: ["Tech Lead", "Developers"]
+    criteria:
+      - API 契约完整
+      - 数据模型清晰
+      - 任务拆解可执行
+
+  - checkpoint: "RC4"
+    name: "代码 Review"
+    after_step: 6
+    reviewers: ["Tech Lead", "Peers"]
+    criteria:
+      - 代码符合规范
+      - 测试覆盖充分
+      - 文档完整
+
+  - checkpoint: "RC5"
+    name: "测试 Report"
+    after_step: 7
+    reviewers: ["Product Owner", "QA Lead"]
+    criteria:
+      - 所有 AC 验证通过
+      - 缺陷已修复或记录
+      - 可发布结论
+```
+
+---
+
+## 状态标记说明
+
+```yaml
+status_definitions:
+  pending: "未开始"
+  in_progress: "执行中"
+  completed: "已完成"
+  blocked: "阻塞"
+  on_hold: "暂停"
+  requires_review: "待 Review"
+```
+
+---
+
+## 紧急回滚机制
+
+```yaml
+rollback_policy:
+  - "任何阶段发现重大问题，可回滚到上一阶段重新设计"
+  - "回滚需记录原因到 decisions-log.md"
+  - "回滚后需重新通过 Review 节点"
+```

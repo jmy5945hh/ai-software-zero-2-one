@@ -1,0 +1,225 @@
+{
+  "total": 31,
+  "passed": 25,
+  "failed": 6,
+  "pass_rate": 80.64516129032258,
+  "results": [
+    {
+      "test_id": "AC-002",
+      "test_name": "登录失败提示",
+      "passed": true,
+      "message": "状态码: 401, 预期: 401",
+      "timestamp": "2026-01-08T14:35:07.697748"
+    },
+    {
+      "test_id": "AC-003",
+      "test_name": "登录成功",
+      "passed": true,
+      "message": "用户: 赵六(客户经理)",
+      "timestamp": "2026-01-08T14:35:07.906381"
+    },
+    {
+      "test_id": "AC-004",
+      "test_name": "未登录访问受保护资源",
+      "passed": true,
+      "message": "状态码: 401, 预期: 401",
+      "timestamp": "2026-01-08T14:35:07.908054"
+    },
+    {
+      "test_id": "AUTH-01",
+      "test_name": "获取当前用户信息",
+      "passed": true,
+      "message": "用户: 赵六(客户经理)",
+      "timestamp": "2026-01-08T14:35:07.910346"
+    },
+    {
+      "test_id": "AC-011",
+      "test_name": "新增拜访记录",
+      "passed": true,
+      "message": "拜访ID: VIS1767854107912",
+      "timestamp": "2026-01-08T14:35:07.914907"
+    },
+    {
+      "test_id": "AC-012",
+      "test_name": "自动记录创建人",
+      "passed": true,
+      "message": "创建人: USERC5C203CEC48142F390682ADF",
+      "timestamp": "2026-01-08T14:35:07.917331"
+    },
+    {
+      "test_id": "AC-013",
+      "test_name": "必填字段校验",
+      "passed": true,
+      "message": "状态码: 422, 预期: 422",
+      "timestamp": "2026-01-08T14:35:07.919140"
+    },
+    {
+      "test_id": "AC-015",
+      "test_name": "编辑拜访记录",
+      "passed": true,
+      "message": "更新后状态: IN_PROGRESS",
+      "timestamp": "2026-01-08T14:35:07.923145"
+    },
+    {
+      "test_id": "AC-016",
+      "test_name": "不支持物理删除",
+      "passed": true,
+      "message": "状态码: 405, 预期: 405",
+      "timestamp": "2026-01-08T14:35:07.923993"
+    },
+    {
+      "test_id": "AC-017",
+      "test_name": "按时间区间查询",
+      "passed": true,
+      "message": "记录数: 9",
+      "timestamp": "2026-01-08T14:35:07.929543"
+    },
+    {
+      "test_id": "AC-018",
+      "test_name": "按营销状态筛选",
+      "passed": true,
+      "message": "NEW状态记录数: 0",
+      "timestamp": "2026-01-08T14:35:07.933141"
+    },
+    {
+      "test_id": "AC-022",
+      "test_name": "提交礼品申请",
+      "passed": true,
+      "message": "申请ID: GIFT1767854107938",
+      "timestamp": "2026-01-08T14:35:07.945249"
+    },
+    {
+      "test_id": "AC-023",
+      "test_name": "申请状态为待审批",
+      "passed": true,
+      "message": "状态: PENDING",
+      "timestamp": "2026-01-08T14:35:07.947995"
+    },
+    {
+      "test_id": "AC-024",
+      "test_name": "提交后不可修改",
+      "passed": false,
+      "message": "状态码: 405, 预期: 422",
+      "timestamp": "2026-01-08T14:35:07.948902"
+    },
+    {
+      "test_id": "AC-025",
+      "test_name": "查看个人申请列表",
+      "passed": true,
+      "message": "申请数: 11",
+      "timestamp": "2026-01-08T14:35:07.957197"
+    },
+    {
+      "test_id": "AC-027",
+      "test_name": "查看待审批申请",
+      "passed": false,
+      "message": "待审批数: N/A",
+      "timestamp": "2026-01-08T14:35:08.146263"
+    },
+    {
+      "test_id": "AC-028",
+      "test_name": "审批通过",
+      "passed": true,
+      "message": "状态: APPROVED",
+      "timestamp": "2026-01-08T14:35:08.152221"
+    },
+    {
+      "test_id": "AC-029",
+      "test_name": "驳回必须填写原因",
+      "passed": true,
+      "message": "状态码: 422, 预期: 422",
+      "timestamp": "2026-01-08T14:35:08.350272"
+    },
+    {
+      "test_id": "AC-028-2",
+      "test_name": "审批驳回",
+      "passed": true,
+      "message": "状态: REJECTED",
+      "timestamp": "2026-01-08T14:35:08.355315"
+    },
+    {
+      "test_id": "AC-030",
+      "test_name": "审批完成后不可变更",
+      "passed": false,
+      "message": "状态码: 400, 预期: 422",
+      "timestamp": "2026-01-08T14:35:08.358078"
+    },
+    {
+      "test_id": "AC-031",
+      "test_name": "查看礼品台账",
+      "passed": true,
+      "message": "台账记录数: 4",
+      "timestamp": "2026-01-08T14:35:08.551744"
+    },
+    {
+      "test_id": "RBAC-01",
+      "test_name": "客户经理访问拜访记录",
+      "passed": true,
+      "message": "客户经理应该可以访问拜访记录",
+      "timestamp": "2026-01-08T14:35:08.743634"
+    },
+    {
+      "test_id": "RBAC-02",
+      "test_name": "客户经理无法访问礼品台账",
+      "passed": true,
+      "message": "状态码: 403, 预期: 403",
+      "timestamp": "2026-01-08T14:35:08.745536"
+    },
+    {
+      "test_id": "RBAC-03",
+      "test_name": "运营人员访问礼品台账",
+      "passed": true,
+      "message": "运营人员应该可以访问礼品台账",
+      "timestamp": "2026-01-08T14:35:08.938263"
+    },
+    {
+      "test_id": "RBAC-04",
+      "test_name": "审批人员访问待审批列表",
+      "passed": false,
+      "message": "审批人员应该可以访问待审批列表",
+      "timestamp": "2026-01-08T14:35:09.127422"
+    },
+    {
+      "test_id": "RBAC-05",
+      "test_name": "管理员全部权限",
+      "passed": false,
+      "message": "管理员应该可以访问所有功能",
+      "timestamp": "2026-01-08T14:35:09.321550"
+    },
+    {
+      "test_id": "AC-014",
+      "test_name": "客户经理数据隔离",
+      "passed": false,
+      "message": "本人可访问: True, 他人不可访问: False",
+      "timestamp": "2026-01-08T14:35:09.707071"
+    },
+    {
+      "test_id": "ERR-01",
+      "test_name": "401 未认证",
+      "passed": true,
+      "message": "状态码: 401",
+      "timestamp": "2026-01-08T14:35:09.895599"
+    },
+    {
+      "test_id": "ERR-02",
+      "test_name": "403 权限不足",
+      "passed": true,
+      "message": "状态码: 403",
+      "timestamp": "2026-01-08T14:35:09.897724"
+    },
+    {
+      "test_id": "ERR-03",
+      "test_name": "400 无效数据",
+      "passed": true,
+      "message": "状态码: 422",
+      "timestamp": "2026-01-08T14:35:09.899723"
+    },
+    {
+      "test_id": "ERR-04",
+      "test_name": "404 资源不存在",
+      "passed": true,
+      "message": "状态码: 404",
+      "timestamp": "2026-01-08T14:35:09.901846"
+    }
+  ]
+}
