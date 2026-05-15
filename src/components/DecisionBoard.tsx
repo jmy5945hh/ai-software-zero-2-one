@@ -1,9 +1,22 @@
-import { useState } from "react";
-import { Bot, Sparkles, ChevronRight, ChevronDown, Activity } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import {
+  Bot,
+  Sparkles,
+  ChevronRight,
+  ChevronDown,
+  Activity,
+  Package,
+  MessageSquare,
+  Send,
+} from "lucide-react";
 import type { DrawerContent, AppState } from "../data/types";
-import { StreamText, useStepKey, useStreamingList } from "../hooks";
+import { StreamText, useStepKey } from "../hooks";
 import { workflow, getContentForStage } from "../data";
-import type { StageContentBlock } from "../data/stageContent";
+import type {
+  StageContent,
+  DeliverableCard,
+  TrajectoryTurn,
+} from "../data/stageContent";
 import {
   IntentDecision,
   ScopeDecision,
@@ -14,6 +27,8 @@ import {
   ReleaseDecision,
 } from "./StageDecisions";
 
+type BoardTab = "delivery" | "trajectory";
+
 type DecisionBoardProps = {
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
@@ -21,14 +36,6 @@ type DecisionBoardProps = {
   onPreview: (content: DrawerContent) => void;
 };
 
-/**
- * 人机协作决策台 —— 主视觉区域。
- * 四层结构：
- * ① AI 工作摘要 / 可视化呈现
- * ② 人类决策操作区
- * ③ AI 补充输入区
- * ④ 可折叠 Chat History
- */
 export function DecisionBoard({
   state,
   onPatch,
@@ -37,202 +44,343 @@ export function DecisionBoard({
 }: DecisionBoardProps) {
   const step = workflow[state.stepIndex];
   const stepKey = useStepKey(state.stepIndex);
-  const contentBlocks = getContentForStage(state.stepIndex);
-  const [chatExpanded, setChatExpanded] = useState(false);
-
-  const handleBlockClick = (block: StageContentBlock) => {
-    if (block.clickable && block.target) {
-      onPreview({
-        type: block.target.type as DrawerContent extends { type: infer T } ? T : never,
-        title: block.target.title,
-        content: block.target.content,
-        language: block.target.type === "code" ? "yaml" : "markdown",
-        html: block.target.type === "html" ? block.target.content : "",
-        path: "",
-      } as DrawerContent);
-    }
-  };
+  const content = getContentForStage(state.stepIndex);
+  const [activeTab, setActiveTab] = useState<BoardTab>("delivery");
 
   return (
     <section className="decision-board" key={stepKey}>
-      <div className="board-stage-header">
-        <div>
-          <span className="eyebrow">{step.id.toUpperCase()} · AI Native 协作</span>
-          <h1>{step.label}</h1>
-          <p>{step.detail}</p>
+      <div className="board-compact-header">
+        <div className="board-header-left">
+          <span className="board-step-id">{step.id.toUpperCase()}</span>
+          <span className="board-step-label">{step.label}</span>
+          <span className="board-step-sep">·</span>
+          <span className="board-step-detail">{step.detail}</span>
         </div>
-        <div className="board-user-role">
-          <Sparkles size={16} />
-          <div>
-            <span>你的角色</span>
-            <strong>{step.userRole}</strong>
-          </div>
+        <div className="board-user-role-compact">
+          <Sparkles size={13} />
+          <span>{step.userRole}</span>
         </div>
       </div>
 
-      {/* ① AI 工作摘要 + 可视化 */}
-      <div className="board-layer layer-summary">
-        <div className="layer-label">
-          <Bot size={14} />
-          <span>AI 工作摘要</span>
-        </div>
-        <SummaryArea blocks={contentBlocks} onBlockClick={handleBlockClick} />
-        <VisualArea stepIndex={state.stepIndex} blocks={contentBlocks} onBlockClick={handleBlockClick} />
-      </div>
-
-      {/* ② 决策操作区 */}
-      <div className="board-layer layer-decision">
-        <DecisionArea state={state} onPatch={onPatch} onContinue={onContinue} onPreview={onPreview} />
-      </div>
-
-      {/* ③ AI 补充输入区 */}
-      <div className="board-layer layer-input">
-        <div className="layer-label">
-          <Activity size={14} />
-          <span>补充说明（可选）</span>
-        </div>
-        <textarea
-          className="board-input"
-          value={state.notes}
-          onChange={(e) => onPatch({ notes: e.target.value })}
-          placeholder={getPlaceholderForStage(state.stepIndex)}
-          rows={2}
-        />
-      </div>
-
-      {/* ④ Chat History（可折叠） */}
-      <div className="board-layer layer-chat">
+      <div className="board-tabs">
         <button
-          className="chat-toggle"
+          className={`board-tab ${activeTab === "delivery" ? "active" : ""}`}
           type="button"
-          onClick={() => setChatExpanded(!chatExpanded)}
+          onClick={() => setActiveTab("delivery")}
         >
-          {chatExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <span>Agent 原始对话记录</span>
-          <em>审计底稿</em>
+          <Package size={14} />
+          <span>交付 & 协作</span>
         </button>
-        {chatExpanded && (
-          <div className="chat-history">
-            <div className="chat-message agent">
-              <Bot size={14} />
-              <div><StreamText text="正在分析你的研发意图...从输入中抽取核心业务对象和角色。" speed={20} /></div>
-            </div>
-            <div className="chat-message agent">
-              <Bot size={14} />
-              <div><StreamText text="识别到关键实体：客户、跟进记录、提醒规则、周报。角色：销售、主管。建议MVP模式跑通主流程。" speed={18} /></div>
-            </div>
-            <div className="chat-message agent">
-              <Bot size={14} />
-              <div><StreamText text="正在生成可执行 Spec，包括 API 契约、数据模型、权限矩阵..." speed={16} /></div>
-            </div>
-          </div>
+        <button
+          className={`board-tab ${activeTab === "trajectory" ? "active" : ""}`}
+          type="button"
+          onClick={() => setActiveTab("trajectory")}
+        >
+          <MessageSquare size={14} />
+          <span>任务轨迹</span>
+        </button>
+      </div>
+
+      <div className="board-tab-panels">
+        {activeTab === "delivery" && (
+          <DeliveryCollabTab
+            content={content}
+            state={state}
+            onPatch={onPatch}
+            onContinue={onContinue}
+            onPreview={onPreview}
+            onSwitchToTrajectory={() => setActiveTab("trajectory")}
+          />
+        )}
+        {activeTab === "trajectory" && (
+          <TrajectoryChatTab
+            trajectory={content.trajectory}
+            stepIndex={state.stepIndex}
+          />
         )}
       </div>
     </section>
   );
 }
 
-// ── ① AI 摘要区 ─────────────────────────────
-function SummaryArea({ blocks, onBlockClick }: { blocks: StageContentBlock[]; onBlockClick: (b: StageContentBlock) => void }) {
-  const summaryBlocks = blocks.filter((b) => b.type === "summary" || b.type === "finding");
+// ── Tab 1: 交付 & 协作 ──────────────────────
+function DeliveryCollabTab({
+  content,
+  state,
+  onPatch,
+  onContinue,
+  onPreview,
+  onSwitchToTrajectory,
+}: {
+  content: StageContent;
+  state: AppState;
+  onPatch: (patch: Partial<AppState>) => void;
+  onContinue: () => void;
+  onPreview: (content: DrawerContent) => void;
+  onSwitchToTrajectory: () => void;
+}) {
   return (
-    <div className="summary-grid">
-      {summaryBlocks.map((block) => (
-        <button key={block.id} className={`summary-card ${block.clickable ? "clickable" : ""}`} type="button" onClick={() => onBlockClick(block)}>
-          <strong><StreamText text={block.title} speed={30} /></strong>
-          <p><StreamText text={block.detail} speed={22} /></p>
-          {block.clickable && <span className="summary-hint">点击查看详情 →</span>}
-        </button>
-      ))}
+    <div className="tab-panel panel-delivery">
+      <div className="delivery-summary">
+        <p><StreamText text={content.summary} speed={18} /></p>
+      </div>
+
+      <div className="delivery-cards">
+        {content.deliverables.map((card) => (
+          <DeliverableCardItem
+            key={card.id}
+            card={card}
+            onPreview={onPreview}
+          />
+        ))}
+      </div>
+
+      <div className="collab-section">
+        <DecisionArea
+          state={state}
+          onPatch={onPatch}
+          onContinue={onContinue}
+          onPreview={onPreview}
+        />
+
+        <div className="collab-input-row">
+          <textarea
+            className="board-input"
+            value={state.notes}
+            onChange={(e) => onPatch({ notes: e.target.value })}
+            placeholder={getPlaceholderForStage(state.stepIndex)}
+            rows={2}
+          />
+        </div>
+
+        <div className="collab-footer">
+          <button
+            className="ghost-button switch-trajectory-btn"
+            type="button"
+            onClick={onSwitchToTrajectory}
+          >
+            <MessageSquare size={13} />
+            <span>对结果不满意？和 AI 继续对话</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── ① 可视化区域 ────────────────────────────
-function VisualArea({ stepIndex, blocks, onBlockClick }: { stepIndex: number; blocks: StageContentBlock[]; onBlockClick: (b: StageContentBlock) => void }) {
-  const visualBlocks = blocks.filter((b) => b.type === "visual" || b.type === "event");
-  if (visualBlocks.length === 0) return null;
+// ── 可展开交付卡片 ───────────────────────────
+function DeliverableCardItem({
+  card,
+  onPreview,
+}: {
+  card: DeliverableCard;
+  onPreview: (content: DrawerContent) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const hasDetail = !!card.expandedContent;
+
   return (
-    <div className="visual-area">
-      <div className="layer-label"><Activity size={14} /><span>实时状态</span></div>
-      {stepIndex === 3 && <BuildProgressPanel blocks={visualBlocks} />}
-      {stepIndex === 4 && <QualityRadarPanel />}
-      {stepIndex !== 3 && stepIndex !== 4 && (
-        <div className="event-list">
-          {visualBlocks.map((block) => (
-            <button key={block.id} className={`event-item ${block.clickable ? "clickable" : ""}`} type="button" onClick={() => onBlockClick(block)}>
-              <div className="event-dot" />
-              <div>
-                <strong><StreamText text={block.title} speed={25} /></strong>
-                <span>{block.detail}</span>
-              </div>
-              {block.clickable && <ChevronRight size={14} />}
-            </button>
-          ))}
+    <div className={`deliverable-card ${hasDetail ? "expandable" : ""} ${expanded ? "expanded" : ""}`}>
+      <button
+        className="deliverable-card-header"
+        type="button"
+        onClick={() => hasDetail && setExpanded(!expanded)}
+      >
+        <div className="deliverable-card-main">
+          <span className={`deliverable-tag tag-${getTagVariant(card.tag)}`}>
+            {card.tag}
+          </span>
+          <div className="deliverable-card-text">
+            <strong>{card.title}</strong>
+            <span>{card.detail}</span>
+          </div>
+        </div>
+        {hasDetail && (
+          <span className="deliverable-expand-icon">
+            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </span>
+        )}
+      </button>
+      {expanded && card.expandedContent && (
+        <div className="deliverable-card-detail">
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={() =>
+              onPreview({
+                type: card.expandedContent!.type as DrawerContent extends { type: infer T } ? T : never,
+                title: card.expandedContent!.title,
+                content: card.expandedContent!.content,
+                language: card.expandedContent!.type === "code" ? "yaml" : "markdown",
+                html: card.expandedContent!.type === "html" ? card.expandedContent!.content : "",
+                path: "",
+              } as DrawerContent)
+            }
+          >
+            在侧栏查看完整内容 →
+          </button>
+          <pre className="deliverable-code-preview">
+            {card.expandedContent.content.slice(0, 300)}
+            {card.expandedContent.content.length > 300 ? "…" : ""}
+          </pre>
         </div>
       )}
     </div>
   );
 }
 
-// ── Agent 开发：构建进展看板 ─────────────────
-function BuildProgressPanel({ blocks }: { blocks: StageContentBlock[] }) {
-  const events = blocks.filter((b) => b.type === "event");
-  const taskNames = events.map((e) => e.title);
-  const { items: done, allDone } = useStreamingList(taskNames, 900);
-  const lastRunning = taskNames.findIndex((t) => !done.includes(t));
-  return (
-    <div className="build-progress">
-      {taskNames.map((name, i) => {
-        const isDone = done.includes(name);
-        const isRunning = !isDone && (allDone ? false : i === lastRunning);
-        return (
-          <div key={name} className={`progress-row ${isRunning ? "running" : ""}`}>
-            <div className="progress-indicator">
-              {isDone ? <span className="indicator-done">✓</span> : isRunning ? <Activity size={14} className="spin-icon" /> : <span className="indicator-queued">○</span>}
-            </div>
-            <span className="progress-name">{name}</span>
-            <span className="progress-status">{isDone ? "Done" : isRunning ? "Running" : "Queued"}</span>
-            <div className={`progress-bar ${isRunning ? "animating" : isDone ? "filled" : ""}`}>
-              <span style={{ width: isDone ? "100%" : isRunning ? "68%" : "0%" }} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+function getTagVariant(tag?: string): string {
+  if (!tag) return "default";
+  const map: Record<string, string> = {
+    "分析": "analysis", "建议": "suggest", "风险": "risk",
+    "契约": "contract", "权限": "permission", "模型": "model",
+    "代码": "code", "数据": "data", "测试": "test",
+    "文档": "doc", "通过": "pass", "未通过": "fail",
+    "修复": "fix", "预览": "preview", "安全": "safe",
+  };
+  return map[tag] || "default";
 }
 
-// ── 质量门禁：雷达图 ────────────────────────
-function QualityRadarPanel() {
-  const items = [
-    { label: "代码检视", value: 100, status: "passed" as const },
-    { label: "单元测试", value: 100, status: "passed" as const },
-    { label: "API 测试", value: 80, status: "running" as const },
-    { label: "UI E2E", value: 0, status: "running" as const },
-  ];
+// ── Tab 2: AI 任务轨迹（Chat 风格） ──────────
+function TrajectoryChatTab({
+  trajectory,
+  stepIndex,
+}: {
+  trajectory: TrajectoryTurn[];
+  stepIndex: number;
+}) {
+  const [messages, setMessages] = useState<Array<{ id: string; role: "agent" | "user"; content: string; agent?: string }>>(
+    trajectory.map((t) => ({
+      id: t.id,
+      role: "agent" as const,
+      content: t.action + (t.output ? `\n\n→ ${t.output}` : ""),
+      agent: t.agent,
+    })),
+  );
+  const [input, setInput] = useState("");
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = () => {
+    const text = input.trim();
+    if (!text) return;
+    const userMsg = {
+      id: `user-${Date.now()}`,
+      role: "user" as const,
+      content: text,
+    };
+    const aiReply = {
+      id: `ai-${Date.now()}`,
+      role: "agent" as const,
+      content: getAIReply(text, stepIndex),
+      agent: "Product Agent",
+    };
+    setMessages((prev) => [...prev, userMsg, aiReply]);
+    setInput("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
   return (
-    <div className="quality-radar">
-      <div className="radar-grid">
-        {items.map((item) => (
-          <div key={item.label} className={`radar-item ${item.status}`}>
-            <div className="radar-ring">
-              <svg viewBox="0 0 80 80">
-                <circle cx="40" cy="40" r="32" fill="none" stroke="var(--secondary)" strokeWidth="6" />
-                <circle cx="40" cy="40" r="32" fill="none" stroke={item.status === "passed" ? "var(--primary)" : "#C27B66"} strokeWidth="6" strokeDasharray={`${(item.value / 100) * 200} 200`} strokeLinecap="round" transform="rotate(-90 40 40)" />
-              </svg>
-              <div className="radar-value"><strong>{item.value}%</strong></div>
+    <div className="tab-panel panel-trajectory">
+      <div className="chat-messages">
+        {messages.map((msg) => (
+          <div key={msg.id} className={`chat-bubble ${msg.role}`}>
+            {msg.role === "agent" && (
+              <div className="chat-bubble-avatar">
+                <Bot size={14} />
+              </div>
+            )}
+            <div className="chat-bubble-body">
+              {msg.role === "agent" && msg.agent && (
+                <span className="chat-bubble-agent">{msg.agent}</span>
+              )}
+              <p>{msg.content}</p>
             </div>
-            <span>{item.label}</span>
           </div>
         ))}
+        <div ref={chatEndRef} />
+      </div>
+
+      <div className="chat-input-bar">
+        <textarea
+          className="chat-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="输入消息，和 AI 继续对话…"
+          rows={1}
+        />
+        <button
+          className="chat-send-btn"
+          type="button"
+          onClick={handleSend}
+          disabled={!input.trim()}
+        >
+          <Send size={16} />
+        </button>
       </div>
     </div>
   );
 }
 
-// ── ② 决策操作区 ────────────────────────────
-function DecisionArea({ state, onPatch, onContinue, onPreview }: { state: AppState; onPatch: (p: Partial<AppState>) => void; onContinue: () => void; onPreview: (c: DrawerContent) => void }) {
+function getAIReply(userInput: string, stepIndex: number): string {
+  const step = workflow[stepIndex]?.id;
+  const replies: Record<string, string[]> = {
+    intent: [
+      "收到，我重新审视了你的需求。核心业务对象不变，但我会调整场景优先级。",
+      "明白，让我重新分析意图。你觉得哪个场景是最优先的？",
+      "好的，我调整了理解。你提到的边界条件我会纳入考虑。",
+    ],
+    scope: [
+      "收到，我重新评估了模块范围。可以调整依赖关系，先做你关注的部分。",
+      "明白，范围可以灵活调整。你想先聚焦哪个模块？",
+    ],
+    spec: [
+      "收到反馈，我会调整 Spec 中对应的定义。请告诉我具体哪些部分需要修改。",
+      "好的，我来修正。你觉得 API 契约还是权限模型需要优先调整？",
+    ],
+    build: [
+      "收到，我会调整构建策略。当前进度可以暂停，等你确认后继续。",
+      "明白，我来检查当前构建产出的问题。请描述你期望的调整方向。",
+    ],
+    quality: [
+      "收到，我会重新审查质量门禁结果。你想让我优先修复哪个问题？",
+      "好的，我来调整质量检查策略。哪些指标你觉得需要重新评估？",
+    ],
+    verify: [
+      "收到，我重新评估修复方案。可以调整修复优先级和范围。",
+      "明白，我来调整修复策略。你有更倾向的修复方向吗？",
+    ],
+    release: [
+      "收到，我会调整发布策略。你想修改哪些发布配置？",
+      "好的，我来重新评估发布方案。请告诉我你的顾虑。",
+    ],
+  };
+  const pool = replies[step] || replies.intent;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// ── 决策操作区 ───────────────────────────────
+function DecisionArea({
+  state,
+  onPatch,
+  onContinue,
+  onPreview,
+}: {
+  state: AppState;
+  onPatch: (p: Partial<AppState>) => void;
+  onContinue: () => void;
+  onPreview: (c: DrawerContent) => void;
+}) {
   const step = workflow[state.stepIndex].id;
   const actions: Record<string, React.ReactNode> = {
     intent: <IntentDecision state={state} onPatch={onPatch} onContinue={onContinue} />,

@@ -882,43 +882,11 @@ p {
   box-shadow: 0 0 0 2px var(--primary-light);
 }
 
-/* ── Module Grid ─────────────────────────── */
+/* ── Module Grid (保留容器布局，各步骤内按需使用) ── */
 .module-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-}
-
-.module-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-full);
-  color: var(--text);
-  background: var(--panel);
-  font-size: 0.82rem;
-  font-weight: 500;
-  transition: all var(--duration-fast) var(--ease-gentle);
-}
-
-.module-chip:hover {
-  border-color: var(--primary);
-  background: var(--primary-light);
-}
-
-.module-chip svg {
-  color: var(--primary);
-}
-
-.module-chip.selected {
-  border-color: var(--primary);
-  background: var(--primary-light);
-  color: var(--text);
-  box-shadow: 0 0 0 2px var(--primary-light);
 }
 
 /* ── Notes Box ──────────────────────────── */

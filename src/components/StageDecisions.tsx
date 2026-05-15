@@ -64,13 +64,13 @@ export function ScopeDecision({
 
   return (
     <>
-      <div className="module-selection">
+      <div className="decision-grid scope-grid">
         {modules.map((mod) => {
           const selected = state.selectedModules.includes(mod.id);
           return (
             <button
               key={mod.id}
-              className={`module-chip ${selected ? "selected" : ""}`}
+              className={`choice-card multi ${selected ? "selected" : ""}`}
               type="button"
               onClick={() =>
                 onPatch({
@@ -80,15 +80,14 @@ export function ScopeDecision({
                 })
               }
             >
-              <span className="module-check">{selected ? "✓" : "○"}</span>
-              <div className="module-info">
-                <strong>{mod.id}</strong>
-                {mod.deps.length > 0 && (
-                  <span className="module-deps">
-                    依赖: {mod.deps.join("、")}
-                  </span>
-                )}
-              </div>
+              <strong>
+                <span className="module-check-icon">{selected ? "✓" : ""}</span>
+                {mod.id}
+              </strong>
+              {mod.deps.length > 0 && (
+                <span>依赖: {mod.deps.join("、")}</span>
+              )}
+              {mod.deps.length === 0 && <span>基础模块</span>}
             </button>
           );
         })}
