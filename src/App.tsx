@@ -1,12 +1,15 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import type { View, HomeTab, AppState, DrawerContent } from "./data/types";
 import { createDefaultState, titleFromIntent, formatTime, workflow } from "./data";
+import { useAgent } from "./agent";
 
 import {
   Sparkles,
   Play,
   ListTodo,
   UserCircle,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
 import { HomeTaskBoard } from "./components/HomeTaskBoard";
@@ -16,15 +19,26 @@ import { LeftPanel } from "./components/LeftPanel";
 import { DecisionBoard } from "./components/DecisionBoard";
 import { Drawer } from "./components/Drawer";
 
-const STORAGE_KEY = "zero-one-software.prototype.v3";
+const STORAGE_KEY = "zero-one-software.prototype.v4";
 
 /**
  * 顶层应用组件 —— 路由 home / workspace 两个视图。
- * 采用 localStorage 持久化状态。
+ * 仅通过 Agent WebSocket 连接驱动，无静态 Demo 模式。
  */
 export function App() {
   const [state, setState] = useStoredState();
   const [drawerContent, setDrawerContent] = useState<DrawerContent>(null);
+
+  // ── Agent 集成 ──
+  const taskId = useMemo(() => {
+    if (state.view === "workspace" && state.createdAt) {
+      return `task-${new Date(state.createdAt).getTime()}`;
+    }
+    return null;
+  }, [state.view, state.createdAt]);
+
+  const agent = useAgent(taskId);
+  const isAgentConnected = agent.connectionStatus === "connected";
 
   const taskTitle = useMemo(
     () => titleFromIntent(state.intent),
@@ -58,6 +72,9 @@ export function App() {
         state={state}
         onPatch={patchState}
         setState={setState}
+        agentConnected={isAgentConnected}
+        createSession={agent.createSession}
+        prompt={agent.prompt}
       />
     );
   }
@@ -72,6 +89,8 @@ export function App() {
       onPreview={openDrawer}
       drawerContent={drawerContent}
       onCloseDrawer={closeDrawer}
+      agent={agent}
+      isAgentConnected={isAgentConnected}
     />
   );
 }
@@ -82,16 +101,23 @@ function HomeView({
   state,
   onPatch,
   setState,
+  agentConnected,
+  createSession,
+  prompt,
 }: {
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
+  agentConnected: boolean;
+  createSession: (step: string, intent: string) => Promise<void>;
+  prompt: (step: string, text: string) => Promise<void>;
 }) {
   const updateHomeTab = (tab: HomeTab) =>
     onPatch({ homeTab: tab, previewTaskId: null });
 
   const startTaskFromIntent = () => {
     if (!state.intent.trim()) return;
+    if (!agentConnected) return;
     setState((previous) => ({
       ...createDefaultState(),
       intent: previous.intent.trim(),
@@ -112,11 +138,14 @@ function HomeView({
             <strong>AI原生研发平台</strong>
           </div>
         </div>
-        <div className="home-user-info">
-          <UserCircle size={18} />
-          <div>
-            <strong>景梦园</strong>
-            <span>80123456</span>
+        <div className="home-nav-right">
+          <AgentStatusBadge connected={agentConnected} />
+          <div className="home-user-info">
+            <UserCircle size={18} />
+            <div>
+              <strong>景梦园</strong>
+              <span>80123456</span>
+            </div>
           </div>
         </div>
       </header>
@@ -193,6 +222,8 @@ function WorkspaceView({
   onPreview,
   drawerContent,
   onCloseDrawer,
+  agent,
+  isAgentConnected,
 }: {
   state: AppState;
   taskTitle: string;
@@ -202,16 +233,58 @@ function WorkspaceView({
   onPreview: (content: DrawerContent) => void;
   drawerContent: DrawerContent;
   onCloseDrawer: () => void;
+  agent: ReturnType<typeof useAgent>;
+  isAgentConnected: boolean;
 }) {
-  const continueTask = () => {
+  // ── Agent session 生命周期：进入 workspace 时自动创建 intent session ──
+  const sessionInitRef = useRef(false);
+  useEffect(() => {
+    if (
+      isAgentConnected &&
+      state.stepIndex === 0 &&
+      !sessionInitRef.current &&
+      state.intent
+    ) {
+      sessionInitRef.current = true;
+      agent.createSession("intent", state.intent).then(() => {
+        // 发送意图分析 prompt
+        agent.prompt(
+          "intent",
+          `请分析以下业务意图，识别核心业务对象、角色和场景：\n\n${state.intent}`,
+        );
+        // 刷新文件树
+        agent.getFileTree();
+      });
+    }
+  }, [isAgentConnected, state.stepIndex, state.intent]);
+
+  const continueTask = useCallback(() => {
     const nextIndex = Math.min(state.stepIndex + 1, workflow.length - 1);
+    const currentStep = workflow[state.stepIndex];
+    const nextStep = workflow[nextIndex];
+
+    // Agent 模式：创建下一步 session（旧 session 由 SessionPool 管理）
+    if (isAgentConnected) {
+      agent.createSession(nextStep.id, state.intent).then(() => {
+        const promptText = getStepPrompt(
+          nextStep.id,
+          state.intent,
+          state.scope,
+          state.selectedModules,
+        );
+        agent.prompt(nextStep.id, promptText);
+        // 刷新文件树
+        agent.getFileTree();
+      });
+    }
+
     onPatch({
       stepIndex: nextIndex,
-      activeStage: workflow[nextIndex].id,
+      activeStage: nextStep.id,
       specConfirmed: state.specConfirmed || state.stepIndex >= 2,
     });
     window.scrollTo({ top: 0 });
-  };
+  }, [state.stepIndex, isAgentConnected, agent, onPatch, state.intent, state.scope, state.selectedModules, state.specConfirmed]);
 
   const handleStepClick = (index: number) => {
     onPatch({
@@ -221,34 +294,31 @@ function WorkspaceView({
     window.scrollTo({ top: 0 });
   };
 
-  const resetDemo = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setState(createDefaultState());
-    window.scrollTo({ top: 0 });
-  };
-
-  const handleFileClick = (path: string, name: string) => {
-    const ext = path.split(".").pop() || "";
-    const mockContent = getMockFileContent(path, name);
-    onPreview({
-      type: ["ts", "tsx", "js", "jsx", "json", "yaml", "yml", "css"].includes(
-        ext,
-      )
-        ? "code"
-        : ["md"].includes(ext)
-          ? "document"
-          : "file",
-      title: name,
-      path,
-      content: mockContent,
-      language: getLanguageFromPath(path),
-      html: "",
-    } as DrawerContent);
-  };
+  const handleFileClick = useCallback(
+    async (path: string, name: string) => {
+      if (!isAgentConnected) return;
+      try {
+        const content = await agent.readFile(path);
+        const ext = path.split(".").pop() || "";
+        const isCode = ["ts", "tsx", "js", "jsx", "json", "yaml", "yml", "css"].includes(ext);
+        onPreview({
+          type: isCode ? "code" : ["md"].includes(ext) ? "document" : "file",
+          title: name,
+          path,
+          content,
+          language: getLanguageFromPath(path),
+          html: "",
+        } as DrawerContent);
+      } catch {
+        // 读取失败
+      }
+    },
+    [isAgentConnected, agent, onPreview],
+  );
 
   return (
     <main className="workspace-shell">
-      {/* Topbar 信息条（精简版） */}
+      {/* Topbar 信息条 */}
       <div className="workspace-infobar">
         <div className="infobar-left">
           <button
@@ -265,14 +335,11 @@ function WorkspaceView({
             <strong>{taskTitle}</strong>
           </div>
         </div>
-        <button
-          className="ghost-button danger-lite"
-          type="button"
-          onClick={resetDemo}
-        >
-          重置演示
-        </button>
+        <div className="infobar-right">
+          <AgentStatusBadge connected={isAgentConnected} />
+        </div>
       </div>
+
       {/* 顶部横置 SOP 导航 */}
       <SopNav
         workflow={workflow}
@@ -281,30 +348,75 @@ function WorkspaceView({
         onStepClick={handleStepClick}
       />
 
-      {/* 主内容区：左侧面板 + 决策台 */}
-      <div className="workspace-grid">
-        <LeftPanel
-          activeTaskCard={state.activeTaskCard}
-          stepIndex={state.stepIndex}
-          onFileClick={handleFileClick}
-          onBackToTasks={() =>
-            setState((prev) => ({ ...prev, view: "home" }))
-          }
-        />
+      {/* Agent 未连接时显示提示 */}
+      {!isAgentConnected ? (
+        <div className="workspace-no-agent">
+          <div className="no-agent-card">
+            <WifiOff size={32} />
+            <h2>Agent 未连接</h2>
+            <p>请启动 Agent Server 并配置 API Key 后刷新页面</p>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() =>
+                setState((prev) => ({ ...prev, view: "home" }))
+              }
+            >
+              ← 返回首页
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* 主内容区：左侧面板 + 决策台 */}
+          <div className="workspace-grid">
+            <LeftPanel
+              activeTaskCard={state.activeTaskCard}
+              stepIndex={state.stepIndex}
+              onFileClick={handleFileClick}
+              onBackToTasks={() =>
+                setState((prev) => ({ ...prev, view: "home" }))
+              }
+              agentFileTree={agent.fileTree}
+              isAgentConnected={isAgentConnected}
+            />
 
-        <DecisionBoard
-          state={state}
-          onPatch={onPatch}
-          onContinue={continueTask}
-          onPreview={onPreview}
-        />
-      </div>
+            <DecisionBoard
+              state={state}
+              onPatch={onPatch}
+              onContinue={continueTask}
+              onPreview={onPreview}
+              agentSessions={agent.sessions}
+              agentSteer={agent.steer}
+              agentPrompt={agent.prompt}
+              isAgentConnected={isAgentConnected}
+            />
+          </div>
 
-
-
-      {/* 右侧抽屉 */}
-      <Drawer content={drawerContent} onClose={onCloseDrawer} />
+          {/* 右侧抽屉 */}
+          <Drawer content={drawerContent} onClose={onCloseDrawer} />
+        </>
+      )}
     </main>
+  );
+}
+
+// ── Agent 连接状态徽章（始终显示于右上角） ──
+function AgentStatusBadge({ connected }: { connected: boolean }) {
+  return (
+    <div className={`agent-status-badge ${connected ? "connected" : "disconnected"}`}>
+      {connected ? (
+        <>
+          <Wifi size={13} />
+          <span>Agent 已连接</span>
+        </>
+      ) : (
+        <>
+          <WifiOff size={13} />
+          <span className="agent-disconnected-text">Agent 未连接</span>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -338,71 +450,36 @@ function useStoredState() {
 function getLanguageFromPath(path: string): string {
   const ext = path.split(".").pop() || "";
   const map: Record<string, string> = {
-    ts: "TypeScript",
-    tsx: "TSX",
-    js: "JavaScript",
-    jsx: "JSX",
-    json: "JSON",
-    yaml: "YAML",
-    yml: "YAML",
-    md: "Markdown",
-    css: "CSS",
-    html: "HTML",
-    diff: "Diff",
+    ts: "TypeScript", tsx: "TSX", js: "JavaScript", jsx: "JSX",
+    json: "JSON", yaml: "YAML", yml: "YAML", md: "Markdown",
+    css: "CSS", html: "HTML", diff: "Diff",
   };
   return map[ext] || ext;
 }
 
-function getMockFileContent(path: string, name: string): string {
-  if (name.includes("openapi") || name.endsWith(".yaml")) {
-    return `openapi: "3.0.0"
-info:
-  title: 销售线索跟进系统
-  version: "1.0.0"
-paths:
-  /customers:
-    get:
-      summary: 获取客户列表
-      responses:
-        "200":
-          description: 客户列表
-  /customers/{id}:
-    get:
-      summary: 获取客户详情
-  /reminders:
-    get:
-      summary: 获取待处理提醒`;
+/** 获取每步的 agent prompt */
+function getStepPrompt(
+  step: string,
+  intent: string,
+  scope: string,
+  selectedModules: string[],
+): string {
+  switch (step) {
+    case "intent":
+      return `请分析以下业务意图，识别核心业务对象、角色和场景：\n\n${intent}`;
+    case "scope":
+      return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围。\n\n业务意图：${intent}`;
+    case "spec":
+      return `基于范围定义，请生成数据模型、页面地图、API 契约和权限模型。\n\n业务意图：${intent}\n交付模式：${scope}\n选定模块：${selectedModules.join("、")}`;
+    case "build":
+      return `基于 Spec 基线，实现页面组件和 mock 数据。请阅读 workspace 中的 API 契约和数据模型文件后开始开发。`;
+    case "quality":
+      return `请执行代码检视、检查测试覆盖率，运行测试并输出质量报告。`;
+    case "verify":
+      return `请分析质量报告中的未通过项，生成修复方案并执行修复和复测。`;
+    case "release":
+      return `请汇总所有产出文件，生成变更摘要、CHANGELOG.md 和 DELIVERY.md。`;
+    default:
+      return `继续当前任务。`;
   }
-  if (name.endsWith(".test.ts")) {
-    return `import { describe, it, expect } from "vitest";
-import { generateReminder } from "../src/hooks/use-follow-up";
-
-describe("提醒生成逻辑", () => {
-  it("超过3天未跟进应生成提醒", () => {
-    const lastFollowUp = new Date("2026-04-20");
-    const reminder = generateReminder(lastFollowUp);
-    expect(reminder.urgent).toBe(true);
-  });
-});`;
-  }
-  if (name.endsWith(".tsx")) {
-    return `import { useState } from "react";
-
-export function ${name.replace(".tsx", "")}() {
-  const [data, setData] = useState([]);
-
-  return (
-    <div className="page">
-      <h1>${name.replace(".tsx", "")}</h1>
-    </div>
-  );
-}`;
-  }
-  if (name.endsWith(".json")) {
-    return JSON.stringify([{ id: 1, name: "示例数据" }], null, 2);
-  }
-  if (name.endsWith(".md")) {
-    return `# ${name.replace(".md", "")}\n\n内容待生成...`;
-  }
-  return `// ${name}\n// Agent 生成于 ${new Date().toLocaleDateString("zh-CN")}`;
 }

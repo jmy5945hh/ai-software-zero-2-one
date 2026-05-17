@@ -389,9 +389,6 @@ export class AgentRunner {
     if (process.env.DEEPSEEK_API_KEY) {
       this.authStorage.setRuntimeApiKey("deepseek", process.env.DEEPSEEK_API_KEY);
     }
-    if (process.env.ANTHROPIC_API_KEY) {
-      this.authStorage.setRuntimeApiKey("anthropic", process.env.ANTHROPIC_API_KEY);
-    }
     this.modelRegistry = ModelRegistry.create(this.authStorage, config.modelsJsonPath);
     this.settingsManager = SettingsManager.inMemory({
       compaction: { enabled: false },
@@ -920,38 +917,11 @@ const authStorage = AuthStorage.create();
 if (process.env.DEEPSEEK_API_KEY) {
   authStorage.setRuntimeApiKey("deepseek", process.env.DEEPSEEK_API_KEY);
 }
-if (process.env.ANTHROPIC_API_KEY) {
-  authStorage.setRuntimeApiKey("anthropic", process.env.ANTHROPIC_API_KEY);
-}
 ```
 
 ### 7.2 models.json（不含 API Key）
 
-基于 DeepSeek 实际 API 格式（`POST https://api.deepseek.com/chat/completions`，模型 `deepseek-v4-pro`，支持 `thinking` + `reasoning_effort`）：
-
-```json
-{
-  "providers": {
-    "deepseek": {
-      "baseUrl": "https://api.deepseek.com",
-      "api": "openai-completions",
-      "models": [
-        {
-          "id": "deepseek-v4-pro",
-          "name": "DeepSeek V4 Pro",
-          "reasoning": true,
-          "input": ["text"],
-          "contextWindow": 128000,
-          "maxTokens": 8192,
-          "compat": {
-            "thinkingFormat": "deepseek"
-          }
-        }
-      ]
-    }
-  }
-}
-```
+基于 DeepSeek 实际 API 格式（`POST https://api.deepseek.com/chat/completions`，模型 `deepseek-v4-flash`，支持 `thinking` + `reasoning_effort`）：
 
 **关键说明**：
 

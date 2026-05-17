@@ -11,13 +11,16 @@ import {
   GitBranch,
 } from "lucide-react";
 import type { TaskCard, FileNode } from "../data/types";
-import { categoryMeta, priorityLabel, getFileTreeForStage } from "../data";
+import { categoryMeta, priorityLabel } from "../data";
+import type { FileNode as AgentFileNode } from "../agent/types";
 
 type LeftPanelProps = {
   activeTaskCard: TaskCard | null;
   stepIndex: number;
   onFileClick: (path: string, name: string) => void;
   onBackToTasks: () => void;
+  agentFileTree?: AgentFileNode[] | null;
+  isAgentConnected: boolean;
 };
 
 /**
@@ -29,6 +32,8 @@ export function LeftPanel({
   stepIndex,
   onFileClick,
   onBackToTasks,
+  agentFileTree,
+  isAgentConnected,
 }: LeftPanelProps) {
   return (
     <aside className="left-panel">
@@ -39,7 +44,12 @@ export function LeftPanel({
       />
 
       {/* 工作空间目录 */}
-      <WorkspaceTree stepIndex={stepIndex} onFileClick={onFileClick} />
+      <WorkspaceTree
+        stepIndex={stepIndex}
+        onFileClick={onFileClick}
+        agentFileTree={agentFileTree}
+        isAgentConnected={isAgentConnected}
+      />
     </aside>
   );
 }
@@ -113,11 +123,18 @@ function TaskCardResident({
 function WorkspaceTree({
   stepIndex,
   onFileClick,
+  agentFileTree,
+  isAgentConnected,
 }: {
   stepIndex: number;
   onFileClick: (path: string, name: string) => void;
+  agentFileTree?: AgentFileNode[] | null;
+  isAgentConnected: boolean;
 }) {
-  const files = getFileTreeForStage(stepIndex);
+  // 仅在 Agent 连接且有文件树时展示
+  const files: FileNode[] = agentFileTree?.length
+    ? agentFileTree.map(convertAgentNode)
+    : [];
 
   return (
     <section className="left-card workspace-tree">
@@ -128,18 +145,34 @@ function WorkspaceTree({
       </div>
 
       <div className="file-tree">
-        {files.map((node) => (
-          <FileTreeNode
-            key={node.name}
-            node={node}
-            depth={0}
-            path={node.name}
-            onFileClick={onFileClick}
-          />
-        ))}
+        {files.length > 0 ? (
+          files.map((node) => (
+            <FileTreeNode
+              key={node.name}
+              node={node}
+              depth={0}
+              path={node.name}
+              onFileClick={onFileClick}
+            />
+          ))
+        ) : (
+          <div className="file-tree-empty">
+            {isAgentConnected ? "等待 Agent 生成文件..." : "Agent 未连接"}
+          </div>
+        )}
       </div>
     </section>
   );
+}
+
+/** 将 Agent FileNode 转换为 Data FileNode */
+function convertAgentNode(node: AgentFileNode): FileNode {
+  return {
+    name: node.name,
+    type: node.type,
+    children: node.children?.map(convertAgentNode),
+    highlight: false,
+  };
 }
 
 /**
@@ -178,7 +211,7 @@ function FileTreeNode({
         </button>
 
         {expanded &&
-          node.children?.map((child) => (
+          node.children?.map((child: FileNode) => (
             <FileTreeNode
               key={child.name}
               node={child}

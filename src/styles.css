@@ -2301,3 +2301,1004 @@ p {
     font-size: 1.3rem;
   }
 }
+
+/* ============================================
+   Markdown 渲染样式
+   ============================================ */
+
+.markdown-body {
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-family: var(--font-heading);
+  margin: 1.2em 0 0.5em;
+  line-height: 1.25;
+}
+
+.markdown-body h1 { font-size: 1.5rem; }
+.markdown-body h2 { font-size: 1.25rem; }
+.markdown-body h3 { font-size: 1.1rem; }
+.markdown-body h4 { font-size: 1rem; }
+
+.markdown-body p {
+  margin: 0.6em 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.markdown-body li {
+  margin: 0.3em 0;
+}
+
+.markdown-body blockquote {
+  margin: 0.6em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--primary);
+  background: var(--primary-light);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--muted);
+}
+
+.markdown-body a {
+  color: var(--terracotta);
+  text-decoration: none;
+  border-bottom: 1px solid var(--secondary);
+  transition: border-color var(--duration-fast);
+}
+
+.markdown-body a:hover {
+  border-color: var(--terracotta);
+}
+
+.markdown-body table {
+  width: 100%;
+  margin: 0.6em 0;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+.markdown-body th {
+  background: var(--bg-soft);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.markdown-body tr:nth-child(even) td {
+  background: var(--bg-soft);
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 1.2em 0;
+}
+
+/* ── 内联代码 ────────────────────────────── */
+.markdown-body .inline-code,
+.markdown-body code:not(pre code) {
+  font-size: 0.82em;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  background: var(--bg-soft);
+  color: var(--terracotta);
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+/* ── 代码块容器 ──────────────────────────── */
+.markdown-code-block {
+  margin: 0.8em 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-soft);
+}
+
+.code-lang-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.code-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.code-copy-btn:hover {
+  background: var(--primary-light);
+  color: var(--text);
+}
+
+.markdown-code-block pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+.markdown-code-block pre code {
+  background: none;
+  padding: 0;
+  color: var(--text);
+  font-size: inherit;
+}
+
+/* ── Mermaid 图表 ────────────────────────── */
+.mermaid-container {
+  margin: 1em 0;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  overflow-x: auto;
+}
+
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-loading,
+.mermaid-error {
+  margin: 0.8em 0;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.mermaid-error {
+  border-color: var(--terracotta);
+  background: var(--terracotta-light);
+  color: var(--terracotta);
+}
+
+.mermaid-error-code {
+  margin-top: 8px;
+  text-align: left;
+  font-size: 0.72rem;
+  opacity: 0.7;
+  white-space: pre-wrap;
+}
+
+/* ── Markdown 轮次正文区 ─────────────────── */
+.round-markdown {
+  padding: 14px 18px;
+  margin: 0;
+}
+
+/* ============================================
+   工具调用分组样式（借鉴 assistant-ui ToolGroup）
+   ============================================ */
+
+.tool-call-group {
+  margin: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color var(--duration-fast);
+}
+
+.tool-call-group.has-active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary-light);
+}
+
+.tool-call-group.expanded {
+  border-color: var(--primary-mid);
+}
+
+.tool-call-group-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: var(--panel-soft);
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--muted);
+  transition: background var(--duration-fast);
+}
+
+.tool-call-group-trigger:hover {
+  background: var(--primary-light);
+}
+
+.tcg-icon {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+}
+
+.has-active .tcg-icon {
+  color: var(--primary);
+}
+
+.tcg-label {
+  flex: 1;
+  text-align: left;
+  font-weight: 500;
+}
+
+.tcg-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--muted-warm);
+}
+
+.tool-call-group-content {
+  padding: 6px 0;
+  background: var(--panel);
+  animation: tcg-slide-down 200ms var(--ease-out);
+}
+
+@keyframes tcg-slide-down {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 600px;
+  }
+}
+
+/* ============================================
+   自定义滚动条（聊天气泡感）
+   ============================================ */
+
+.trajectory-rounds::-webkit-scrollbar {
+  width: 6px;
+}
+
+.trajectory-rounds::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.trajectory-rounds::-webkit-scrollbar-thumb {
+  background: var(--secondary);
+  border-radius: var(--radius-full);
+}
+
+.trajectory-rounds::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* Firefox */
+.trajectory-rounds {
+  scrollbar-width: thin;
+  scrollbar-color: var(--secondary) transparent;
+}
+
+/* 通用可滚动区域美化 */
+.markdown-code-block pre::-webkit-scrollbar {
+  height: 5px;
+}
+
+.markdown-code-block pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.markdown-code-block pre::-webkit-scrollbar-thumb {
+  background: var(--secondary);
+  border-radius: var(--radius-full);
+}
+
+/* ============================================
+   Token 用量徽章样式
+   ============================================ */
+
+.token-usage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  transition: all var(--duration-fast);
+  white-space: nowrap;
+}
+
+.token-usage-ring {
+  position: relative;
+  width: 14px;
+  height: 14px;
+}
+
+.token-usage-ring svg {
+  transform: rotate(-90deg);
+}
+
+.token-usage-ring-bg {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 2.5;
+}
+
+.token-usage-ring-fill {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 400ms var(--ease-out), stroke var(--duration-fast);
+}
+
+.token-usage-ring-fill.normal {
+  stroke: var(--primary);
+}
+
+.token-usage-ring-fill.warning {
+  stroke: #E4A854;
+}
+
+.token-usage-ring-fill.critical {
+  stroke: var(--terracotta);
+}
+
+/* ── 轨迹信息条 ──────────────────────────── */
+.trajectory-infobar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-soft);
+}
+
+.trajectory-turn-summary {
+  font-size: 0.72rem;
+  color: var(--muted-warm);
+  font-weight: 500;
+}
+
+/* ============================================
+   轨迹 V2 — 三栏事件流 + 右侧详情面板
+   ============================================ */
+
+/* ── 容器 ────────────────────────────────── */
+.panel-trajectory-v2 {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 0;
+  padding: 0 !important;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── 中间事件流 ──────────────────────────── */
+.trajectory-stream {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--line);
+  transition: all var(--duration-normal);
+}
+
+.trajectory-stream.has-panel {
+  flex: 1 1 55%;
+}
+
+/* ── 轮次分隔线 ──────────────────────────── */
+.timeline-round-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 8px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+
+.timeline-round-divider.running {
+  background: linear-gradient(to bottom, var(--primary-light), var(--bg));
+}
+
+.trd-index {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.timeline-round-divider.running .trd-index {
+  background: var(--primary);
+  color: var(--panel);
+}
+
+.trd-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.timeline-round-divider.running .trd-label {
+  color: var(--text);
+}
+
+/* ── 思考过程 ────────────────────────────── */
+.timeline-thought {
+  padding: 6px 16px 6px 40px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.tl-thought-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--muted-warm);
+}
+
+.tl-thought-text {
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* ── 打字光标 ────────────────────────────── */
+.typing-cursor::after {
+  content: "▋";
+  display: inline-block;
+  animation: blink 1s step-end infinite;
+  color: var(--primary);
+  margin-left: 2px;
+}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ── 消息卡片 ────────────────────────────── */
+.timeline-message {
+  padding: 0 16px;
+  transition: background var(--duration-fast);
+}
+
+.timeline-message:hover {
+  background: var(--primary-light);
+}
+
+.tl-message-content {
+  padding: 10px 0;
+}
+
+/* ── 工具调用卡片 ────────────────────────── */
+.timeline-tool {
+  padding: 4px 16px;
+  cursor: pointer;
+}
+
+.timeline-tool.running:hover,
+.timeline-tool.done:hover,
+.timeline-tool.error:hover {
+  background: var(--primary-light);
+}
+
+.tl-tool-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel-soft);
+  transition: all var(--duration-fast);
+}
+
+.timeline-tool.running .tl-tool-card {
+  border-color: var(--primary);
+  box-shadow: 0 0 6px rgba(99, 102, 241, 0.2);
+  animation: tool-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tool-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.15); }
+  50% { box-shadow: 0 0 10px 2px rgba(99, 102, 241, 0.3); }
+}
+
+.timeline-tool.error .tl-tool-card {
+  border-color: var(--terracotta);
+}
+
+.tl-tool-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.tl-tool-icon.cat-tool { color: var(--muted); }
+.tl-tool-icon.cat-mcp { color: #A78BFA; border-color: rgba(167, 139, 250, 0.3); }
+.tl-tool-icon.cat-skill { color: #F59E0B; border-color: rgba(245, 158, 11, 0.3); }
+.tl-tool-icon.cat-subagent { color: #34D399; border-color: rgba(52, 211, 153, 0.3); }
+
+.tl-tool-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.tl-tool-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+}
+
+.tl-tool-cat {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.62rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.tl-tool-cat.cat-tool { color: var(--muted); border: 1px solid var(--line); }
+.tl-tool-cat.cat-mcp { color: #A78BFA; border: 1px solid rgba(167, 139, 250, 0.3); }
+.tl-tool-cat.cat-skill { color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3); }
+.tl-tool-cat.cat-subagent { color: #34D399; border: 1px solid rgba(52, 211, 153, 0.3); }
+
+.tl-tool-name {
+  font-weight: 500;
+  color: var(--text);
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.76rem;
+}
+
+.tl-tool-subtitle {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--muted-warm);
+  margin-top: 2px;
+}
+
+.tl-tool-status {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tl-tool-status.running { color: var(--primary); }
+.tl-tool-status.done { color: #34D399; }
+.tl-tool-status.error { color: var(--terracotta); }
+
+.tl-tool-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--muted-warm);
+  flex-shrink: 0;
+}
+
+/* ── 工具结果折叠预览 ────────────────────── */
+.tl-tool-result-preview {
+  margin: 6px 0 2px 38px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.tl-tool-result-pre {
+  padding: 8px 10px;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--muted-warm);
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.tl-tool-result-preview.collapsed .tl-tool-result-pre {
+  max-height: 140px;
+  position: relative;
+}
+
+.tl-tool-result-preview.collapsed .tl-tool-result-pre::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background: linear-gradient(transparent, var(--surface));
+}
+
+/* ── 用户消息气泡 ────────────────────────── */
+.timeline-user {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 16px;
+}
+
+.tl-user-bubble {
+  background: var(--primary-light);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 12px 12px 4px 12px;
+  padding: 8px 14px;
+  max-width: 80%;
+}
+
+.tl-user-bubble p {
+  font-size: 0.8rem;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.tl-user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--muted-warm);
+}
+
+/* ── 任务完成卡片 ────────────────────────── */
+.timeline-complete {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 12px 16px;
+  padding: 14px;
+  border: 2px solid rgba(52, 211, 153, 0.3);
+  border-radius: var(--radius-md);
+  background: rgba(52, 211, 153, 0.06);
+}
+
+.tl-complete-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: rgba(52, 211, 153, 0.15);
+  color: #34D399;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tl-complete-body strong {
+  display: block;
+  font-size: 0.82rem;
+  color: #34D399;
+  margin-bottom: 4px;
+}
+
+.tl-complete-body p {
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── 错误事件卡片 ────────────────────────── */
+.timeline-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 8px 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--terracotta);
+  border-radius: var(--radius-md);
+  background: var(--terracotta-light);
+}
+
+.tl-error-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  background: rgba(217, 119, 87, 0.15);
+  color: var(--terracotta);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tl-error-body strong {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--terracotta);
+  margin-bottom: 2px;
+}
+
+.tl-error-body p {
+  font-size: 0.74rem;
+  color: var(--muted-warm);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── 右侧详情面板 ────────────────────────── */
+.trajectory-detail-panel {
+  flex: 1 1 45%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+  animation: panel-slide-in 200ms var(--ease-out);
+}
+
+@keyframes panel-slide-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Tab 栏 ──────────────────────────────── */
+.tdp-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-soft);
+}
+
+.tdp-tab-list {
+  display: flex;
+  gap: 2px;
+}
+
+.tdp-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-warm);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.tdp-tab:hover {
+  color: var(--text);
+  background: var(--primary-light);
+}
+
+.tdp-tab.active {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.tdp-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-warm);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+
+.tdp-close-btn:hover {
+  background: var(--terracotta-light);
+  color: var(--terracotta);
+}
+
+/* ── 内容区 ──────────────────────────────── */
+.tdp-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ── I/O 区域 ────────────────────────────── */
+.tdp-io {
+  padding: 12px 14px;
+}
+
+.tdp-section {
+  margin-bottom: 16px;
+}
+
+.tdp-section-title {
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted-warm);
+  margin-bottom: 8px;
+}
+
+.tdp-code-block {
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  color: var(--text);
+}
+
+/* ── Diff 区域 ───────────────────────────── */
+.tdp-diff {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-soft);
+}
+
+.tdp-diff-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-soft);
+}
+
+.tdp-diff-summary {
+  font-size: 0.76rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.tdp-diff-badge {
+  font-size: 0.62rem;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  color: var(--muted-warm);
+}
+
+.tdp-diff-content {
+  flex: 1;
+  overflow-y: auto;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.diff-line {
+  display: flex;
+  padding: 0 14px;
+  min-height: 22px;
+}
+
+.diff-line.add {
+  background: rgba(52, 211, 153, 0.06);
+  color: #A7F3D0;
+}
+
+.diff-line.del {
+  background: rgba(239, 68, 68, 0.06);
+  color: #FCA5A5;
+}
+
+.diff-line.ctx {
+  color: var(--muted);
+}
+
+.diff-num {
+  width: 36px;
+  flex-shrink: 0;
+  text-align: right;
+  padding-right: 12px;
+  border-right: 1px solid var(--line);
+  margin-right: 12px;
+  color: var(--muted-warm);
+  user-select: none;
+  font-size: 0.68rem;
+}
+
+.diff-text {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ── 预览区域 ────────────────────────────── */
+.tdp-preview {
+  padding: 16px;
+}
+
+.tdp-preview .markdown-body {
+  color: var(--text);
+}
+
+/* ============================================
+   响应式 — 小屏时面板全宽
+   ============================================ */
+@media (max-width: 900px) {
+  .panel-trajectory-v2 {
+    flex-direction: column !important;
+  }
+
+  .trajectory-stream {
+    flex: 1 1 50%;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .trajectory-detail-panel {
+    flex: 1 1 50%;
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+}

@@ -1077,6 +1077,418 @@
   font-size: 0.9rem;
 }
 
+/* ── Agent 连接状态徽章（右上角常驻） ──── */
+.agent-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.agent-status-badge.connected {
+  background: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.agent-status-badge.disconnected {
+  background: var(--terracotta-light);
+  color: var(--terracotta);
+  border: 1px solid var(--terracotta);
+}
+
+.agent-status-badge .agent-disconnected-text {
+  color: var(--terracotta);
+  font-weight: 600;
+}
+
+.home-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.infobar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── Agent 未连接提示 ────────────────────── */
+.workspace-no-agent {
+  display: grid;
+  place-items: center;
+  padding: 80px 24px;
+  min-height: 0;
+}
+
+.no-agent-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 48px 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--panel);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+  max-width: 420px;
+}
+
+.no-agent-card svg {
+  color: var(--terracotta);
+  opacity: 0.6;
+}
+
+.no-agent-card h2 {
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  color: var(--text);
+}
+
+.no-agent-card p {
+  color: var(--muted-warm);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+/* ── 文件树空状态 ───────────────────────── */
+.file-tree-empty {
+  padding: 16px 8px;
+  color: var(--muted-warm);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* ── 交付板块：Agent 工作中提示 ──────────── */
+.delivery-working-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 28px 24px;
+  border: 1.5px solid var(--primary);
+  border-radius: var(--radius-lg);
+  background: var(--primary-light);
+  box-shadow: 0 0 0 4px var(--primary-light);
+  margin-bottom: 16px;
+}
+
+.working-notice-icon {
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.working-notice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.working-notice-body strong {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+.working-notice-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-full);
+  background: var(--panel);
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+  align-self: flex-start;
+}
+
+.working-notice-link:hover {
+  background: var(--primary);
+  color: #F9F8F4;
+}
+
+/* ── 任务轨迹：轮次展示 ─────────────────── */
+.trajectory-rounds {
+  overflow-y: auto;
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.trajectory-empty,
+.trajectory-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 24px;
+  color: var(--muted-warm);
+  text-align: center;
+}
+
+.trajectory-empty svg,
+.trajectory-waiting svg {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.trajectory-empty p,
+.trajectory-waiting p {
+  font-size: 0.82rem;
+}
+
+.trajectory-round {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  overflow: hidden;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.trajectory-round.running {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.round-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--line);
+}
+
+.round-index {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.trajectory-round.running .round-index {
+  border-color: var(--terracotta);
+  background: var(--terracotta-light);
+  color: var(--terracotta);
+}
+
+.round-label {
+  font-family: var(--font-heading);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.round-tool-count {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+/* 工具调用列表 */
+.round-tool-calls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.round-tool-call {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 500;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.round-tool-call.running {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.round-tool-call.done {
+  opacity: 0.65;
+}
+
+.round-tool-call.error {
+  border-color: var(--terracotta);
+  background: var(--terracotta-light);
+}
+
+.rtc-icon {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.round-tool-call.category-tool .rtc-icon { color: var(--primary); }
+.round-tool-call.category-mcp .rtc-icon { color: #6366F1; }
+.round-tool-call.category-skill .rtc-icon { color: #F59E0B; }
+.round-tool-call.category-subagent .rtc-icon { color: #8B5CF6; }
+
+.rtc-name {
+  color: var(--text);
+  font-family: "SF Mono", "Cascadia Code", monospace;
+}
+
+.rtc-category {
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-warm);
+  background: var(--secondary-light);
+}
+
+.round-tool-call.category-mcp .rtc-category {
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366F1;
+}
+
+.round-tool-call.category-skill .rtc-category {
+  background: rgba(245, 158, 11, 0.1);
+  color: #D97706;
+}
+
+.round-tool-call.category-subagent .rtc-category {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8B5CF6;
+}
+
+.rtc-status {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  font-size: 0.6rem;
+  flex-shrink: 0;
+}
+
+.rtc-status.done { color: var(--primary); }
+.rtc-status.error { color: var(--terracotta); }
+
+/* 轮次文本 */
+.round-text {
+  padding: 14px 16px;
+  font-size: 0.8rem;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.round-text p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.round-text.streaming-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.text-muted {
+  color: var(--muted-warm);
+  font-style: italic;
+}
+.agent-tool-calls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.tool-call-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--panel);
+  font-size: 0.7rem;
+  font-weight: 500;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.tool-call-badge.running {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.tool-call-badge.done {
+  opacity: 0.6;
+}
+
+.tool-call-badge.error {
+  border-color: var(--terracotta);
+  background: var(--terracotta-light);
+}
+
+.tool-call-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tool-call-dot.running {
+  background: var(--primary);
+  animation: pulseBar 1.8s ease-in-out infinite;
+}
+
+.tool-call-dot.done {
+  background: var(--primary);
+}
+
+.tool-call-dot.error {
+  background: var(--terracotta);
+}
+
+.tool-call-name {
+  color: var(--text);
+}
+
+.tool-call-status {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
 /* ── 动画补充 ────────────────────────────── */
 @keyframes badgePulse {
   0%, 100% { opacity: 1; }
