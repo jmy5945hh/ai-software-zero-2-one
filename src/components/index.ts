@@ -4,3 +4,7 @@ export { DecisionBoard } from "./DecisionBoard";
 export { Drawer } from "./Drawer";
 export { HomeTaskBoard } from "./HomeTaskBoard";
 export { TypewriterText } from "./TypewriterText";
+export { ContentModal } from "./ContentModal";
+export { WorkspaceSelector } from "./WorkspaceSelector";
+export type { ModalContent } from "./ContentModal";
+export type { BrowseEntry } from "./WorkspaceSelector";

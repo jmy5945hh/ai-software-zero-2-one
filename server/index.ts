@@ -157,9 +157,16 @@ wss.on("connection", (ws: WebSocket) => {
             taskId: string;
             step: string;
             intent?: string;
+            workspacePath?: string;
           };
           const intent = (msg.params as { intent?: string }).intent || "";
-          const workspaceDir = workspace.initWorkspace(taskId, intent);
+          const extPath = (msg.params as { workspacePath?: string }).workspacePath;
+          let workspaceDir: string;
+          if (extPath) {
+            workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
+          } else {
+            workspaceDir = workspace.initWorkspace(taskId, intent);
+          }
           const session = await runner.createSession(taskId, step, workspaceDir);
           pool.set(taskId, step, session);
 
@@ -260,6 +267,15 @@ wss.on("connection", (ws: WebSocket) => {
           const content = workspace.readFile(taskId, filePath);
           ws.send(
             JSON.stringify({ type: "response", id: msg.id, result: { content } }),
+          );
+          break;
+        }
+
+        case "workspace.browse": {
+          const { dirPath } = msg.params as { dirPath: string };
+          const entries = workspace.browseDir(dirPath || "/");
+          ws.send(
+            JSON.stringify({ type: "response", id: msg.id, result: { entries } }),
           );
           break;
         }

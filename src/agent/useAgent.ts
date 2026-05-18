@@ -35,14 +35,18 @@ export function useAgent(taskId: string | null) {
 
   // ── 创建 session ──
   const createSession = useCallback(
-    async (step: string, intent: string) => {
+    async (step: string, intent: string, workspacePath?: string) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
-      const result = (await wsRef.current.request("session.create", {
+      const params: Record<string, unknown> = {
         taskId,
         step,
         intent,
-      })) as { sessionId: string };
+      };
+      if (workspacePath) {
+        params.workspacePath = workspacePath;
+      }
+      const result = (await wsRef.current.request("session.create", params)) as { sessionId: string };
 
       setSessions((prev) => ({
         ...prev,
@@ -150,6 +154,18 @@ export function useAgent(taskId: string | null) {
       return result.content;
     },
     [taskId],
+  );
+
+  // ── 浏览目录（用于工作空间选择器） ──
+  const browseDir = useCallback(
+    async (dirPath: string): Promise<{ name: string; type: string; path: string }[]> => {
+      if (!wsRef.current) return [];
+      const result = (await wsRef.current.request("workspace.browse", {
+        dirPath,
+      })) as { entries: { name: string; type: string; path: string }[] };
+      return result.entries;
+    },
+    [],
   );
 
   // ── WebSocket 生命周期 ──
@@ -450,5 +466,6 @@ export function useAgent(taskId: string | null) {
     steer,
     getFileTree,
     readFile,
+    browseDir,
   } as const;
 }

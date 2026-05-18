@@ -9,7 +9,8 @@ export type AgentMethod =
   | "session.abort"
   | "session.dispose"
   | "workspace.tree"
-  | "workspace.readFile";
+  | "workspace.readFile"
+  | "workspace.browse";
 
 /** 所有 WebSocket 消息统一格式 */
 export type WsMessage =

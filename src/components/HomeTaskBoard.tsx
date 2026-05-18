@@ -1,12 +1,12 @@
 import { Play, Eye, Rocket } from "lucide-react";
 import type { AppState, TaskCard, TaskCategory } from "../data/types";
 import { taskCards, categoryMeta, priorityLabel } from "../data";
-import { createDefaultState } from "../data";
 
 type HomeTaskBoardProps = {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
   onPatch: (patch: Partial<AppState>) => void;
+  onRequestStartTask: (intent: string, notes: string, activeTaskCard: AppState["activeTaskCard"]) => void;
 };
 
 /** 从卡片标题中提取方括号内的标签文字，如 "【前端】xxx" → "前端" */
@@ -23,17 +23,9 @@ function stripTag(title: string): string {
 /**
  * 首页任务面板 —— 三列泳道展示故事卡、缺陷、治理任务。
  */
-export function HomeTaskBoard({ state, setState, onPatch }: HomeTaskBoardProps) {
+export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask }: HomeTaskBoardProps) {
   const startTaskFromCard = (card: TaskCard) => {
-    setState((previous) => ({
-      ...createDefaultState(),
-      intent: `${card.title}：${card.summary}`,
-      notes: previous.notes.trim(),
-      activeTaskCard: card,
-      view: "workspace",
-      createdAt: new Date().toISOString(),
-    }));
-    window.scrollTo({ top: 0 });
+    onRequestStartTask(`${card.title}：${card.summary}`, state.notes.trim(), card);
   };
 
   const previewTask = state.previewTaskId

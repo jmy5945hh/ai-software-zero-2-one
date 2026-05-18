@@ -86,6 +86,7 @@ export type AppState = {
   view: View;
   homeTab: HomeTab;
   intent: string;
+  workspacePath: string;
   activeStage: WorkflowId;
   stepIndex: number;
   scope: ScopeChoice;

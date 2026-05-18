@@ -444,6 +444,8 @@
 
 .tab-panel {
   animation: cardReveal 0.3s var(--ease-out);
+  height: 100%;
+  min-height: 0;
 }
 
 /* ── Tab 1: 交付 & 协作 ───────────────────── */
@@ -754,6 +756,7 @@
   gap: 10px;
   padding: 14px 0 4px;
   border-top: 1px solid var(--line);
+  flex-shrink: 0;
 }
 
 .chat-input {

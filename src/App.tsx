@@ -18,6 +18,7 @@ import { SopNav } from "./components/SopNav";
 import { LeftPanel } from "./components/LeftPanel";
 import { DecisionBoard } from "./components/DecisionBoard";
 import { Drawer } from "./components/Drawer";
+import { WorkspaceSelector } from "./components/WorkspaceSelector";
 
 const STORAGE_KEY = "zero-one-software.prototype.v4";
 
@@ -28,14 +29,15 @@ const STORAGE_KEY = "zero-one-software.prototype.v4";
 export function App() {
   const [state, setState] = useStoredState();
   const [drawerContent, setDrawerContent] = useState<DrawerContent>(null);
+  const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
 
   // ── Agent 集成 ──
   const taskId = useMemo(() => {
-    if (state.view === "workspace" && state.createdAt) {
+    if ((state.view === "workspace" || showWorkspacePicker) && state.createdAt) {
       return `task-${new Date(state.createdAt).getTime()}`;
     }
     return null;
-  }, [state.view, state.createdAt]);
+  }, [state.view, state.createdAt, showWorkspacePicker]);
 
   const agent = useAgent(taskId);
   const isAgentConnected = agent.connectionStatus === "connected";
@@ -66,16 +68,66 @@ export function App() {
   );
   const closeDrawer = useCallback(() => setDrawerContent(null), []);
 
+  // ── 开始任务流程：先选工作空间，再进入 workspace ──
+  const requestStartTask = useCallback(
+    (intent: string, notes: string, activeTaskCard: AppState["activeTaskCard"]) => {
+      setState((previous) => ({
+        ...createDefaultState(),
+        intent,
+        notes,
+        activeTaskCard,
+        view: "home", // 暂不切换
+        createdAt: new Date().toISOString(),
+      }));
+      setShowWorkspacePicker(true);
+    },
+    [setState],
+  );
+
+  const confirmWorkspace = useCallback(
+    (path: string) => {
+      setState((previous) => ({
+        ...previous,
+        workspacePath: path,
+        view: "workspace",
+      }));
+      setShowWorkspacePicker(false);
+      window.scrollTo({ top: 0 });
+    },
+    [setState],
+  );
+
+  const cancelWorkspacePicker = useCallback(() => {
+    setShowWorkspacePicker(false);
+    // 回到干净的首页状态
+    setState((previous) => ({
+      ...previous,
+      intent: "",
+      notes: "",
+      activeTaskCard: null,
+      createdAt: new Date().toISOString(),
+    }));
+  }, [setState]);
+
   if (state.view === "home") {
     return (
-      <HomeView
-        state={state}
-        onPatch={patchState}
-        setState={setState}
-        agentConnected={isAgentConnected}
-        createSession={agent.createSession}
-        prompt={agent.prompt}
-      />
+      <>
+        <HomeView
+          state={state}
+          onPatch={patchState}
+          setState={setState}
+          agentConnected={isAgentConnected}
+          onRequestStartTask={requestStartTask}
+        />
+        {showWorkspacePicker && (
+          <WorkspaceSelector
+            onConfirm={confirmWorkspace}
+            onCancel={cancelWorkspacePicker}
+            onBrowse={isAgentConnected ? agent.browseDir : undefined}
+            initialPath={state.workspacePath || "~"}
+          />
+        )}
+      </>
     );
   }
 
@@ -91,6 +143,7 @@ export function App() {
       onCloseDrawer={closeDrawer}
       agent={agent}
       isAgentConnected={isAgentConnected}
+      connectionStatus={agent.connectionStatus}
     />
   );
 }
@@ -102,29 +155,20 @@ function HomeView({
   onPatch,
   setState,
   agentConnected,
-  createSession,
-  prompt,
+  onRequestStartTask,
 }: {
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
   agentConnected: boolean;
-  createSession: (step: string, intent: string) => Promise<void>;
-  prompt: (step: string, text: string) => Promise<void>;
+  onRequestStartTask: (intent: string, notes: string, activeTaskCard: AppState["activeTaskCard"]) => void;
 }) {
   const updateHomeTab = (tab: HomeTab) =>
     onPatch({ homeTab: tab, previewTaskId: null });
 
   const startTaskFromIntent = () => {
     if (!state.intent.trim()) return;
-    if (!agentConnected) return;
-    setState((previous) => ({
-      ...createDefaultState(),
-      intent: previous.intent.trim(),
-      view: "workspace",
-      createdAt: new Date().toISOString(),
-    }));
-    window.scrollTo({ top: 0 });
+    onRequestStartTask(state.intent.trim(), state.notes, null);
   };
 
   return (
@@ -139,7 +183,6 @@ function HomeView({
           </div>
         </div>
         <div className="home-nav-right">
-          <AgentStatusBadge connected={agentConnected} />
           <div className="home-user-info">
             <UserCircle size={18} />
             <div>
@@ -183,7 +226,7 @@ function HomeView({
         </div>
 
         {state.homeTab === "tasks" ? (
-          <HomeTaskBoard state={state} setState={setState} onPatch={onPatch} />
+          <HomeTaskBoard state={state} setState={setState} onPatch={onPatch} onRequestStartTask={onRequestStartTask} />
         ) : (
           <div className="launch-panel">
             <label htmlFor="intent">Hi, 今天想创造点什么？</label>
@@ -224,6 +267,7 @@ function WorkspaceView({
   onCloseDrawer,
   agent,
   isAgentConnected,
+  connectionStatus,
 }: {
   state: AppState;
   taskTitle: string;
@@ -235,6 +279,7 @@ function WorkspaceView({
   onCloseDrawer: () => void;
   agent: ReturnType<typeof useAgent>;
   isAgentConnected: boolean;
+  connectionStatus: string;
 }) {
   // ── Agent session 生命周期：进入 workspace 时自动创建 intent session ──
   const sessionInitRef = useRef(false);
@@ -246,7 +291,7 @@ function WorkspaceView({
       state.intent
     ) {
       sessionInitRef.current = true;
-      agent.createSession("intent", state.intent).then(() => {
+      agent.createSession("intent", state.intent, state.workspacePath).then(() => {
         // 发送意图分析 prompt
         agent.prompt(
           "intent",
@@ -265,7 +310,7 @@ function WorkspaceView({
 
     // Agent 模式：创建下一步 session（旧 session 由 SessionPool 管理）
     if (isAgentConnected) {
-      agent.createSession(nextStep.id, state.intent).then(() => {
+      agent.createSession(nextStep.id, state.intent, state.workspacePath).then(() => {
         const promptText = getStepPrompt(
           nextStep.id,
           state.intent,
@@ -348,22 +393,37 @@ function WorkspaceView({
         onStepClick={handleStepClick}
       />
 
-      {/* Agent 未连接时显示提示 */}
-      {!isAgentConnected ? (
+      {/* Agent 未连接 / 连接中 */}
+      {!isAgentConnected && (
         <div className="workspace-no-agent">
           <div className="no-agent-card">
-            <WifiOff size={32} />
-            <h2>Agent 未连接</h2>
-            <p>请启动 Agent Server 并配置 API Key 后刷新页面</p>
-            <button
-              className="ghost-button"
-              type="button"
-              onClick={() =>
-                setState((prev) => ({ ...prev, view: "home" }))
-              }
-            >
-              ← 返回首页
-            </button>
+            {connectionStatus === "connecting" ? (
+              <>
+                <div className="agent-summon-spinner" />
+                <h2>DevAgent 数字伙伴召集中...</h2>
+                <p>云端算力唤醒，Agent Team 即将就绪</p>
+                <div className="agent-summon-dots">
+                  <span className="dot" />
+                  <span className="dot" />
+                  <span className="dot" />
+                </div>
+              </>
+            ) : (
+              <>
+                <WifiOff size={32} />
+                <h2>Agent 未连接</h2>
+                <p>请启动 Agent Server 并配置 API Key 后刷新页面</p>
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={() =>
+                    setState((prev) => ({ ...prev, view: "home" }))
+                  }
+                >
+                  ← 返回首页
+                </button>
+              </>
+            )}
           </div>
         </div>
       ) : (

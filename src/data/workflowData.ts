@@ -226,6 +226,7 @@ export function createDefaultState(): AppState {
     view: "home",
     homeTab: "tasks",
     intent: "",
+    workspacePath: "",
     activeStage: "intent",
     stepIndex: 0,
     scope: "mvp",

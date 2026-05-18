@@ -36,6 +36,8 @@ import {
 } from "./StageDecisions";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { TokenUsageBadge } from "./TokenUsageBadge";
+import { ContentModal } from "./ContentModal";
+import type { ModalContent } from "./ContentModal";
 
 type BoardTab = "delivery" | "trajectory";
 
@@ -314,7 +316,7 @@ function getTagVariant(tag?: string): string {
   return map[tag] || "default";
 }
 
-// ── Tab 2: AI 任务轨迹（按轮次展示） ──────────
+// ── Tab 2: AI 任务轨迹（单栏·固定高度轮次） ──
 function TrajectoryChatTab({
   trajectory,
   stepIndex,
@@ -333,19 +335,18 @@ function TrajectoryChatTab({
   isAgentConnected: boolean;
 }) {
   const [input, setInput] = useState("");
-  const [selectedToolCall, setSelectedToolCall] = useState<ToolCallRecord | null>(null);
-  const [rightTab, setRightTab] = useState<"io" | "diff" | "preview" | "dashboard">("io");
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  });
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
+  const [modalContent, setModalContent] = useState<ModalContent | null>(null);
 
   // 构建展示用的轮次列表
   const displayTurns = buildDisplayTurns(agentSession, trajectory, isAgentConnected);
 
   // 从所有轮次中收集事件时间线（扁平化）
   const timeline = useTimeline(displayTurns, isAgentConnected, agentSession);
+
+  // 将事件按轮次分组
+  const roundGroups = useRoundGroups(timeline);
 
   const handleSend = () => {
     const text = input.trim();
@@ -363,38 +364,18 @@ function TrajectoryChatTab({
     }
   };
 
-  // 点击工具调用 → 右侧展示详情
-  const handleSelectTool = (tc: ToolCallRecord) => {
-    setSelectedToolCall(tc);
-    setRightTab("io");
+  // 切换内联展开
+  const toggleExpand = (eventId: string) => {
+    setExpandedEventId((prev) => (prev === eventId ? null : eventId));
   };
 
-  // 点击 Diff 事件 → 右侧展示 Diff
-  const handleSelectDiff = (tc: ToolCallRecord) => {
-    setSelectedToolCall(tc);
-    setRightTab("diff");
-  };
-
-  // 点击文本消息 → 右侧展示预览
-  const handleSelectPreview = (text: string) => {
-    // use a virtual tool call to hold text content
-    setSelectedToolCall({
-      id: "msg-preview",
-      name: "消息",
-      status: "done",
-      category: "unknown",
-      outputFragments: [text],
-    });
-    setRightTab("preview");
-  };
-
-  // 是否显示右侧面板
-  const showRightPanel = selectedToolCall !== null;
+  // 打开弹窗
+  const openModal = (mc: ModalContent) => setModalContent(mc);
+  const closeModal = () => setModalContent(null);
 
   return (
     <div className="tab-panel panel-trajectory-v2">
-      {/* ── 中间：事件流 ──────────────────── */}
-      <div className={`trajectory-stream ${showRightPanel ? "has-panel" : ""}`}>
+      <div className="trajectory-stream">
         {/* 信息条 */}
         {displayTurns.length > 0 && (
           <div className="trajectory-infobar">
@@ -419,19 +400,74 @@ function TrajectoryChatTab({
             </div>
           )}
 
-          {/* 按事件时间线渲染 */}
-          {timeline.map((event, ei) => (
-            <TimelineEvent
-              key={event.id}
-              event={event}
-              index={ei}
-              onSelectTool={handleSelectTool}
-              onSelectDiff={handleSelectDiff}
-              onSelectPreview={handleSelectPreview}
-            />
+          {/* 按轮次分组渲染（固定高度容器） */}
+          {roundGroups.map((group) => (
+            <div
+              key={group.id}
+              className={`trajectory-round-group ${group.status === "running" ? "running" : ""}`}
+            >
+              {/* 轮次头部 */}
+              <div className="round-group-header">
+                <div className="round-group-index">
+                  {group.status === "running" ? (
+                    <Loader2 size={12} className="spin-icon" />
+                  ) : (
+                    <span>{group.index}</span>
+                  )}
+                </div>
+                <span className="round-group-label">
+                  Round {group.index}
+                  {group.status === "running" ? " — 进行中" : ""}
+                </span>
+                {group.toolCount > 0 && (
+                  <span className="round-group-badge">
+                    <Wrench size={10} />
+                    {group.toolCount} 工具
+                  </span>
+                )}
+              </div>
+
+              {/* 轮次内部：可滚动 */}
+              <div className="round-group-body">
+                {group.events.map((event) => (
+                  <TimelineEventV2
+                    key={event.id}
+                    event={event}
+                    isExpanded={expandedEventId === event.id}
+                    onToggleExpand={() => {
+                      if (event.type === "tool" || event.type === "diff" || event.type === "message") {
+                        toggleExpand(event.id);
+                      }
+                    }}
+                    onOpenModal={openModal}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
 
-          <div ref={chatEndRef} />
+          {/* 独立事件（完成/错误） */}
+          {timeline
+            .filter((e) => e.type === "complete" || e.type === "error")
+            .length > 0 && (
+            <div className="trajectory-post-events">
+              {timeline
+                .filter((e) => e.type === "complete" || e.type === "error")
+                .map((event) => (
+                  <TimelineEventV2
+                    key={event.id}
+                    event={event}
+                    isExpanded={expandedPostId === event.id}
+                    onToggleExpand={() =>
+                      setExpandedPostId((prev) =>
+                        prev === event.id ? null : event.id,
+                      )
+                    }
+                    onOpenModal={openModal}
+                  />
+                ))}
+            </div>
+          )}
         </div>
 
         <div className="chat-input-bar">
@@ -454,16 +490,8 @@ function TrajectoryChatTab({
         </div>
       </div>
 
-      {/* ── 右侧：详情面板 ────────────────── */}
-      {showRightPanel && (
-        <TrajectoryDetailPanel
-          selected={selectedToolCall}
-          tab={rightTab}
-          onTabChange={setRightTab}
-          onClose={() => setSelectedToolCall(null)}
-          turnCount={displayTurns.length}
-        />
-      )}
+      {/* 内容弹窗 */}
+      <ContentModal content={modalContent} onClose={closeModal} />
     </div>
   );
 }
@@ -657,7 +685,7 @@ function useTimeline(
       events.push({
         type: "complete",
         id: "complete",
-        summary: summary.slice(0, 500),
+        summary,
       });
     }
   }
@@ -674,19 +702,65 @@ function useTimeline(
   return events;
 }
 
-// ── 单条事件渲染 ───────────────────────────
-function TimelineEvent({
+// ── 轮次分组 ───────────────────────────────
+type RoundGroup = {
+  id: string;
+  index: number;
+  status: "running" | "done";
+  events: TimelineEvent[];
+  toolCount: number;
+};
+
+function useRoundGroups(timeline: TimelineEvent[]): RoundGroup[] {
+  // 找到所有 round-divider 的位置
+  const dividerPositions: { pos: number; event: Extract<TimelineEvent, { type: "round-divider" }> }[] = [];
+  for (let i = 0; i < timeline.length; i++) {
+    if (timeline[i].type === "round-divider") {
+      dividerPositions.push({ pos: i, event: timeline[i] as unknown as Extract<TimelineEvent, { type: "round-divider" }> });
+    }
+  }
+
+  if (dividerPositions.length === 0) return [];
+
+  const groups: RoundGroup[] = [];
+
+  for (let gi = 0; gi < dividerPositions.length; gi++) {
+    const { pos, event: divider } = dividerPositions[gi];
+    const nextPos = gi < dividerPositions.length - 1 ? dividerPositions[gi + 1].pos : timeline.length;
+
+    // 取从该 divider 到下一个 divider 之间的所有事件
+    const allEvents = timeline.slice(pos, nextPos);
+
+    // 过滤掉 complete、error 和 round-divider（它们由头部或外部渲染）
+    const events = allEvents.filter(
+      (e) => e.type !== "complete" && e.type !== "error" && e.type !== "round-divider",
+    );
+
+    const toolCount = events.filter((e) => e.type === "tool" || e.type === "diff").length;
+
+    groups.push({
+      id: `group-${divider.roundIndex}`,
+      index: divider.roundIndex,
+      status: divider.status,
+      events,
+      toolCount,
+    });
+  }
+
+  return groups;
+}
+
+// ── 单条事件渲染（V2：支持内联展开 + 弹窗）─
+function TimelineEventV2({
   event,
-  index,
-  onSelectTool,
-  onSelectDiff,
-  onSelectPreview,
+  isExpanded,
+  onToggleExpand,
+  onOpenModal,
 }: {
   event: TimelineEvent;
-  index: number;
-  onSelectTool: (tc: ToolCallRecord) => void;
-  onSelectDiff: (tc: ToolCallRecord) => void;
-  onSelectPreview: (text: string) => void;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onOpenModal: (mc: ModalContent) => void;
 }) {
   switch (event.type) {
     case "user":
@@ -702,21 +776,7 @@ function TimelineEvent({
       );
 
     case "round-divider":
-      return (
-        <div className={`timeline-round-divider ${event.status === "running" ? "running" : ""}`}>
-          <div className="trd-index">
-            {event.status === "running" ? (
-              <Loader2 size={12} className="spin-icon" />
-            ) : (
-              <span>{event.roundIndex}</span>
-            )}
-          </div>
-          <span className="trd-label">
-            Round {event.roundIndex}
-            {event.status === "running" ? " — 进行中" : ""}
-          </span>
-        </div>
-      );
+      return null; // round-divider 已抽取到轮次头部
 
     case "thought":
       return (
@@ -737,21 +797,39 @@ function TimelineEvent({
 
     case "message":
       return (
-        <div className="timeline-message cursor-pointer" onClick={() => onSelectPreview(event.content)}>
-          <MarkdownRenderer className="tl-message-content">
-            {event.content}
-          </MarkdownRenderer>
+        <div className="timeline-message">
+          <div className="tl-message-content">
+            <MarkdownRenderer>
+              {event.content}
+            </MarkdownRenderer>
+          </div>
+          {/* 弹窗按钮 */}
+          <div className="tl-event-actions">
+            <button
+              className="ghost-button small"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenModal({
+                  type: "markdown",
+                  title: "Agent 输出",
+                  content: event.content,
+                });
+              }}
+            >
+              弹窗查看
+            </button>
+          </div>
         </div>
       );
 
     case "diff": {
       const tc = event.toolCall;
+      const resultText = tc.result || tc.outputFragments.join("");
+
       return (
-        <div
-          className="timeline-tool done"
-          onClick={() => onSelectDiff(tc)}
-        >
-          <div className="tl-tool-card">
+        <div className={`timeline-tool done ${isExpanded ? "expanded" : ""}`}>
+          <div className="tl-tool-card" onClick={onToggleExpand}>
             <span className="tl-tool-icon cat-tool">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             </span>
@@ -761,62 +839,162 @@ function TimelineEvent({
                 <span className="tl-tool-name">{event.file}</span>
               </div>
               <span className="tl-tool-subtitle">
-                <span style={{ color: "var(--color-success, #22c55e)" }}>+{event.additions}</span>{" "}
-                <span style={{ color: "var(--color-danger, #ef4444)" }}>-{event.deletions}</span>
+                <span style={{ color: "#2D6A4F" }}>+{event.additions}</span>{" "}
+                <span style={{ color: "#A05A4A" }}>-{event.deletions}</span>
               </span>
             </div>
             <span className="tl-tool-status done">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </span>
-            <span className="tl-tool-chevron">
+            <span className={`tl-tool-chevron ${isExpanded ? "open" : ""}`}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </span>
+          </div>
+
+          {/* 内联展开：Diff 内容 */}
+          {isExpanded && (
+            <div className="tl-tool-expand">
+              <div className="tl-tool-expand-section">
+                <div className="tl-tool-expand-title">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <span>文件变更 · {parseDiffSummary(resultText)}</span>
+                </div>
+                <div className="tl-tool-expand-pre">
+                  {parseDiffLines(resultText).slice(0, 40).map((line, li) => (
+                    <div key={li} className={`cm-diff-line ${line.type}`}>
+                      <span className="cm-diff-num">{li + 1}</span>
+                      <span className="cm-diff-text">{line.content}</span>
+                    </div>
+                  ))}
+                  {resultText.split("\n").length > 40 && (
+                    <div style={{ padding: "6px 0", color: "var(--muted)", fontStyle: "italic" }}>
+                      ... 共 {resultText.split("\n").length} 行，弹窗查看完整内容
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="tl-tool-expand-action">
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenModal({
+                      type: "diff",
+                      title: `变更: ${event.file}`,
+                      content: resultText,
+                    });
+                  }}
+                >
+                  弹窗查看完整变更
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    case "complete": {
+      const long = event.summary.length > 300;
+      const displayText = isExpanded || !long ? event.summary : event.summary.slice(0, 300) + "…";
+      return (
+        <div className={`timeline-complete ${isExpanded ? "expanded" : ""}`}>
+          <div className="tl-complete-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div className="tl-complete-right">
+            <div className="tl-complete-body">
+              <strong>任务完成</strong>
+              {isExpanded ? (
+                <div className="tl-complete-markdown">
+                  <MarkdownRenderer>{event.summary}</MarkdownRenderer>
+                </div>
+              ) : (
+                <p onClick={onToggleExpand}>{displayText}</p>
+              )}
+            </div>
+            <div className="tl-complete-actions">
+              {long && (
+                <button className="ghost-button small" type="button" onClick={onToggleExpand}>
+                  {isExpanded ? "收起" : "展开完整内容"}
+                </button>
+              )}
+              <button
+                className="ghost-button small"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenModal({
+                    type: "markdown",
+                    title: "任务完成 · 完整输出",
+                    content: event.summary,
+                  });
+                }}
+              >
+                弹窗查看
+              </button>
+            </div>
           </div>
         </div>
       );
     }
 
-    case "complete":
+    case "error": {
+      const long = event.message.length > 300;
+      const displayText = isExpanded || !long ? event.message : event.message.slice(0, 300) + "…";
       return (
-        <div className="timeline-complete">
-          <div className="tl-complete-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-          </div>
-          <div className="tl-complete-body">
-            <strong>任务完成</strong>
-            <p>{event.summary}</p>
-          </div>
-        </div>
-      );
-
-    case "error":
-      return (
-        <div className="timeline-error">
+        <div className={`timeline-error ${isExpanded ? "expanded" : ""}`}>
           <div className="tl-error-icon">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
           </div>
-          <div className="tl-error-body">
-            <strong>执行出错</strong>
-            <p>{event.message}</p>
+          <div className="tl-complete-right">
+            <div className="tl-error-body">
+              <strong>执行出错</strong>
+              {isExpanded ? (
+                <div className="tl-complete-markdown">
+                  <MarkdownRenderer>{event.message}</MarkdownRenderer>
+                </div>
+              ) : (
+                <p onClick={onToggleExpand}>{displayText}</p>
+              )}
+            </div>
+            <div className="tl-complete-actions">
+              {long && (
+                <button className="ghost-button small" type="button" onClick={onToggleExpand}>
+                  {isExpanded ? "收起" : "展开完整内容"}
+                </button>
+              )}
+              <button
+                className="ghost-button small"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenModal({
+                    type: "markdown",
+                    title: "错误信息",
+                    content: event.message,
+                  });
+                }}
+              >
+                弹窗查看
+              </button>
+            </div>
           </div>
         </div>
       );
+    }
 
     case "tool": {
       const tc = event.toolCall;
-      // 提取工具参数摘要
       const argsSummary = tc.input ? extractToolArgsSummary(tc.input, tc.name) : "";
-      // 合并结果文本
       const resultText = tc.result || tc.outputFragments.join("");
-      const showResultPreview = tc.status === "done" && resultText.trim();
-      const longResult = showResultPreview && shouldCollapseOutput(resultText);
+      const hasInput = !!tc.input;
+      const hasOutput = tc.status === "done" && resultText.trim();
 
       return (
-        <div
-          className={`timeline-tool ${tc.status} ${showResultPreview ? "has-result" : ""}`}
-          onClick={() => onSelectTool(tc)}
-        >
-          <div className="tl-tool-card">
+        <div className={`timeline-tool ${tc.status} ${isExpanded ? "expanded" : ""}`}>
+          <div className="tl-tool-card" onClick={onToggleExpand}>
             <span className={`tl-tool-icon cat-${tc.category}`}>
               {getToolIconSvg(tc.category)}
             </span>
@@ -838,14 +1016,50 @@ function TimelineEvent({
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               )}
             </span>
-            <span className="tl-tool-chevron">
+            <span className={`tl-tool-chevron ${isExpanded ? "open" : ""}`}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </span>
           </div>
-          {/* 折叠式结果预览 */}
-          {showResultPreview && (
-            <div className={`tl-tool-result-preview ${longResult ? "collapsed" : ""}`}>
-              <pre className="tl-tool-result-pre"><code>{longResult ? resultText.split("\n").slice(0, 8).join("\n") + "\n..." : resultText}</code></pre>
+
+          {/* 内联展开：输入/输出 */}
+          {isExpanded && (hasInput || hasOutput) && (
+            <div className="tl-tool-expand">
+              {hasInput && (
+                <div className="tl-tool-expand-section">
+                  <div className="tl-tool-expand-title">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    <span>输入参数</span>
+                  </div>
+                  <pre className="tl-tool-expand-pre"><code>{formatJsonOrText(tc.input)}</code></pre>
+                </div>
+              )}
+              {hasOutput && (
+                <div className="tl-tool-expand-section">
+                  <div className="tl-tool-expand-title">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    <span>输出结果</span>
+                  </div>
+                  <pre className="tl-tool-expand-pre"><code>{formatJsonOrText(resultText)}</code></pre>
+                </div>
+              )}
+              {hasOutput && (
+                <div className="tl-tool-expand-action">
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenModal({
+                        type: "json",
+                        title: `${tc.name} · 输出结果`,
+                        content: resultText,
+                      });
+                    }}
+                  >
+                    弹窗查看完整输出
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -855,106 +1069,6 @@ function TimelineEvent({
     default:
       return null;
   }
-}
-
-// ── 右侧详情面板 ───────────────────────────
-function TrajectoryDetailPanel({
-  selected,
-  tab,
-  onTabChange,
-  onClose,
-  turnCount,
-}: {
-  selected: ToolCallRecord;
-  tab: "io" | "diff" | "preview" | "dashboard";
-  onTabChange: (t: "io" | "diff" | "preview" | "dashboard") => void;
-  onClose: () => void;
-  turnCount: number;
-}) {
-  // 优先使用 result（完整结果），其次合并 outputFragments（流式片段）
-  const fullOutput = selected.result || selected.outputFragments.join("");
-  const isDiff = isDiffContent(fullOutput);
-  const hasInput = !!selected.input;
-  const hasOutput = !!fullOutput;
-
-  // 自适应 tab 显示
-  const availableTabs: { id: "io" | "diff" | "preview" | "dashboard"; label: string; icon: React.ReactNode }[] = [];
-  if (hasInput || hasOutput) {
-    availableTabs.push({ id: "io", label: "I/O 数据", icon: <span style={{fontSize:12}}>{"{ }"}</span> });
-  }
-  if (isDiff) {
-    availableTabs.push({ id: "diff", label: "文件变更", icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> });
-  }
-  if (hasOutput) {
-    availableTabs.push({ id: "preview", label: "预览", icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> });
-  }
-
-  return (
-    <div className="trajectory-detail-panel">
-      {/* Tab Bar */}
-      <div className="tdp-tabs">
-        <div className="tdp-tab-list">
-          {availableTabs.map((t) => (
-            <button
-              key={t.id}
-              className={`tdp-tab ${tab === t.id ? "active" : ""}`}
-              type="button"
-              onClick={() => onTabChange(t.id)}
-            >
-              {t.icon}
-              <span>{t.label}</span>
-            </button>
-          ))}
-        </div>
-        <button className="tdp-close-btn" type="button" onClick={onClose}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="tdp-content">
-        {tab === "io" && (
-          <div className="tdp-io">
-            {selected.input && (
-              <div className="tdp-section">
-                <h4 className="tdp-section-title">输入参数</h4>
-                <pre className="tdp-code-block"><code>{formatJsonOrText(selected.input)}</code></pre>
-              </div>
-            )}
-            <div className="tdp-section">
-              <h4 className="tdp-section-title">输出结果</h4>
-              <pre className="tdp-code-block"><code>{formatJsonOrText(fullOutput)}</code></pre>
-            </div>
-          </div>
-        )}
-
-        {tab === "diff" && (
-          <div className="tdp-diff">
-            <div className="tdp-diff-header">
-              <span className="tdp-diff-summary">{parseDiffSummary(fullOutput)}</span>
-              <span className="tdp-diff-badge">Unified Diff</span>
-            </div>
-            <div className="tdp-diff-content">
-              {parseDiffLines(fullOutput).map((line, li) => (
-                <div key={li} className={`diff-line ${line.type}`}>
-                  <span className="diff-num">{li + 1}</span>
-                  <span className="diff-text">{line.content}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {tab === "preview" && (
-          <div className="tdp-preview">
-            <MarkdownRenderer>
-              {fullOutput}
-            </MarkdownRenderer>
-          </div>
-        )}
-      </div>
-    </div>
-  );
 }
 
 // ── Diff 检测与解析工具 ────────────────────

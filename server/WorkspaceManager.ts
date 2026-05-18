@@ -1,5 +1,6 @@
 import path from "path";
 import fs from "fs";
+import os from "os";
 
 export type FileNode = {
   name: string;
@@ -7,14 +8,27 @@ export type FileNode = {
   children?: FileNode[];
 };
 
+export type BrowseEntry = {
+  name: string;
+  type: "dir" | "file";
+  path: string;
+};
+
 /**
  * Workspace 文件系统管理器 — 为每个 taskId 维护隔离的工作目录。
+ * 支持两种模式：
+ * 1. 托管模式：在 root 下创建 task 子目录（含 AGENTS.md / package.json）
+ * 2. 外部模式：直接使用用户指定的现有目录（如 Git 项目）
+ *
  * 限制路径遍历，安全读取 workspace 下文件。
  */
 export class WorkspaceManager {
+  /** 外部工作空间映射 taskId → 绝对路径 */
+  private externalDirs = new Map<string, string>();
+
   constructor(private root: string) {}
 
-  /** 初始化 workspace 目录结构，写入 AGENTS.md */
+  /** 初始化托管 workspace 目录结构，写入 AGENTS.md */
   initWorkspace(taskId: string, intent: string): string {
     const dir = this.dir(taskId);
     fs.mkdirSync(dir, { recursive: true });
@@ -45,6 +59,19 @@ export class WorkspaceManager {
     return dir;
   }
 
+  /** 设置外部工作空间目录（用户指定的本地 Git 项目等） */
+  setExternalWorkspace(taskId: string, dirPath: string): string {
+    const resolved = path.resolve(this.expandHome(dirPath));
+    if (!fs.existsSync(resolved)) {
+      throw new Error(`目录不存在: ${resolved}`);
+    }
+    if (!fs.statSync(resolved).isDirectory()) {
+      throw new Error(`路径不是目录: ${resolved}`);
+    }
+    this.externalDirs.set(taskId, resolved);
+    return resolved;
+  }
+
   /** 获取 workspace 文件树 */
   getFileTree(taskId: string): FileNode[] {
     const dir = this.dir(taskId);
@@ -64,12 +91,66 @@ export class WorkspaceManager {
     return fs.readFileSync(full, "utf-8");
   }
 
+  /** 展开 ~ 为用户主目录 */
+  private expandHome(dirPath: string): string {
+    if (dirPath === "~" || dirPath.startsWith("~/")) {
+      return dirPath.replace("~", os.homedir());
+    }
+    return dirPath;
+  }
+
+  /** 浏览文件系统目录（用于前端目录选择器） */
+  browseDir(dirPath: string): BrowseEntry[] {
+    const resolved = path.resolve(this.expandHome(dirPath));
+    if (!fs.existsSync(resolved)) {
+      throw new Error(`目录不存在: ${resolved}`);
+    }
+    if (!fs.statSync(resolved).isDirectory()) {
+      throw new Error(`路径不是目录: ${resolved}`);
+    }
+
+    try {
+      const entries = fs.readdirSync(resolved, { withFileTypes: true });
+      const result: BrowseEntry[] = [];
+
+      for (const entry of entries) {
+        // 跳过隐藏文件和 node_modules
+        if (entry.name.startsWith(".")) continue;
+        if (entry.name === "node_modules") continue;
+
+        try {
+          const entryPath = path.join(resolved, entry.name);
+          result.push({
+            name: entry.name,
+            type: entry.isDirectory() ? "dir" : "file",
+            path: entryPath,
+          });
+        } catch {
+          // 跳过无法访问的条目
+        }
+      }
+
+      // 排序：目录在前，然后按名称排序
+      result.sort((a, b) => {
+        if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      return result;
+    } catch (err) {
+      throw new Error(`无法读取目录: ${(err as Error).message}`);
+    }
+  }
+
   /** 获取 workspace 根目录 */
   getDir(taskId: string): string {
     return this.dir(taskId);
   }
 
   private dir(taskId: string): string {
+    // 优先返回外部目录
+    const external = this.externalDirs.get(taskId);
+    if (external) return external;
     return path.join(this.root, taskId);
   }
 
