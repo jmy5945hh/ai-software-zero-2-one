@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory } from "./types";
+import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory, Turn } from "./types";
+import type { FileChange, AgentSummary } from "../data/types";
 import { AgentWebSocket } from "./ws";
+
+// ── 工具函数 ─────────────────────────────────
 
 /** 根据工具名称推断调用类别 */
 function categorizeToolCall(name: string): ToolCallCategory {
@@ -14,15 +17,119 @@ function categorizeToolCall(name: string): ToolCallCategory {
   return "unknown";
 }
 
+/** 从 session 的所有 turns 中提取文件变更列表（create / modify / delete） */
+export function extractFileChanges(turns: Turn[]): FileChange[] {
+  const seen = new Set<string>();
+  const changes: FileChange[] = [];
+
+  for (const turn of turns) {
+    for (const tc of turn.toolCalls) {
+      if (tc.status === "error") continue;
+
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(tc.input);
+      } catch {
+        continue;
+      }
+
+      if (tc.name === "write" && typeof parsed.path === "string") {
+        if (!seen.has(parsed.path)) {
+          seen.add(parsed.path);
+          changes.push({ path: parsed.path, action: "create" });
+        }
+      } else if (tc.name === "edit" && typeof parsed.path === "string") {
+        if (!seen.has(parsed.path)) {
+          seen.add(parsed.path);
+          changes.push({ path: parsed.path, action: "modify" });
+        }
+      } else if (tc.name === "bash") {
+        const cmd = typeof parsed.command === "string" ? parsed.command.trim() : "";
+        const rmMatch = cmd.match(/(?:^|\s)(?:rm|unlink)\s+(?:-rf?\s+)?(["']?)([^\s"']+)\1/);
+        const mvMatch = cmd.match(/(?:^|\s)mv\s+(["']?)([^\s"']+)\1\s+(["']?)([^\s"']+)\3/);
+        const mkMatch = cmd.match(/(?:^|\s)mkdir\s+(?:-p\s+)?(["']?)([^\s"']+)\1/);
+
+        if (rmMatch) {
+          const p = rmMatch[2];
+          if (!seen.has(p)) { seen.add(p); changes.push({ path: p, action: "delete" }); }
+        }
+        if (mvMatch) {
+          const src = mvMatch[2];
+          if (!seen.has(src)) { seen.add(src); changes.push({ path: src, action: "delete" }); }
+          const dst = mvMatch[4];
+          if (!seen.has(dst)) { seen.add(dst); changes.push({ path: dst, action: "create" }); }
+        }
+        if (mkMatch) {
+          const p = mkMatch[2];
+          if (!seen.has(p)) { seen.add(p); changes.push({ path: p, action: "create" }); }
+        }
+      }
+    }
+  }
+
+  return changes;
+}
+
+/** 构造总结 Agent 的 prompt */
+function buildSummarizationPrompt(summary: string): string {
+  return `你是一个任务总结专家。请严格基于下面的 Agent 工作摘要，生成结构化总结。
+
+要求：
+1. 忠于原文，不添加原文中没有的内容，不自由发挥
+2. 仅输出 JSON，不要有任何额外说明文字
+
+输出 JSON schema：
+{
+  "brief": "核心总结，不超过200字",
+  "key_points": [
+    { "title": "要点概要，不超过50字", "summary": "要点内容，不超过200字" }
+  ],
+  "todos": [
+    {
+      "task": "需要用户决策或讨论的问题",
+      "type": "choice" | "fill",
+      "multiSelect": true/false,
+      "choices": [{ "option": "选项名", "description": "选项描述" }],
+      "placeholder": "填空题占位文本"
+    }
+  ]
+}
+
+注意：
+- key_points 数量不限，提取核心要点
+- todos 仅在原文中确实存在待决策事项时才出现
+- type=choice 时 choices 必填，type=fill 时 choices 可为空数组、placeholder 必填
+- multiSelect 仅 type=choice 时有效，默认 false
+- brief 使用中文
+
+以下是 Agent 工作摘要：
+---
+${summary}
+---`;
+}
+
+/** 默认 Session 状态工厂 */
+function defaultSession(): SessionState {
+  return {
+    id: "",
+    streamingText: "",
+    isStreaming: false,
+    completed: false,
+    summary: "",
+    messages: [],
+    turns: [],
+    isCompacting: false,
+    isRetrying: false,
+    queue: { steering: [], followUp: [] },
+    summarizationStatus: "idle",
+  };
+}
+
+// ── Hook ──────────────────────────────────────
+
 /**
  * useAgent — 前端 Agent 核心 Hook。
  * 管理 WebSocket 连接、多 session 状态、文件树、消息流。
- *
- * 用法：
- *   const agent = useAgent(taskId);
- *   agent.createSession("intent", intent);
- *   agent.prompt("intent", "请分析这个业务意图");
- *   const tree = agent.getFileTree();
  */
 export function useAgent(taskId: string | null) {
   const [sessions, setSessions] = useState<Record<string, SessionState>>({});
@@ -32,6 +139,8 @@ export function useAgent(taskId: string | null) {
 
   const wsRef = useRef<AgentWebSocket | null>(null);
   const activeStepRef = useRef<string | null>(null);
+  /** 记录哪些 step 的总结已被触发，确保只触发一次 */
+  const summarizingRef = useRef<Set<string>>(new Set());
 
   // ── 创建 session ──
   const createSession = useCallback(
@@ -50,18 +159,7 @@ export function useAgent(taskId: string | null) {
 
       setSessions((prev) => ({
         ...prev,
-        [step]: {
-          id: result.sessionId,
-          streamingText: "",
-          isStreaming: false,
-          completed: false,
-          summary: "",
-          messages: [],
-          turns: [],
-          isCompacting: false,
-          isRetrying: false,
-          queue: { steering: [], followUp: [] },
-        },
+        [step]: { ...defaultSession(), id: result.sessionId },
       }));
     },
     [taskId],
@@ -73,22 +171,10 @@ export function useAgent(taskId: string | null) {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
 
-      // 在 messages 中添加用户消息
       setSessions((prev) => ({
         ...prev,
         [step]: {
-          ...(prev[step] || {
-            id: "",
-            streamingText: "",
-            isStreaming: false,
-            completed: false,
-            summary: "",
-            messages: [],
-            turns: [],
-            isCompacting: false,
-            isRetrying: false,
-            queue: { steering: [], followUp: [] },
-          }),
+          ...(prev[step] || defaultSession()),
           messages: [
             ...(prev[step]?.messages || []),
             { role: "user" as const, content: text },
@@ -106,22 +192,10 @@ export function useAgent(taskId: string | null) {
   const steer = useCallback(
     (step: string, text: string) => {
       if (!taskId || !wsRef.current) return;
-      // 修正时重置 completed，等待新一轮输出
       setSessions((prev) => ({
         ...prev,
         [step]: {
-          ...(prev[step] || {
-            id: "",
-            streamingText: "",
-            isStreaming: false,
-            completed: false,
-            summary: "",
-            messages: [],
-            turns: [],
-            isCompacting: false,
-            isRetrying: false,
-            queue: { steering: [], followUp: [] },
-          }),
+          ...(prev[step] || defaultSession()),
           completed: false,
           messages: [
             ...(prev[step]?.messages || []),
@@ -156,7 +230,7 @@ export function useAgent(taskId: string | null) {
     [taskId],
   );
 
-  // ── 浏览目录（用于工作空间选择器） ──
+  // ── 浏览目录 ──
   const browseDir = useCallback(
     async (dirPath: string): Promise<{ name: string; type: string; path: string }[]> => {
       if (!wsRef.current) return [];
@@ -171,7 +245,6 @@ export function useAgent(taskId: string | null) {
   // ── WebSocket 生命周期 ──
   useEffect(() => {
     if (!taskId) {
-      // 无 taskId 时断开连接
       wsRef.current?.close();
       wsRef.current = null;
       setConnectionStatus("disconnected");
@@ -195,19 +268,45 @@ export function useAgent(taskId: string | null) {
       if (!step) return;
 
       setSessions((prev) => {
-        const s = prev[step] || {
-          id: "",
-          streamingText: "",
-          isStreaming: false,
-          completed: false,
-          summary: "",
-          messages: [],
-          turns: [],
-          isCompacting: false,
-          isRetrying: false,
-          queue: { steering: [], followUp: [] },
-        };
+        const s = prev[step] || defaultSession();
 
+        // ── 总结分流：agent_start / text_delta / agent_end ──
+        if (s.summarizationStatus === "loading") {
+          switch (event.type) {
+            case "agent_start":
+              return { ...prev, [step]: { ...s, summarizationRaw: "" } };
+
+            case "text_delta":
+              return {
+                ...prev,
+                [step]: { ...s, summarizationRaw: (s.summarizationRaw || "") + event.delta },
+              };
+
+            case "agent_end": {
+              const raw = (s.summarizationRaw || "") + ((event as { summary: string }).summary || "");
+              let result: AgentSummary | undefined;
+              try {
+                result = JSON.parse(raw.trim());
+              } catch {
+                result = undefined;
+              }
+              return {
+                ...prev,
+                [step]: {
+                  ...s,
+                  summarizationStatus: result ? "done" : "error",
+                  summarizationResult: result || undefined,
+                  summarizationRaw: raw,
+                },
+              };
+            }
+
+            default:
+              return prev;
+          }
+        }
+
+        // ── 正常流程 ──
         switch (event.type) {
           case "text_delta":
             return {
@@ -215,7 +314,6 @@ export function useAgent(taskId: string | null) {
               [step]: {
                 ...s,
                 streamingText: s.streamingText + event.delta,
-                // 实时写入当前轮次的 textContent
                 turns: s.turns.length > 0
                   ? s.turns.map((t, i) =>
                       i === s.turns.length - 1 && t.status === "running"
@@ -269,7 +367,6 @@ export function useAgent(taskId: string | null) {
                 ? { ...t, status: "done" as const }
                 : i === s.turns.length - 1 ? { ...t, status: "done" as const, textContent: finalText } : t,
             );
-            // Ensure textContent is set on the last turn if it's empty
             const lastTurn = updatedTurns.length > 0 ? updatedTurns[updatedTurns.length - 1] : null;
             if (lastTurn && !lastTurn.textContent && finalText) {
               lastTurn.textContent = finalText;
@@ -289,12 +386,13 @@ export function useAgent(taskId: string | null) {
                 ],
                 streamingText: "",
                 turns: updatedTurns,
+                // 触发结构化总结
+                summarizationStatus: "loading",
               },
             };
           }
 
           case "turn_start": {
-            // 开始新一轮，标记上一轮完成
             const finalizedTurns = s.turns.map((t, i) =>
               i === s.turns.length - 1 && t.status === "running"
                 ? { ...t, status: "done" as const }
@@ -456,6 +554,43 @@ export function useAgent(taskId: string | null) {
       wsRef.current = null;
     };
   }, [taskId]);
+
+  // ── 自动触发结构化总结 ──
+  useEffect(() => {
+    if (!wsRef.current || !taskId) return;
+
+    for (const [step, session] of Object.entries(sessions)) {
+      if (
+        session.summarizationStatus === "loading" &&
+        session.summary &&
+        !summarizingRef.current.has(step)
+      ) {
+        summarizingRef.current.add(step);
+
+        // 发送总结 prompt 到同一个 session
+        // 事件分流由 summarizationStatus === "loading" 保证
+        const prevStep = activeStepRef.current;
+        activeStepRef.current = step;
+
+        wsRef.current
+          .request("session.prompt", {
+            taskId,
+            step,
+            text: buildSummarizationPrompt(session.summary),
+          })
+          .catch(() => {
+            setSessions((prev) => ({
+              ...prev,
+              [step]: {
+                ...prev[step],
+                summarizationStatus: "error",
+              },
+            }));
+            activeStepRef.current = prevStep;
+          });
+      }
+    }
+  }, [sessions, taskId]);
 
   return {
     sessions,

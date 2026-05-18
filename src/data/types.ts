@@ -116,3 +116,44 @@ export type FileNode = {
   children?: FileNode[];
   highlight?: boolean;
 };
+
+// ── Agent 结构化总结 ─────────────────────────
+
+/** Agent 产出总结的完整结构 */
+export type AgentSummary = {
+  brief: string;
+  key_points: KeyPoint[];
+  todos: TodoItem[];
+};
+
+/** 单个关键产出要点 */
+export type KeyPoint = {
+  title: string;
+  summary: string;
+};
+
+/** 待决策事项 */
+export type TodoItem = {
+  task: string;
+  type: "choice" | "fill";
+  /** type=choice 时是否多选 */
+  multiSelect?: boolean;
+  /** type=choice 时的选项列表；type=fill 时为空 */
+  choices: Choice[];
+  /** type=fill 时的输入框占位文本 */
+  placeholder?: string;
+  /** 用户已选 / 已填内容（暂做视觉标记，后续反馈给 Agent） */
+  userAnswer?: string | string[];
+};
+
+/** 选项 */
+export type Choice = {
+  option: string;
+  description: string;
+};
+
+/** 从 session toolCalls 统计的文件变更 */
+export type FileChange = {
+  path: string;
+  action: "create" | "modify" | "delete";
+};

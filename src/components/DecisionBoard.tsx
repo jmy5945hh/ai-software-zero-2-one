@@ -15,16 +15,21 @@ import {
   Package,
   MessageSquare,
   Send,
+  FileText,
+  ListChecks,
+  FolderOpen,
+  CheckCircle2,
+  PlusCircle,
+  Edit3,
 } from "lucide-react";
-import type { DrawerContent, AppState } from "../data/types";
-import { StreamText, useStepKey } from "../hooks";
+import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
+import { useStepKey } from "../hooks";
 import { workflow, getContentForStage } from "../data";
 import type {
-  StageContent,
-  DeliverableCard,
   TrajectoryTurn,
 } from "../data/stageContent";
 import type { SessionState, ToolCallCategory, ToolCallRecord, Turn } from "../agent/types";
+import { extractFileChanges } from "../agent/useAgent";
 import {
   IntentDecision,
   ScopeDecision,
@@ -104,7 +109,6 @@ export function DecisionBoard({
       <div className="board-tab-panels">
         {activeTab === "delivery" && (
           <DeliveryCollabTab
-            content={content}
             state={state}
             onPatch={onPatch}
             onContinue={onContinue}
@@ -132,7 +136,6 @@ export function DecisionBoard({
 
 // ── Tab 1: 交付 & 协作 ──────────────────────
 function DeliveryCollabTab({
-  content,
   state,
   onPatch,
   onContinue,
@@ -141,7 +144,6 @@ function DeliveryCollabTab({
   agentSession,
   isAgentConnected,
 }: {
-  content: StageContent;
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
   onContinue: () => void;
@@ -150,13 +152,23 @@ function DeliveryCollabTab({
   agentSession?: SessionState;
   isAgentConnected: boolean;
 }) {
-  // Agent 是否已完成本轮工作
   const agentCompleted = isAgentConnected && agentSession?.completed && !agentSession?.isStreaming;
   const agentWorking = isAgentConnected && agentSession && !agentCompleted;
 
+  // 结构化总结状态
+  const summaryResult = agentSession?.summarizationResult;
+  const summaryLoading = agentSession?.summarizationStatus === "loading";
+  const summaryError = agentSession?.summarizationStatus === "error";
+  const hasSummary = agentSession?.summarizationStatus === "done" && summaryResult;
+
+  // 文件变更（从 session turns 中统计）
+  const fileChanges: FileChange[] = agentSession?.turns
+    ? extractFileChanges(agentSession.turns)
+    : [];
+
   return (
     <div className="tab-panel panel-delivery">
-      {/* Agent 工作中：显示提示 */}
+      {/* Agent 工作中 */}
       {agentWorking && (
         <div className="delivery-working-notice">
           <div className="working-notice-icon">
@@ -177,36 +189,50 @@ function DeliveryCollabTab({
         </div>
       )}
 
-      {/* Agent 已完成：展示交付内容 */}
-      {!agentWorking && (
+      {/* Agent 已完成：展示真实交付内容 */}
+      {!agentWorking && isAgentConnected && agentCompleted && (
         <>
-          <div className="delivery-summary">
-            <p>
-              {isAgentConnected && agentSession ? (
-                <>
-                  {agentSession.streamingText || (
-                    agentSession.messages
-                      .filter((m) => m.role === "assistant")
-                      .slice(-1)
-                      .map((m) => m.content)
-                      .join("")
-                  ) || content.summary}
-                </>
-              ) : (
-                <StreamText text={content.summary} speed={18} />
-              )}
-            </p>
-          </div>
+          {/* 总结加载中 */}
+          {summaryLoading && (
+            <div className="summary-loading">
+              <Loader2 size={20} className="spin-icon" />
+              <span>正在结构化总结 Agent 产出...</span>
+            </div>
+          )}
 
-          <div className="delivery-cards">
-            {content.deliverables.map((card) => (
-              <DeliverableCardItem
-                key={card.id}
-                card={card}
-                onPreview={onPreview}
+          {/* 总结失败：展示原始 summary */}
+          {summaryError && agentSession?.summary && (
+            <div className="delivery-summary">
+              <div className="summary-section-header">
+                <FileText size={15} />
+                <span>核心摘要</span>
+              </div>
+              <p>{agentSession.summary}</p>
+            </div>
+          )}
+
+          {/* 总结成功：分板块展示 */}
+          {hasSummary && summaryResult && (
+            <>
+              <SummaryBrief brief={summaryResult.brief} />
+              <KeyPointsGrid keyPoints={summaryResult.key_points} />
+              <FileChangesList files={fileChanges} />
+              <TodoSection
+                todos={summaryResult.todos}
+                onAnswerChange={(todoIndex, answer) => {
+                  // 暂做视觉标记，后续反馈给 Agent
+                  console.log(`Todo #${todoIndex} answer:`, answer);
+                }}
               />
-            ))}
-          </div>
+            </>
+          )}
+
+          {/* 无总结结果但有 summary（idle 状态下尚未触发） */}
+          {!summaryLoading && !hasSummary && !summaryError && agentSession?.summary && (
+            <div className="delivery-summary">
+              <p>{agentSession.summary}</p>
+            </div>
+          )}
 
           <div className="collab-section">
             <DecisionArea
@@ -239,81 +265,228 @@ function DeliveryCollabTab({
           </div>
         </>
       )}
-    </div>
-  );
-}
 
-// ── 可展开交付卡片 ───────────────────────────
-function DeliverableCardItem({
-  card,
-  onPreview,
-}: {
-  card: DeliverableCard;
-  onPreview: (content: DrawerContent) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const hasDetail = !!card.expandedContent;
-
-  return (
-    <div className={`deliverable-card ${hasDetail ? "expandable" : ""} ${expanded ? "expanded" : ""}`}>
-      <button
-        className="deliverable-card-header"
-        type="button"
-        onClick={() => hasDetail && setExpanded(!expanded)}
-      >
-        <div className="deliverable-card-main">
-          <span className={`deliverable-tag tag-${getTagVariant(card.tag)}`}>
-            {card.tag}
-          </span>
-          <div className="deliverable-card-text">
-            <strong>{card.title}</strong>
-            <span>{card.detail}</span>
-          </div>
+      {/* 未连接 Agent 时：空白态 */}
+      {!isAgentConnected && (
+        <div className="delivery-empty">
+          <Bot size={24} />
+          <p>连接 Agent 后将在此展示交付产出</p>
         </div>
-        {hasDetail && (
-          <span className="deliverable-expand-icon">
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </span>
-        )}
-      </button>
-      {expanded && card.expandedContent && (
-        <div className="deliverable-card-detail">
-          <button
-            className="ghost-button"
-            type="button"
-            onClick={() =>
-              onPreview({
-                type: card.expandedContent!.type as DrawerContent extends { type: infer T } ? T : never,
-                title: card.expandedContent!.title,
-                content: card.expandedContent!.content,
-                language: card.expandedContent!.type === "code" ? "yaml" : "markdown",
-                html: card.expandedContent!.type === "html" ? card.expandedContent!.content : "",
-                path: "",
-              } as DrawerContent)
-            }
-          >
-            在侧栏查看完整内容 →
-          </button>
-          <pre className="deliverable-code-preview">
-            {card.expandedContent.content.slice(0, 300)}
-            {card.expandedContent.content.length > 300 ? "…" : ""}
-          </pre>
+      )}
+
+      {/* 已连接但无当前步骤 session */}
+      {isAgentConnected && !agentSession && !agentWorking && (
+        <div className="delivery-empty">
+          <Bot size={24} />
+          <p>请通过任务轨迹创建 Agent 会话来开始本阶段工作</p>
         </div>
       )}
     </div>
   );
 }
 
-function getTagVariant(tag?: string): string {
-  if (!tag) return "default";
-  const map: Record<string, string> = {
-    "分析": "analysis", "建议": "suggest", "风险": "risk",
-    "契约": "contract", "权限": "permission", "模型": "model",
-    "代码": "code", "数据": "data", "测试": "test",
-    "文档": "doc", "通过": "pass", "未通过": "fail",
-    "修复": "fix", "预览": "preview", "安全": "safe",
+// ── 摘要卡片 ────────────────────────────────
+function SummaryBrief({ brief }: { brief: string }) {
+  return (
+    <div className="delivery-summary">
+      <div className="summary-section-header">
+        <FileText size={15} />
+        <span>核心摘要</span>
+      </div>
+      <p>{brief}</p>
+    </div>
+  );
+}
+
+// ── 关键产出要点 ─────────────────────────────
+function KeyPointsGrid({ keyPoints }: { keyPoints: KeyPoint[] }) {
+  if (keyPoints.length === 0) return null;
+
+  return (
+    <div className="summary-section keypoints-section">
+      <div className="summary-section-header">
+        <ListChecks size={15} />
+        <span>关键产出</span>
+        <em className="summary-section-count">{keyPoints.length} 项</em>
+      </div>
+      <div className="keypoints-grid">
+        {keyPoints.map((kp, i) => (
+          <div key={i} className="keypoint-card">
+            <strong className="keypoint-title">{kp.title}</strong>
+            <p className="keypoint-summary">{kp.summary}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 文件变更列表 ─────────────────────────────
+function FileChangesList({ files }: { files: FileChange[] }) {
+  if (files.length === 0) return null;
+
+  const actionIcon = (action: FileChange["action"]) => {
+    switch (action) {
+      case "create": return <PlusCircle size={13} />;
+      case "modify": return <Edit3 size={13} />;
+      case "delete": return <Edit3 size={13} />;
+    }
   };
-  return map[tag] || "default";
+
+  const actionLabel = (action: FileChange["action"]) => {
+    switch (action) {
+      case "create": return "新增";
+      case "modify": return "修改";
+      case "delete": return "删除";
+    }
+  };
+
+  const actionClass = (action: FileChange["action"]) => `file-action-${action}`;
+
+  return (
+    <div className="summary-section filechanges-section">
+      <div className="summary-section-header">
+        <FolderOpen size={15} />
+        <span>文件变更</span>
+        <em className="summary-section-count">{files.length} 项</em>
+      </div>
+      <div className="filechanges-list">
+        {files.map((fc, i) => (
+          <div key={i} className="filechange-item">
+            <span className={`filechange-action ${actionClass(fc.action)}`}>
+              {actionIcon(fc.action)}
+              <span>{actionLabel(fc.action)}</span>
+            </span>
+            <span className="filechange-path">{fc.path}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 待决策事项 ───────────────────────────────
+function TodoSection({
+  todos,
+  onAnswerChange,
+}: {
+  todos: TodoItem[];
+  onAnswerChange: (todoIndex: number, answer: string | string[]) => void;
+}) {
+  if (todos.length === 0) return null;
+
+  return (
+    <div className="summary-section todo-section">
+      <div className="summary-section-header">
+        <CheckCircle2 size={15} />
+        <span>待决策</span>
+        <em className="summary-section-count">{todos.length} 项</em>
+      </div>
+
+      <div className="todo-list">
+        {todos.map((todo, ti) => (
+          <TodoItemCard
+            key={ti}
+            todo={todo}
+            index={ti}
+            onAnswerChange={(answer) => onAnswerChange(ti, answer)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TodoItemCard({
+  todo,
+  index,
+  onAnswerChange,
+}: {
+  todo: TodoItem;
+  index: number;
+  onAnswerChange: (answer: string | string[]) => void;
+}) {
+  const [selectedChoices, setSelectedChoices] = useState<string[]>(
+    Array.isArray(todo.userAnswer) ? todo.userAnswer as string[] : todo.userAnswer ? [todo.userAnswer as string] : []
+  );
+  const [fillValue, setFillValue] = useState(
+    typeof todo.userAnswer === "string" && todo.type === "fill" ? todo.userAnswer : ""
+  );
+
+  const toggleChoice = (option: string) => {
+    if (todo.type === "fill") return;
+
+    let next: string[];
+    if (todo.multiSelect) {
+      next = selectedChoices.includes(option)
+        ? selectedChoices.filter((c) => c !== option)
+        : [...selectedChoices, option];
+    } else {
+      next = selectedChoices.includes(option) ? [] : [option];
+    }
+    setSelectedChoices(next);
+    onAnswerChange(todo.multiSelect ? next : next[0] || "");
+  };
+
+  const handleFillChange = (value: string) => {
+    setFillValue(value);
+    onAnswerChange(value);
+  };
+
+  return (
+    <div className="todo-card">
+      <div className="todo-task-header">
+        <span className="todo-index">{index + 1}</span>
+        <span className="todo-task-text">{todo.task}</span>
+        {todo.type === "choice" && (
+          <span className="todo-type-badge">
+            {todo.multiSelect ? "多选" : "单选"}
+          </span>
+        )}
+        {todo.type === "fill" && (
+          <span className="todo-type-badge fill">填空</span>
+        )}
+      </div>
+
+      {todo.type === "choice" && todo.choices.length > 0 && (
+        <div className="todo-choices">
+          {todo.choices.map((choice, ci) => {
+            const isSelected = selectedChoices.includes(choice.option);
+            return (
+              <button
+                key={ci}
+                className={`todo-choice-btn ${isSelected ? "selected" : ""}`}
+                type="button"
+                onClick={() => toggleChoice(choice.option)}
+              >
+                <span className="todo-choice-dot">
+                  {isSelected && (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  )}
+                </span>
+                <div className="todo-choice-body">
+                  <strong>{choice.option}</strong>
+                  {choice.description && <span>{choice.description}</span>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {todo.type === "fill" && (
+        <div className="todo-fill">
+          <input
+            className="todo-fill-input"
+            type="text"
+            value={fillValue}
+            onChange={(e) => handleFillChange(e.target.value)}
+            placeholder={todo.placeholder || "输入你的回答..."}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Tab 2: AI 任务轨迹（单栏·固定高度轮次） ──
@@ -990,7 +1163,7 @@ function TimelineEventV2({
       const argsSummary = tc.input ? extractToolArgsSummary(tc.input, tc.name) : "";
       const resultText = tc.result || tc.outputFragments.join("");
       const hasInput = !!tc.input;
-      const hasOutput = tc.status === "done" && resultText.trim();
+      const hasOutput = tc.status !== "running" && resultText.trim();
 
       return (
         <div className={`timeline-tool ${tc.status} ${isExpanded ? "expanded" : ""}`}>
@@ -1034,10 +1207,14 @@ function TimelineEventV2({
                 </div>
               )}
               {hasOutput && (
-                <div className="tl-tool-expand-section">
+                <div className={`tl-tool-expand-section${tc.status === "error" ? " tl-tool-expand-error" : ""}`}>
                   <div className="tl-tool-expand-title">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                    <span>输出结果</span>
+                    {tc.status === "error" ? (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                    ) : (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    )}
+                    <span>{tc.status === "error" ? "错误信息" : "输出结果"}</span>
                   </div>
                   <pre className="tl-tool-expand-pre"><code>{formatJsonOrText(resultText)}</code></pre>
                 </div>

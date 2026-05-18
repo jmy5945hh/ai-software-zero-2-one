@@ -1222,6 +1222,339 @@
   color: #F9F8F4;
 }
 
+/* ── 交付板块：结构化总结 ──────────────── */
+.summary-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--primary-light);
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 16px;
+}
+
+.delivery-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 56px 24px;
+  color: var(--muted-warm);
+  text-align: center;
+}
+
+.delivery-empty svg {
+  color: var(--muted);
+  opacity: 0.4;
+}
+
+.delivery-empty p {
+  font-size: 0.85rem;
+}
+
+/* 板块通用头部 */
+.summary-section {
+  margin-bottom: 18px;
+}
+
+.summary-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--primary);
+}
+
+.summary-section-header span {
+  font-family: var(--font-heading);
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.summary-section-header svg {
+  flex-shrink: 0;
+}
+
+.summary-section-count {
+  margin-left: auto;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.65rem;
+  font-weight: 600;
+  font-style: normal;
+}
+
+/* 关键产出网格 */
+.keypoints-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.keypoint-card {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.keypoint-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
+}
+
+.keypoint-title {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.keypoint-summary {
+  color: var(--muted-warm);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+/* 文件变更列表 */
+.filechanges-list {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.filechange-item {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.78rem;
+  transition: background var(--duration-fast) var(--ease-gentle);
+}
+
+.filechange-item:last-child {
+  border-bottom: none;
+}
+
+.filechange-item:hover {
+  background: var(--primary-light);
+}
+
+.filechange-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.65rem;
+  font-weight: 600;
+  flex-shrink: 0;
+  justify-self: start;
+}
+
+.filechange-action svg {
+  flex-shrink: 0;
+}
+
+.file-action-create {
+  background: rgba(45, 106, 79, 0.1);
+  color: #2D6A4F;
+}
+
+.file-action-modify {
+  background: rgba(140, 154, 132, 0.12);
+  color: var(--primary);
+}
+
+.file-action-delete {
+  background: var(--terracotta-light);
+  color: var(--terracotta);
+}
+
+.filechange-path {
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.75rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 待决策事项 */
+.todo-list {
+  display: grid;
+  gap: 10px;
+}
+
+.todo-card {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+}
+
+.todo-task-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.todo-index {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.todo-task-text {
+  flex: 1;
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.todo-type-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.todo-type-badge.fill {
+  background: var(--terracotta-light);
+  color: var(--terracotta);
+}
+
+/* 选项按钮 */
+.todo-choices {
+  display: grid;
+  gap: 6px;
+}
+
+.todo-choice-btn {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.todo-choice-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  transform: translateX(2px);
+}
+
+.todo-choice-btn.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.todo-choice-dot {
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--muted-warm);
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: all var(--duration-fast) var(--ease-gentle);
+  margin-top: 1px;
+}
+
+.todo-choice-btn.selected .todo-choice-dot {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #F9F8F4;
+}
+
+.todo-choice-body strong {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.todo-choice-body span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted-warm);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+/* 填空输入 */
+.todo-fill {
+  margin-top: 4px;
+}
+
+.todo-fill-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: var(--bg-soft);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  transition: border-color var(--duration-fast) var(--ease-gentle);
+}
+
+.todo-fill-input:focus {
+  border-color: var(--primary);
+  background: var(--panel);
+}
+
+.todo-fill-input::placeholder {
+  color: var(--muted-warm);
+}
+
 /* ── 任务轨迹：轮次展示 ─────────────────── */
 .trajectory-rounds {
   overflow-y: auto;
@@ -1562,5 +1895,14 @@
 
   .drawer {
     width: 100% !important;
+  }
+
+  .keypoints-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filechange-item {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }

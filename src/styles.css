@@ -3054,6 +3054,19 @@ p {
   border-top: 1px dashed var(--line);
 }
 
+.tl-tool-expand-error {
+  border-left: 3px solid #e53e3e;
+  padding-left: 11px;
+}
+
+.tl-tool-expand-error .tl-tool-expand-title {
+  color: #e53e3e;
+}
+
+.tl-tool-expand-error .tl-tool-expand-title svg {
+  color: #e53e3e;
+}
+
 .tl-tool-expand-title {
   display: flex;
   align-items: center;
