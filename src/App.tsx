@@ -394,7 +394,7 @@ function WorkspaceView({
       />
 
       {/* Agent 未连接 / 连接中 */}
-      {!isAgentConnected && (
+      {!isAgentConnected ? (
         <div className="workspace-no-agent">
           <div className="no-agent-card">
             {connectionStatus === "connecting" ? (
