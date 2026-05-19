@@ -8,6 +8,7 @@ export type AgentMethod =
   | "session.followUp"
   | "session.abort"
   | "session.dispose"
+  | "session.answerQuestion"
   | "workspace.tree"
   | "workspace.readFile"
   | "workspace.browse";

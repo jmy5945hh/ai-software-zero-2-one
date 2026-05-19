@@ -3,6 +3,7 @@ import { WebSocketServer, type WebSocket } from "ws";
 import { AgentRunner } from "./AgentRunner";
 import { SessionPool } from "./SessionPool";
 import { WorkspaceManager } from "./WorkspaceManager";
+import { resolveQuestion } from "./customTools";
 import type { WsMessage, AgentEvent } from "./protocol";
 
 const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
@@ -245,6 +246,21 @@ wss.on("connection", (ws: WebSocket) => {
             step: string;
           };
           pool.dispose(taskId, step);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
+          break;
+        }
+
+        // ── 用户回答问题 ────────────────────
+        case "session.answerQuestion": {
+          const { taskId, step, answer } = msg.params as {
+            taskId: string;
+            step: string;
+            answer: string;
+          };
+          const resolved = resolveQuestion(taskId, step, answer);
+          if (!resolved) {
+            throw new Error(`No pending question for ${taskId}:${step}`);
+          }
           ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
           break;
         }

@@ -119,6 +119,7 @@ function TaskCardResident({
 
 /**
  * 工作空间文件树 —— 根据当前 SOP 阶段动态展示文件结构。
+ * 在研发执行阶段（stepIndex >= 3）默认折叠，减少视觉干扰。
  */
 function WorkspaceTree({
   stepIndex,
@@ -131,6 +132,9 @@ function WorkspaceTree({
   agentFileTree?: AgentFileNode[] | null;
   isAgentConnected: boolean;
 }) {
+  // 研发执行阶段（build 及之后）默认折叠
+  const [collapsed, setCollapsed] = useState(stepIndex >= 3);
+
   // 仅在 Agent 连接且有文件树时展示
   const files: FileNode[] = agentFileTree?.length
     ? agentFileTree.map(convertAgentNode)
@@ -138,29 +142,43 @@ function WorkspaceTree({
 
   return (
     <section className="left-card workspace-tree">
-      <div className="left-card-header">
+      <button
+        className="left-card-header workspace-tree-toggle"
+        type="button"
+        onClick={() => setCollapsed(!collapsed)}
+      >
         <FolderOpen size={16} />
         <span>Workspace</span>
         <em>cs-2026-0518</em>
-      </div>
+        <ChevronRight
+          size={14}
+          style={{
+            transform: collapsed ? "rotate(0deg)" : "rotate(90deg)",
+            transition: "transform 0.2s",
+            color: "var(--muted)",
+          }}
+        />
+      </button>
 
-      <div className="file-tree">
-        {files.length > 0 ? (
-          files.map((node) => (
-            <FileTreeNode
-              key={node.name}
-              node={node}
-              depth={0}
-              path={node.name}
-              onFileClick={onFileClick}
-            />
-          ))
-        ) : (
-          <div className="file-tree-empty">
-            {isAgentConnected ? "等待 Agent 生成文件..." : "Agent 未连接"}
-          </div>
-        )}
-      </div>
+      {!collapsed && (
+        <div className="file-tree">
+          {files.length > 0 ? (
+            files.map((node) => (
+              <FileTreeNode
+                key={node.name}
+                node={node}
+                depth={0}
+                path={node.name}
+                onFileClick={onFileClick}
+              />
+            ))
+          ) : (
+            <div className="file-tree-empty">
+              {isAgentConnected ? "等待 Agent 生成文件..." : "Agent 未连接"}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

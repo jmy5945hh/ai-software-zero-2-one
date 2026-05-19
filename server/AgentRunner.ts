@@ -8,6 +8,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { createAuthStorage, getDefaultProvider } from "./config";
 import { STEP_CONFIGS, type StepConfig } from "./stepConfigs";
+import { createAskUserQuestionTool } from "./customTools";
 
 /**
  * AgentRunner — 根据步骤配置创建 AgentSession。
@@ -69,6 +70,10 @@ export class AgentRunner {
     });
     await loader.reload();
 
+    const customTools = stepConfig.tools.includes("ask_user_question")
+      ? [createAskUserQuestionTool(taskId, step)]
+      : [];
+
     const { session } = await createAgentSession({
       model,
       thinkingLevel: stepConfig.thinkingLevel,
@@ -76,6 +81,7 @@ export class AgentRunner {
       modelRegistry: this.modelRegistry,
       settingsManager: this.settingsManager,
       tools: stepConfig.tools,
+      customTools,
       cwd: workspaceDir,
       resourceLoader: loader,
     });

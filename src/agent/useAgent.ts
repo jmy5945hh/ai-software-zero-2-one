@@ -216,6 +216,15 @@ export function useAgent(taskId: string | null) {
     [taskId],
   );
 
+  // ── 回答问题 ──
+  const answerQuestion = useCallback(
+    async (step: string, answer: string) => {
+      if (!taskId || !wsRef.current) return;
+      await wsRef.current.request("session.answerQuestion", { taskId, step, answer });
+    },
+    [taskId],
+  );
+
   // ── 获取文件树 ──
   const getFileTree = useCallback(async () => {
     if (!taskId || !wsRef.current) return;
@@ -609,6 +618,7 @@ export function useAgent(taskId: string | null) {
     createSession,
     prompt,
     steer,
+    answerQuestion,
     getFileTree,
     readFile,
     browseDir,

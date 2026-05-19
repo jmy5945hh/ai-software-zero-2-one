@@ -217,6 +217,28 @@
   color: var(--muted-warm);
 }
 
+/* 工作空间折叠切换按钮 */
+.workspace-tree-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-gentle);
+}
+
+.workspace-tree-toggle:hover {
+  color: var(--text);
+}
+
 /* ── 故事卡驻留 ──────────────────────────── */
 .story-resident-body h3 {
   margin: 0;

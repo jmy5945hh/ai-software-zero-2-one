@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   PlusCircle,
   Edit3,
+  HelpCircle,
 } from "lucide-react";
 import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
 import { useStepKey } from "../hooks";
@@ -54,6 +55,7 @@ type DecisionBoardProps = {
   agentSessions: Record<string, SessionState>;
   agentSteer: (step: string, text: string) => void;
   agentPrompt: (step: string, text: string) => Promise<void>;
+  agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   isAgentConnected: boolean;
 };
 
@@ -65,6 +67,7 @@ export function DecisionBoard({
   agentSessions,
   agentSteer,
   agentPrompt,
+  agentAnswerQuestion,
   isAgentConnected,
 }: DecisionBoardProps) {
   const step = workflow[state.stepIndex];
@@ -125,6 +128,7 @@ export function DecisionBoard({
             stepId={step.id}
             agentSteer={agentSteer}
             agentPrompt={agentPrompt}
+            agentAnswerQuestion={agentAnswerQuestion}
             agentSession={agentSessions[step.id]}
             isAgentConnected={isAgentConnected}
           />
@@ -496,6 +500,7 @@ function TrajectoryChatTab({
   stepId,
   agentSteer,
   agentPrompt,
+  agentAnswerQuestion,
   agentSession,
   isAgentConnected,
 }: {
@@ -504,6 +509,7 @@ function TrajectoryChatTab({
   stepId: string;
   agentSteer: (step: string, text: string) => void;
   agentPrompt: (step: string, text: string) => Promise<void>;
+  agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentSession?: SessionState;
   isAgentConnected: boolean;
 }) {
@@ -606,6 +612,8 @@ function TrajectoryChatTab({
                   <TimelineEventV2
                     key={event.id}
                     event={event}
+                    stepId={stepId}
+                    agentAnswerQuestion={agentAnswerQuestion}
                     isExpanded={expandedEventId === event.id}
                     onToggleExpand={() => {
                       if (event.type === "tool" || event.type === "diff" || event.type === "message") {
@@ -923,14 +931,148 @@ function useRoundGroups(timeline: TimelineEvent[]): RoundGroup[] {
   return groups;
 }
 
+// ── ask_user_question 卡片 ─────────────────
+function AskUserQuestionCard({
+  toolCall: tc,
+  stepId,
+  agentAnswerQuestion,
+  isExpanded,
+  onToggleExpand,
+  onOpenModal,
+}: {
+  toolCall: ToolCallRecord;
+  stepId?: string;
+  agentAnswerQuestion?: (step: string, answer: string) => Promise<void>;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  onOpenModal: (mc: ModalContent) => void;
+}) {
+  const [answer, setAnswer] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // 从 input 中解析 question 字段
+  let question = "";
+  try {
+    const parsed = JSON.parse(tc.input);
+    question = parsed.question || tc.input;
+  } catch {
+    question = tc.input;
+  }
+
+  // 如果已有 result（已回答过），显示结果
+  const alreadyAnswered = tc.status === "done" && tc.result;
+
+  const handleSubmit = async () => {
+    if (!answer.trim() || !stepId || !agentAnswerQuestion) return;
+    setSubmitting(true);
+    try {
+      await agentAnswerQuestion(stepId, answer.trim());
+      setSubmitted(true);
+    } catch {
+      // 错误由 ws 层处理
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  return (
+    <div className={`timeline-tool ${tc.status} ${isExpanded ? "expanded" : ""} ask-question-tool`}>
+      <div className="tl-tool-card" onClick={onToggleExpand}>
+        <span className="tl-tool-icon cat-tool">
+          <HelpCircle size={14} />
+        </span>
+        <div className="tl-tool-info">
+          <div className="tl-tool-meta">
+            <span className="tl-tool-cat cat-tool">工具</span>
+            <span className="tl-tool-name">向您提问</span>
+          </div>
+          <span className="tl-tool-subtitle">
+            {alreadyAnswered ? "已回答" : "等待您的回答"}
+          </span>
+        </div>
+        <span className={`tl-tool-status ${tc.status}`}>
+          {submitted ? (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          ) : tc.status === "running" ? (
+            <Loader2 size={12} className="spin-icon" />
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          )}
+        </span>
+        <span className={`tl-tool-chevron ${isExpanded ? "open" : ""}`}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </span>
+      </div>
+
+      {isExpanded && (
+        <div className="tl-tool-expand">
+          <div className="tl-tool-expand-section ask-question-body">
+            <div className="tl-tool-expand-title">
+              <HelpCircle size={12} />
+              <span>问题</span>
+            </div>
+            <div className="ask-question-text">{question}</div>
+
+            {alreadyAnswered ? (
+              <div className="ask-question-answered">
+                <div className="ask-question-answer-label">您的回答：</div>
+                <div className="ask-question-answer-value">{tc.result}</div>
+              </div>
+            ) : (
+              <div className="ask-question-input-area">
+                <textarea
+                  ref={inputRef}
+                  className="ask-question-textarea"
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="输入您的回答..."
+                  rows={3}
+                  disabled={submitting}
+                />
+                <button
+                  className="ask-question-submit"
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={!answer.trim() || submitting}
+                >
+                  {submitting ? (
+                    <Loader2 size={14} className="spin-icon" />
+                  ) : (
+                    <Send size={14} />
+                  )}
+                  <span>提交回答</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 单条事件渲染（V2：支持内联展开 + 弹窗）─
 function TimelineEventV2({
   event,
+  stepId,
+  agentAnswerQuestion,
   isExpanded,
   onToggleExpand,
   onOpenModal,
 }: {
   event: TimelineEvent;
+  stepId?: string;
+  agentAnswerQuestion?: (step: string, answer: string) => Promise<void>;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onOpenModal: (mc: ModalContent) => void;
@@ -1160,6 +1302,19 @@ function TimelineEventV2({
 
     case "tool": {
       const tc = event.toolCall;
+
+      // ── ask_user_question 特殊渲染 ──
+      if (tc.name === "ask_user_question") {
+        return <AskUserQuestionCard
+          toolCall={tc}
+          stepId={stepId}
+          agentAnswerQuestion={agentAnswerQuestion}
+          isExpanded={isExpanded}
+          onToggleExpand={onToggleExpand}
+          onOpenModal={onOpenModal}
+        />;
+      }
+
       const argsSummary = tc.input ? extractToolArgsSummary(tc.input, tc.name) : "";
       const resultText = tc.result || tc.outputFragments.join("");
       const hasInput = !!tc.input;

@@ -449,6 +449,7 @@ function WorkspaceView({
               agentSessions={agent.sessions}
               agentSteer={agent.steer}
               agentPrompt={agent.prompt}
+              agentAnswerQuestion={agent.answerQuestion}
               isAgentConnected={isAgentConnected}
             />
           </div>
