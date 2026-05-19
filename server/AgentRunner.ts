@@ -42,6 +42,13 @@ export class AgentRunner {
     if (!stepConfig) throw new Error(`Unknown SOP step: ${step}`);
 
     const provider = stepConfig.modelProvider || getDefaultProvider();
+
+    // Ensure API key is set on authStorage (each createSession call)
+    const key = process.env.DEEPSEEK_API_KEY;
+    if (!key) {
+      throw new Error("DEEPSEEK_API_KEY not found in environment");
+    }
+    this.authStorage.setRuntimeApiKey("deepseek", key);
     const model = this.modelRegistry.find(provider, stepConfig.modelId);
     if (!model) {
       throw new Error(
@@ -49,6 +56,7 @@ export class AgentRunner {
         `Check server/models.json and your API key.`,
       );
     }
+    console.log("[AgentRunner] Model found: %s", model.id);
 
     const loader = new DefaultResourceLoader({
       cwd: workspaceDir,

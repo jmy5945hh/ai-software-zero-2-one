@@ -108,6 +108,14 @@ ${summary}
 ---`;
 }
 
+/** 从可能包含 markdown 代码块的内容中提取纯 JSON */
+function extractJsonFromMarkdown(raw: string): string {
+  const trimmed = raw.trim();
+  // 匹配 ```json ... ``` 或 ``` ... ```
+  const match = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/);
+  return match ? match[1].trim() : trimmed;
+}
+
 /** 默认 Session 状态工厂 */
 function defaultSession(): SessionState {
   return {
@@ -283,10 +291,12 @@ export function useAgent(taskId: string | null) {
               };
 
             case "agent_end": {
-              const raw = (s.summarizationRaw || "") + ((event as { summary: string }).summary || "");
+              const raw = extractJsonFromMarkdown(
+                (event as { summary: string }).summary || "",
+              );
               let result: AgentSummary | undefined;
               try {
-                result = JSON.parse(raw.trim());
+                result = JSON.parse(raw);
               } catch {
                 result = undefined;
               }
