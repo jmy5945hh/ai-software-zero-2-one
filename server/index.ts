@@ -2,6 +2,7 @@ import http from "http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { AgentRunner } from "./AgentRunner";
 import { SessionPool } from "./SessionPool";
+import { SummaryStore } from "./SummaryStore";
 import { WorkspaceManager } from "./WorkspaceManager";
 import { resolveQuestion } from "./customTools";
 import type { WsMessage, AgentEvent } from "./protocol";
@@ -11,6 +12,7 @@ const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 // ── 初始化核心组件 ──────────────────────────
 const runner = new AgentRunner("./server/models.json");
 const pool = new SessionPool();
+const summaryStore = new SummaryStore();
 const workspace = new WorkspaceManager("./server/workspaces");
 
 const server = http.createServer();
@@ -19,6 +21,45 @@ const wss = new WebSocketServer({ server, path: "/agent" });
 console.log("Agent Server starting...");
 console.log(`  Model provider: DeepSeek (via DEEPSEEK_API_KEY)`);
 console.log(`  Port: ${PORT}`);
+
+// ── 总结 Prompt 构建 ───────────────────────
+/** 构造总结 Agent 的 prompt（与前端 buildSummarizationPrompt 一致） */
+function buildSummarizationPrompt(summary: string): string {
+  return `你是一个任务总结专家。请严格基于下面的 Agent 工作摘要，生成结构化总结。
+
+要求：
+1. 忠于原文，不添加原文中没有的内容，不自由发挥
+2. 仅输出 JSON，不要有任何额外说明文字
+
+输出 JSON schema：
+{
+  "brief": "核心总结，不超过200字",
+  "key_points": [
+    { "title": "要点概要，不超过50字", "summary": "要点内容，不超过200字" }
+  ],
+  "todos": [
+    {
+      "task": "需要用户决策或讨论的问题",
+      "type": "choice" | "fill",
+      "multiSelect": true/false,
+      "choices": [{ "option": "选项名", "description": "选项描述" }],
+      "placeholder": "填空题占位文本"
+    }
+  ]
+}
+
+注意：
+- key_points 数量不限，提取核心要点
+- todos 仅在原文中确实存在待决策事项时才出现
+- type=choice 时 choices 必填，type=fill 时 choices 可为空数组、placeholder 必填
+- multiSelect 仅 type=choice 时有效，默认 false
+- brief 使用中文
+
+以下是 Agent 工作摘要：
+---
+${summary}
+---`;
+}
 
 // ── SDK 事件映射 ────────────────────────────
 /** 从 AgentToolResult 的 content 数组中提取文本 */
@@ -262,6 +303,59 @@ wss.on("connection", (ws: WebSocket) => {
             throw new Error(`No pending question for ${taskId}:${step}`);
           }
           ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
+          break;
+        }
+
+        // ── 总结独立链路 ──────────────────
+        case "summarization.save": {
+          const { taskId, step, summary } = msg.params as {
+            taskId: string;
+            step: string;
+            summary: string;
+          };
+          summaryStore.set(taskId, step, summary);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
+          break;
+        }
+
+        case "summarization.trigger": {
+          const { taskId, step } = msg.params as {
+            taskId: string;
+            step: string;
+          };
+          const saved = summaryStore.get(taskId, step);
+          if (!saved) {
+            throw new Error(`No summary saved for ${taskId}:${step}`);
+          }
+          const workspaceDir = workspace.getDir(taskId);
+          const session = await runner.createSummarizationSession(workspaceDir);
+
+          // 监听 agent_end，完成后自动清理
+          const unsub = session.subscribe((sdkEvent) => {
+            const event = mapSdkEvent(sdkEvent);
+            if (!event) return;
+            ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
+
+            // 总结完成 → 清理 session
+            if (event.type === "agent_end") {
+              unsub();
+              session.dispose();
+              summaryStore.delete(taskId, step);
+            }
+          });
+
+          // 先发响应（前端准备接收事件）
+          ws.send(
+            JSON.stringify({
+              type: "response",
+              id: msg.id,
+              result: { sessionId: session.sessionId },
+            }),
+          );
+
+          // 发送总结 prompt
+          const promptText = buildSummarizationPrompt(saved);
+          await session.prompt(promptText);
           break;
         }
 

@@ -914,6 +914,11 @@
   animation: drawerSlideIn 0.3s var(--ease-out);
 }
 
+/* diff 类型抽屉更宽 */
+.drawer.drawer-wide {
+  /* 由 JS 控制 width，此处仅做标记 */
+}
+
 @keyframes drawerSlideIn {
   from {
     transform: translateX(40px);
@@ -958,6 +963,25 @@
   font-weight: 600;
 }
 
+/* 抽屉头部 diff 统计 */
+.drawer-diff-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.diff-stat-add {
+  color: #2D6A4F;
+}
+
+.diff-stat-del {
+  color: var(--terracotta);
+}
+
 .drawer-actions {
   display: flex;
   align-items: center;
@@ -973,6 +997,43 @@
 .drawer-body {
   overflow-y: auto;
   padding: 0;
+}
+
+/* ── Diff 查看器（抽屉内） ── */
+.drawer-diff {
+  padding: 4px 0;
+  background: var(--bg-soft);
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.75rem;
+  line-height: 1.7;
+}
+
+.drawer-diff .cm-diff-line {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  padding: 1px 0;
+}
+
+.drawer-diff .cm-diff-line.add {
+  background: rgba(45, 106, 79, 0.08);
+}
+
+.drawer-diff .cm-diff-line.del {
+  background: rgba(194, 123, 102, 0.08);
+}
+
+.drawer-diff .cm-diff-num {
+  padding-right: 12px;
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+  font-size: 0.65rem;
+}
+
+.drawer-diff .cm-diff-text {
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding-right: 16px;
 }
 
 /* ── 代码预览 ────────────────────────────── */
@@ -1363,23 +1424,58 @@
   overflow: hidden;
 }
 
+/* 汇总行 */
+.filechanges-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-light);
+  font-size: 0.75rem;
+}
+
+.filechanges-summary-text {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.filechanges-summary-add {
+  color: #2D6A4F;
+  font-weight: 700;
+  font-family: "SF Mono", "Cascadia Code", monospace;
+}
+
+.filechanges-summary-del {
+  color: var(--terracotta);
+  font-weight: 700;
+  font-family: "SF Mono", "Cascadia Code", monospace;
+}
+
 .filechange-item {
   display: grid;
-  grid-template-columns: 72px 1fr;
+  grid-template-columns: 72px 1fr auto auto;
   gap: 12px;
   align-items: center;
   padding: 8px 14px;
   border-bottom: 1px solid var(--line);
   font-size: 0.78rem;
   transition: background var(--duration-fast) var(--ease-gentle);
+  cursor: default;
+}
+
+.filechange-item.clickable {
+  cursor: pointer;
+}
+
+.filechange-item.clickable:hover {
+  background: var(--primary-light);
+  border-bottom-color: var(--primary-mid);
 }
 
 .filechange-item:last-child {
   border-bottom: none;
-}
-
-.filechange-item:hover {
-  background: var(--primary-light);
 }
 
 .filechange-action {
@@ -1420,6 +1516,39 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 单文件变更行数统计 */
+.filechange-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.filechange-stat-add {
+  color: #2D6A4F;
+}
+
+.filechange-stat-del {
+  color: var(--terracotta);
+}
+
+/* 点击查看 chevron */
+.filechange-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform var(--duration-fast) var(--ease-gentle), color var(--duration-fast);
+}
+
+.filechange-item.clickable:hover .filechange-chevron {
+  transform: translateX(2px);
+  color: var(--primary);
 }
 
 /* 待决策事项 */
@@ -1921,7 +2050,15 @@
   }
 
   .filechange-item {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr auto;
     gap: 4px;
+  }
+
+  .filechange-stats {
+    display: none;
+  }
+
+  .filechange-chevron {
+    display: none;
   }
 }

@@ -17,6 +17,11 @@ export function Drawer({ content, onClose }: DrawerProps) {
   const [copied, setCopied] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
 
+  // diff 类型默认更宽
+  useEffect(() => {
+    if (content?.type === "diff") setWidth(620);
+  }, [content?.type]);
+
   // 拖拽调整宽度
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -79,7 +84,7 @@ export function Drawer({ content, onClose }: DrawerProps) {
       {/* 抽屉主体 */}
       <aside
         ref={drawerRef}
-        className="drawer"
+        className={`drawer ${content.type === "diff" ? "drawer-wide" : ""}`}
         style={{ width }}
         aria-label="内容预览"
       >
@@ -93,11 +98,17 @@ export function Drawer({ content, onClose }: DrawerProps) {
         {/* 头部 */}
         <div className="drawer-header">
           <div className="drawer-title">
-            <span className="eyebrow">{content.type === "code" ? "代码" : content.type === "html" ? "预览" : "文档"}</span>
+            <span className="eyebrow">{content.type === "code" ? "代码" : content.type === "html" ? "预览" : content.type === "diff" ? "变更" : "文档"}</span>
             <strong>{content.title}</strong>
+            {content.type === "diff" && (
+              <span className="drawer-diff-stats">
+                <span className="diff-stat-add">+{content.additions}</span>
+                <span className="diff-stat-del">-{content.deletions}</span>
+              </span>
+            )}
           </div>
           <div className="drawer-actions">
-            {(content.type === "code" || content.type === "document") && (
+            {(content.type === "code" || content.type === "document" || content.type === "diff") && (
               <button
                 className="ghost-button small"
                 type="button"
@@ -139,6 +150,10 @@ export function Drawer({ content, onClose }: DrawerProps) {
 
           {content.type === "file" && (
             <CodePreview language={getLanguageFromPath(content.path)} code={content.content} />
+          )}
+
+          {content.type === "diff" && (
+            <DiffViewer content={content.content} />
           )}
         </div>
       </aside>
@@ -197,6 +212,32 @@ function HtmlPreview({ html }: { html: string }) {
           <p>沙盒预览将在发布后可用</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Diff 查看器 ────────────────────────────
+
+type DiffLine = { type: "add" | "del" | "ctx"; content: string };
+
+function parseDiffLines(text: string): DiffLine[] {
+  return text.split("\n").map((line) => {
+    if (line.startsWith("+") && !line.startsWith("+++")) return { type: "add", content: line };
+    if (line.startsWith("-") && !line.startsWith("---")) return { type: "del", content: line };
+    return { type: "ctx", content: line };
+  });
+}
+
+function DiffViewer({ content }: { content: string }) {
+  const lines = parseDiffLines(content);
+  return (
+    <div className="drawer-diff">
+      {lines.map((line, i) => (
+        <div key={i} className={`cm-diff-line ${line.type}`}>
+          <span className="cm-diff-num">{i + 1}</span>
+          <span className="cm-diff-text">{line.content}</span>
+        </div>
+      ))}
     </div>
   );
 }

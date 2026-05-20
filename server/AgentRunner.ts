@@ -33,6 +33,45 @@ export class AgentRunner {
     });
   }
 
+  /** 为总结 Agent 创建独立 AgentSession（轻量模型 + 干净上下文） */
+  async createSummarizationSession(
+    workspaceDir: string,
+  ): Promise<AgentSession> {
+    const provider = getDefaultProvider();
+    const key = process.env.DEEPSEEK_API_KEY;
+    if (!key) throw new Error("DEEPSEEK_API_KEY not found in environment");
+    this.authStorage.setRuntimeApiKey("deepseek", key);
+
+    const model = this.modelRegistry.find(provider, "deepseek-v4-flash");
+    if (!model) throw new Error(`Model not found: ${provider}/deepseek-v4-flash`);
+
+    const loader = new DefaultResourceLoader({
+      cwd: workspaceDir,
+      agentDir: workspaceDir,
+      systemPrompt: `你是一个任务总结专家。你的唯一职责是将用户提供的 Agent 工作摘要转化为严格的 JSON 结构化输出。
+
+规则：
+1. 只输出 JSON，不输出任何其他内容（不要加 markdown 代码块、不要解释）
+2. 严格遵守用户提供的 JSON schema
+3. 忠于原文，不添加原文中没有的内容`,
+    });
+    await loader.reload();
+
+    const { session } = await createAgentSession({
+      model,
+      thinkingLevel: "low",
+      authStorage: this.authStorage,
+      modelRegistry: this.modelRegistry,
+      settingsManager: this.settingsManager,
+      tools: [],
+      customTools: [],
+      cwd: workspaceDir,
+      resourceLoader: loader,
+    });
+
+    return session;
+  }
+
   /** 为指定步骤创建 AgentSession */
   async createSession(
     taskId: string,

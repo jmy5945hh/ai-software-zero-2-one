@@ -17,7 +17,19 @@ function categorizeToolCall(name: string): ToolCallCategory {
   return "unknown";
 }
 
-/** 从 session 的所有 turns 中提取文件变更列表（create / modify / delete） */
+/** 从 diff 文本中提取 +N -M 统计 */
+function extractDiffStats(text: string): { additions: number; deletions: number } {
+  if (!text) return { additions: 0, deletions: 0 };
+  let adds = 0;
+  let dels = 0;
+  for (const line of text.split("\n")) {
+    if (line.startsWith("+") && !line.startsWith("+++")) adds++;
+    if (line.startsWith("-") && !line.startsWith("---")) dels++;
+  }
+  return { additions: adds, deletions: dels };
+}
+
+/** 从 session 的所有 turns 中提取文件变更列表（create / modify / delete），含行数统计和 diff 内容 */
 export function extractFileChanges(turns: Turn[]): FileChange[] {
   const seen = new Set<string>();
   const changes: FileChange[] = [];
@@ -36,12 +48,28 @@ export function extractFileChanges(turns: Turn[]): FileChange[] {
       if (tc.name === "write" && typeof parsed.path === "string") {
         if (!seen.has(parsed.path)) {
           seen.add(parsed.path);
-          changes.push({ path: parsed.path, action: "create" });
+          const content = typeof parsed.content === "string" ? parsed.content : "";
+          const lines = content ? content.split("\n").length : 0;
+          changes.push({
+            path: parsed.path,
+            action: "create",
+            additions: lines,
+            deletions: 0,
+            diffContent: content || undefined,
+          });
         }
       } else if (tc.name === "edit" && typeof parsed.path === "string") {
         if (!seen.has(parsed.path)) {
           seen.add(parsed.path);
-          changes.push({ path: parsed.path, action: "modify" });
+          const output = tc.result || tc.outputFragments.join("");
+          const stats = extractDiffStats(output);
+          changes.push({
+            path: parsed.path,
+            action: "modify",
+            additions: stats.additions,
+            deletions: stats.deletions,
+            diffContent: output || undefined,
+          });
         }
       } else if (tc.name === "bash") {
         const cmd = typeof parsed.command === "string" ? parsed.command.trim() : "";
@@ -70,50 +98,51 @@ export function extractFileChanges(turns: Turn[]): FileChange[] {
   return changes;
 }
 
-/** 构造总结 Agent 的 prompt */
-function buildSummarizationPrompt(summary: string): string {
-  return `你是一个任务总结专家。请严格基于下面的 Agent 工作摘要，生成结构化总结。
+/**
+ * 鲁棒 JSON 提取器。
+ * 能处理：markdown 代码块包裹（```json / ```markdown / ```）、
+ * 前后中文说明文本、BOM / 零宽字符、JSON 尾部逗号容错。
+ * 多层 fallback 策略。
+ */
+function robustExtractJson(raw: string): string {
+  let text = raw.trim();
 
-要求：
-1. 忠于原文，不添加原文中没有的内容，不自由发挥
-2. 仅输出 JSON，不要有任何额外说明文字
+  // Step 0: 移除 BOM 和常见零宽字符
+  text = text.replace(/^[\uFEFF\u200B-\u200D\u2060]+/, "");
 
-输出 JSON schema：
-{
-  "brief": "核心总结，不超过200字",
-  "key_points": [
-    { "title": "要点概要，不超过50字", "summary": "要点内容，不超过200字" }
-  ],
-  "todos": [
-    {
-      "task": "需要用户决策或讨论的问题",
-      "type": "choice" | "fill",
-      "multiSelect": true/false,
-      "choices": [{ "option": "选项名", "description": "选项描述" }],
-      "placeholder": "填空题占位文本"
+  // Step 1: 移除 markdown 代码块包裹 ```json / ```markdown / ```
+  // 匹配开头的 ```xxx 和结尾的 ```
+  const fenceMatch = text.match(/^```(?:json|markdown)?\s*\n?([\s\S]*?)\n?```$/);
+  if (fenceMatch) {
+    text = fenceMatch[1].trim();
+  } else {
+    // Step 2: 如果不在完整的代码块中，尝试提取 { ... } 部分
+    const braceStart = text.indexOf("{");
+    const braceEnd = text.lastIndexOf("}");
+    if (braceStart !== -1 && braceEnd > braceStart) {
+      text = text.slice(braceStart, braceEnd + 1);
     }
-  ]
-}
+  }
 
-注意：
-- key_points 数量不限，提取核心要点
-- todos 仅在原文中确实存在待决策事项时才出现
-- type=choice 时 choices 必填，type=fill 时 choices 可为空数组、placeholder 必填
-- multiSelect 仅 type=choice 时有效，默认 false
-- brief 使用中文
+  // Step 3: 容错移除尾部多余的逗号（JSON 最后一组逗号）
+  // 匹配 ,} ,] ,\s+} ,\s+]
+  text = text.replace(/,(\s*[}\]])/g, "$1");
 
-以下是 Agent 工作摘要：
----
-${summary}
----`;
+  // Step 4: 再次 trim
+  text = text.trim();
+
+  // 验证是否以 { 开头以 } 结尾
+  if (text.startsWith("{") && text.endsWith("}")) {
+    return text;
+  }
+
+  // 兜底：返回原始内容（后续 JSON.parse 会报错，降级展示即可）
+  return raw;
 }
 
 /** 从可能包含 markdown 代码块的内容中提取纯 JSON */
 function extractJsonFromMarkdown(raw: string): string {
-  const trimmed = raw.trim();
-  // 匹配 ```json ... ``` 或 ``` ... ```
-  const match = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/);
-  return match ? match[1].trim() : trimmed;
+  return robustExtractJson(raw);
 }
 
 /** 默认 Session 状态工厂 */
@@ -149,6 +178,8 @@ export function useAgent(taskId: string | null) {
   const activeStepRef = useRef<string | null>(null);
   /** 记录哪些 step 的总结已被触发，确保只触发一次 */
   const summarizingRef = useRef<Set<string>>(new Set());
+  /** 当前正在总结的 step（用于分流总结事件到对应 session） */
+  const summarizingStepRef = useRef<string | null>(null);
 
   // ── 创建 session ──
   const createSession = useCallback(
@@ -281,22 +312,23 @@ export function useAgent(taskId: string | null) {
     ws.onClose(() => setConnectionStatus("disconnected"));
 
     ws.onEvent((event: AgentEvent) => {
-      const step = activeStepRef.current;
-      if (!step) return;
+      // ── 总结事件分流（独立 session，不影响正常流程）──
+      const sumStep = summarizingStepRef.current;
+      if (sumStep) {
+        setSessions((prev) => {
+          const s = prev[sumStep] || defaultSession();
 
-      setSessions((prev) => {
-        const s = prev[step] || defaultSession();
-
-        // ── 总结分流：agent_start / text_delta / agent_end ──
-        if (s.summarizationStatus === "loading") {
           switch (event.type) {
             case "agent_start":
-              return { ...prev, [step]: { ...s, summarizationRaw: "" } };
+              return { ...prev, [sumStep]: { ...s, summarizationRaw: "" } };
 
             case "text_delta":
               return {
                 ...prev,
-                [step]: { ...s, summarizationRaw: (s.summarizationRaw || "") + event.delta },
+                [sumStep]: {
+                  ...s,
+                  summarizationRaw: (s.summarizationRaw || "") + event.delta,
+                },
               };
 
             case "agent_end": {
@@ -309,9 +341,10 @@ export function useAgent(taskId: string | null) {
               } catch {
                 result = undefined;
               }
+              summarizingStepRef.current = null;
               return {
                 ...prev,
-                [step]: {
+                [sumStep]: {
                   ...s,
                   summarizationStatus: result ? "done" : "error",
                   summarizationResult: result || undefined,
@@ -323,9 +356,17 @@ export function useAgent(taskId: string | null) {
             default:
               return prev;
           }
-        }
+        });
+        return;
+      }
 
-        // ── 正常流程 ──
+      // ── 正常流程 ──
+      const step = activeStepRef.current;
+      if (!step) return;
+
+      setSessions((prev) => {
+        const s = prev[step] || defaultSession();
+
         switch (event.type) {
           case "text_delta":
             return {
@@ -405,8 +446,8 @@ export function useAgent(taskId: string | null) {
                 ],
                 streamingText: "",
                 turns: updatedTurns,
-                // 触发结构化总结
-                summarizationStatus: "loading",
+                // 标记待触发独立总结
+                summarizationStatus: "pending",
               },
             };
           }
@@ -574,30 +615,45 @@ export function useAgent(taskId: string | null) {
     };
   }, [taskId]);
 
-  // ── 自动触发结构化总结 ──
+  // ── 自动触发独立结构化总结 ──
   useEffect(() => {
     if (!wsRef.current || !taskId) return;
 
     for (const [step, session] of Object.entries(sessions)) {
       if (
-        session.summarizationStatus === "loading" &&
+        session.summarizationStatus === "pending" &&
         session.summary &&
         !summarizingRef.current.has(step)
       ) {
         summarizingRef.current.add(step);
 
-        // 发送总结 prompt 到同一个 session
-        // 事件分流由 summarizationStatus === "loading" 保证
-        const prevStep = activeStepRef.current;
-        activeStepRef.current = step;
-
+        // Step 1: 保存 summary 到后端
         wsRef.current
-          .request("session.prompt", {
+          .request("summarization.save", {
             taskId,
             step,
-            text: buildSummarizationPrompt(session.summary),
+            summary: session.summary,
+          })
+          .then(() => {
+            // Step 2: 触发独立总结 session
+            setSessions((prev) => ({
+              ...prev,
+              [step]: {
+                ...prev[step],
+                summarizationStatus: "loading",
+              },
+            }));
+
+            // 设置分流标记，让后续事件路由到总结分支
+            summarizingStepRef.current = step;
+
+            return wsRef.current!.request("summarization.trigger", {
+              taskId,
+              step,
+            });
           })
           .catch(() => {
+            summarizingStepRef.current = null;
             setSessions((prev) => ({
               ...prev,
               [step]: {
@@ -605,7 +661,6 @@ export function useAgent(taskId: string | null) {
                 summarizationStatus: "error",
               },
             }));
-            activeStepRef.current = prevStep;
           });
       }
     }

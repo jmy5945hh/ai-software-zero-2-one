@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Bot,
   Sparkles,
@@ -31,15 +31,6 @@ import type {
 } from "../data/stageContent";
 import type { SessionState, ToolCallCategory, ToolCallRecord, Turn } from "../agent/types";
 import { extractFileChanges } from "../agent/useAgent";
-import {
-  IntentDecision,
-  ScopeDecision,
-  SpecDecision,
-  BuildDecision,
-  QualityDecision,
-  VerifyDecision,
-  ReleaseDecision,
-} from "./StageDecisions";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { TokenUsageBadge } from "./TokenUsageBadge";
 import { ContentModal } from "./ContentModal";
@@ -170,6 +161,30 @@ function DeliveryCollabTab({
     ? extractFileChanges(agentSession.turns)
     : [];
 
+  // 点击文件变更 → 打开右侧抽屉查看详情
+  const handleFileClick = useCallback(
+    (fc: FileChange) => {
+      if (fc.action === "modify" && fc.diffContent) {
+        onPreview({
+          type: "diff",
+          title: fc.path.split("/").pop() || fc.path,
+          path: fc.path,
+          content: fc.diffContent,
+          additions: fc.additions || 0,
+          deletions: fc.deletions || 0,
+        });
+      } else if (fc.action === "create" && fc.diffContent) {
+        onPreview({
+          type: "code",
+          title: fc.path.split("/").pop() || fc.path,
+          language: getLanguageFromPath(fc.path),
+          content: fc.diffContent,
+        });
+      }
+    },
+    [onPreview],
+  );
+
   return (
     <div className="tab-panel panel-delivery">
       {/* Agent 工作中 */}
@@ -204,14 +219,14 @@ function DeliveryCollabTab({
             </div>
           )}
 
-          {/* 总结失败：展示原始 summary */}
+          {/* 总结失败：展示原始 summary（Markdown） */}
           {summaryError && agentSession?.summary && (
             <div className="delivery-summary">
               <div className="summary-section-header">
                 <FileText size={15} />
                 <span>核心摘要</span>
               </div>
-              <p>{agentSession.summary}</p>
+              <MarkdownRenderer>{agentSession.summary}</MarkdownRenderer>
             </div>
           )}
 
@@ -220,7 +235,7 @@ function DeliveryCollabTab({
             <>
               <SummaryBrief brief={summaryResult.brief} />
               <KeyPointsGrid keyPoints={summaryResult.key_points} />
-              <FileChangesList files={fileChanges} />
+              <FileChangesList files={fileChanges} onFileClick={handleFileClick} />
               <TodoSection
                 todos={summaryResult.todos}
                 onAnswerChange={(todoIndex, answer) => {
@@ -231,21 +246,14 @@ function DeliveryCollabTab({
             </>
           )}
 
-          {/* 无总结结果但有 summary（idle 状态下尚未触发） */}
+          {/* 无总结结果但有 summary（idle/pending 状态下尚未触发） */}
           {!summaryLoading && !hasSummary && !summaryError && agentSession?.summary && (
             <div className="delivery-summary">
-              <p>{agentSession.summary}</p>
+              <MarkdownRenderer>{agentSession.summary}</MarkdownRenderer>
             </div>
           )}
 
           <div className="collab-section">
-            <DecisionArea
-              state={state}
-              onPatch={onPatch}
-              onContinue={onContinue}
-              onPreview={onPreview}
-            />
-
             <div className="collab-input-row">
               <textarea
                 className="board-input"
@@ -326,8 +334,11 @@ function KeyPointsGrid({ keyPoints }: { keyPoints: KeyPoint[] }) {
 }
 
 // ── 文件变更列表 ─────────────────────────────
-function FileChangesList({ files }: { files: FileChange[] }) {
+function FileChangesList({ files, onFileClick }: { files: FileChange[]; onFileClick: (file: FileChange) => void }) {
   if (files.length === 0) return null;
+
+  const totalAdditions = files.reduce((sum, f) => sum + (f.additions || 0), 0);
+  const totalDeletions = files.reduce((sum, f) => sum + (f.deletions || 0), 0);
 
   const actionIcon = (action: FileChange["action"]) => {
     switch (action) {
@@ -354,16 +365,50 @@ function FileChangesList({ files }: { files: FileChange[] }) {
         <span>文件变更</span>
         <em className="summary-section-count">{files.length} 项</em>
       </div>
+
+      {/* 汇总行 */}
+      <div className="filechanges-summary">
+        <span className="filechanges-summary-text">{files.length} 个文件变更</span>
+        {totalAdditions > 0 && (
+          <span className="filechanges-summary-add">+{totalAdditions}</span>
+        )}
+        {totalDeletions > 0 && (
+          <span className="filechanges-summary-del">-{totalDeletions}</span>
+        )}
+      </div>
+
       <div className="filechanges-list">
-        {files.map((fc, i) => (
-          <div key={i} className="filechange-item">
-            <span className={`filechange-action ${actionClass(fc.action)}`}>
-              {actionIcon(fc.action)}
-              <span>{actionLabel(fc.action)}</span>
-            </span>
-            <span className="filechange-path">{fc.path}</span>
-          </div>
-        ))}
+        {files.map((fc, i) => {
+          const hasStats = fc.additions !== undefined && fc.deletions !== undefined;
+          const hasContent = !!fc.diffContent;
+          const canClick = hasContent && fc.action !== "delete";
+
+          return (
+            <div
+              key={i}
+              className={`filechange-item${canClick ? " clickable" : ""}`}
+              onClick={() => canClick && onFileClick(fc)}
+              title={canClick ? "点击查看变更详情" : undefined}
+            >
+              <span className={`filechange-action ${actionClass(fc.action)}`}>
+                {actionIcon(fc.action)}
+                <span>{actionLabel(fc.action)}</span>
+              </span>
+              <span className="filechange-path">{fc.path}</span>
+              {hasStats && (fc.additions! > 0 || fc.deletions! > 0) && (
+                <span className="filechange-stats">
+                  {fc.additions! > 0 && <span className="filechange-stat-add">+{fc.additions}</span>}
+                  {fc.deletions! > 0 && <span className="filechange-stat-del">-{fc.deletions}</span>}
+                </span>
+              )}
+              {canClick && (
+                <span className="filechange-chevron">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -1574,32 +1619,17 @@ function getToolCategoryLabel(category: ToolCallCategory): string {
   }
 }
 
-// ── 决策操作区 ───────────────────────────────
-function DecisionArea({
-  state,
-  onPatch,
-  onContinue,
-  onPreview,
-}: {
-  state: AppState;
-  onPatch: (p: Partial<AppState>) => void;
-  onContinue: () => void;
-  onPreview: (c: DrawerContent) => void;
-}) {
-  const step = workflow[state.stepIndex].id;
-  const actions: Record<string, React.ReactNode> = {
-    intent: <IntentDecision state={state} onPatch={onPatch} onContinue={onContinue} />,
-    scope: <ScopeDecision state={state} onPatch={onPatch} onContinue={onContinue} />,
-    spec: <SpecDecision state={state} onPatch={onPatch} onContinue={onContinue} onPreview={onPreview} />,
-    build: <BuildDecision onContinue={onContinue} />,
-    quality: <QualityDecision state={state} onPatch={onPatch} onContinue={onContinue} onPreview={onPreview} />,
-    verify: <VerifyDecision state={state} onPatch={onPatch} onContinue={onContinue} onPreview={onPreview} />,
-    release: <ReleaseDecision state={state} onPatch={onPatch} />,
+// ── 工具函数 ────────────────────────────────
+function getLanguageFromPath(path: string): string {
+  const ext = path.split(".").pop() || "";
+  const map: Record<string, string> = {
+    ts: "TypeScript", tsx: "TSX", js: "JavaScript", jsx: "JSX",
+    json: "JSON", yaml: "YAML", yml: "YAML", md: "Markdown",
+    css: "CSS", html: "HTML",
   };
-  return <div className="decision-actions">{actions[step] ?? null}</div>;
+  return map[ext] || ext;
 }
 
-// ── 工具函数 ────────────────────────────────
 function getPlaceholderForStage(stepIndex: number): string {
   const prompts = [
     "补充更多业务背景或边界条件...",

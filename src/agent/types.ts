@@ -76,7 +76,7 @@ export type SessionState = {
   isRetrying: boolean;
   queue: { steering: string[]; followUp: string[] };
   /** 结构化总结状态 */
-  summarizationStatus: "idle" | "loading" | "done" | "error";
+  summarizationStatus: "idle" | "pending" | "loading" | "done" | "error";
   /** 解析后的结构化总结结果 */
   summarizationResult?: import("../data/types").AgentSummary;
   /** 总结 Agent 原始返回文本（调试 / 兜底用） */

@@ -107,6 +107,7 @@ export type DrawerContent =
   | { type: "document"; title: string; content: string }
   | { type: "html"; title: string; html: string }
   | { type: "file"; title: string; path: string; content: string }
+  | { type: "diff"; title: string; path: string; content: string; additions: number; deletions: number }
   | null;
 
 // ── 工作空间文件节点 ────────────────────────
@@ -156,4 +157,10 @@ export type Choice = {
 export type FileChange = {
   path: string;
   action: "create" | "modify" | "delete";
+  /** 新增行数（create 时 = 文件行数，modify 时从 diff 统计） */
+  additions?: number;
+  /** 删除行数（仅 modify 时有值） */
+  deletions?: number;
+  /** diff 原文（modify）或完整文件内容（create），用于 Drawer 展示 */
+  diffContent?: string;
 };

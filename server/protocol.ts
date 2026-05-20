@@ -9,6 +9,8 @@ export type AgentMethod =
   | "session.abort"
   | "session.dispose"
   | "session.answerQuestion"
+  | "summarization.save"
+  | "summarization.trigger"
   | "workspace.tree"
   | "workspace.readFile"
   | "workspace.browse";
