@@ -514,9 +514,11 @@ function TrajectoryChatTab({
   isAgentConnected: boolean;
 }) {
   const [input, setInput] = useState("");
-  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [expandedRoundIds, setExpandedRoundIds] = useState<Set<string>>(new Set());
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
   const [modalContent, setModalContent] = useState<ModalContent | null>(null);
+  // final round 在最后一轮完成时自动展开
+  const lastExpandedRef = useRef<string | null>(null);
 
   // 构建展示用的轮次列表
   const displayTurns = buildDisplayTurns(agentSession, trajectory, isAgentConnected);
@@ -526,6 +528,19 @@ function TrajectoryChatTab({
 
   // 将事件按轮次分组
   const roundGroups = useRoundGroups(timeline);
+
+  // 最后一轮 running 时自动展开，完成后自动折叠
+  useEffect(() => {
+    if (roundGroups.length > 0) {
+      const lastGroup = roundGroups[roundGroups.length - 1];
+      if (lastGroup.status === "running" && lastGroup.id !== lastExpandedRef.current) {
+        setExpandedRoundIds((prev) => new Set([...prev, lastGroup.id]));
+        lastExpandedRef.current = lastGroup.id;
+      } else if (lastGroup.status === "done" && lastGroup.id === lastExpandedRef.current) {
+        // 完成后保持展开，不自动折叠
+      }
+    }
+  }, [roundGroups]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -543,9 +558,17 @@ function TrajectoryChatTab({
     }
   };
 
-  // 切换内联展开
-  const toggleExpand = (eventId: string) => {
-    setExpandedEventId((prev) => (prev === eventId ? null : eventId));
+  // 切换轮次展开/折叠
+  const toggleRound = (roundId: string) => {
+    setExpandedRoundIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(roundId)) {
+        next.delete(roundId);
+      } else {
+        next.add(roundId);
+      }
+      return next;
+    });
   };
 
   // 打开弹窗
@@ -579,14 +602,17 @@ function TrajectoryChatTab({
             </div>
           )}
 
-          {/* 按轮次分组渲染（固定高度容器） */}
-          {roundGroups.map((group) => (
+          {/* 按轮次分组渲染 */}
+          {roundGroups.map((group) => {
+            const isExpanded = expandedRoundIds.has(group.id);
+            const reasoningPreview = getReasoningPreview(group.events);
+            return (
             <div
               key={group.id}
-              className={`trajectory-round-group ${group.status === "running" ? "running" : ""}`}
+              className={`trajectory-round-group ${group.status === "running" ? "running" : ""} ${isExpanded ? "expanded" : "collapsed"}`}
             >
               {/* 轮次头部 */}
-              <div className="round-group-header">
+              <div className="round-group-header" onClick={() => toggleRound(group.id)}>
                 <div className="round-group-index">
                   {group.status === "running" ? (
                     <Loader2 size={12} className="spin-icon" />
@@ -594,19 +620,30 @@ function TrajectoryChatTab({
                     <span>{group.index}</span>
                   )}
                 </div>
-                <span className="round-group-label">
-                  Round {group.index}
-                  {group.status === "running" ? " — 进行中" : ""}
-                </span>
-                {group.toolCount > 0 && (
-                  <span className="round-group-badge">
-                    <Wrench size={10} />
-                    {group.toolCount} 工具
+                <div className="round-group-title-area">
+                  <span className="round-group-label">
+                    Round {group.index}
+                    {group.status === "running" ? " — 进行中" : ""}
                   </span>
-                )}
+                  {!isExpanded && reasoningPreview && (
+                    <span className="round-group-preview">{reasoningPreview}</span>
+                  )}
+                </div>
+                <div className="round-group-header-right">
+                  {group.toolCount > 0 && (
+                    <span className="round-group-badge">
+                      <Wrench size={10} />
+                      {group.toolCount} 工具
+                    </span>
+                  )}
+                  <span className={`round-group-chevron ${isExpanded ? "open" : ""}`}>
+                    <ChevronRight size={16} />
+                  </span>
+                </div>
               </div>
 
               {/* 轮次内部：可滚动 */}
+              {isExpanded && (
               <div className="round-group-body">
                 {group.events.map((event) => (
                   <TimelineEventV2
@@ -614,18 +651,15 @@ function TrajectoryChatTab({
                     event={event}
                     stepId={stepId}
                     agentAnswerQuestion={agentAnswerQuestion}
-                    isExpanded={expandedEventId === event.id}
-                    onToggleExpand={() => {
-                      if (event.type === "tool" || event.type === "diff" || event.type === "message") {
-                        toggleExpand(event.id);
-                      }
-                    }}
+                    isExpanded={event.type === "tool" || event.type === "diff"}
+                    onToggleExpand={() => {}}
                     onOpenModal={openModal}
                   />
                 ))}
               </div>
+              )}
             </div>
-          ))}
+          );})}
 
           {/* 独立事件（完成/错误） */}
           {timeline
@@ -649,8 +683,10 @@ function TrajectoryChatTab({
                 ))}
             </div>
           )}
+
         </div>
 
+        {/* 对话输入框：固定在任务轨迹区域底部 */}
         <div className="chat-input-bar">
           <textarea
             className="chat-input"
@@ -675,6 +711,25 @@ function TrajectoryChatTab({
       <ContentModal content={modalContent} onClose={closeModal} />
     </div>
   );
+}
+
+/** 从轮次事件中提取决策内容预览（一行截断） */
+function getReasoningPreview(events: TimelineEvent[]): string {
+  // 优先取 message（Agent 决策输出）
+  for (const e of events) {
+    if (e.type === "message" && e.content) {
+      const firstLine = e.content.split("\n")[0].trim();
+      if (firstLine) return firstLine.slice(0, 120);
+    }
+  }
+  // 回退取 thought（推理过程）
+  for (const e of events) {
+    if (e.type === "thought" && e.content) {
+      const firstLine = e.content.split("\n")[0].trim();
+      if (firstLine) return firstLine.slice(0, 120);
+    }
+  }
+  return "";
 }
 
 // ── 构建展示轮次 ────────────────────────────
@@ -1211,30 +1266,19 @@ function TimelineEventV2({
     }
 
     case "complete": {
-      const long = event.summary.length > 300;
-      const displayText = isExpanded || !long ? event.summary : event.summary.slice(0, 300) + "…";
       return (
-        <div className={`timeline-complete ${isExpanded ? "expanded" : ""}`}>
+        <div className="timeline-complete">
           <div className="tl-complete-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
           </div>
           <div className="tl-complete-right">
             <div className="tl-complete-body">
               <strong>任务完成</strong>
-              {isExpanded ? (
-                <div className="tl-complete-markdown">
-                  <MarkdownRenderer>{event.summary}</MarkdownRenderer>
-                </div>
-              ) : (
-                <p onClick={onToggleExpand}>{displayText}</p>
-              )}
+              <div className="tl-complete-markdown">
+                <MarkdownRenderer>{event.summary}</MarkdownRenderer>
+              </div>
             </div>
             <div className="tl-complete-actions">
-              {long && (
-                <button className="ghost-button small" type="button" onClick={onToggleExpand}>
-                  {isExpanded ? "收起" : "展开完整内容"}
-                </button>
-              )}
               <button
                 className="ghost-button small"
                 type="button"
@@ -1256,30 +1300,19 @@ function TimelineEventV2({
     }
 
     case "error": {
-      const long = event.message.length > 300;
-      const displayText = isExpanded || !long ? event.message : event.message.slice(0, 300) + "…";
       return (
-        <div className={`timeline-error ${isExpanded ? "expanded" : ""}`}>
+        <div className="timeline-error">
           <div className="tl-error-icon">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
           </div>
           <div className="tl-complete-right">
             <div className="tl-error-body">
               <strong>执行出错</strong>
-              {isExpanded ? (
-                <div className="tl-complete-markdown">
-                  <MarkdownRenderer>{event.message}</MarkdownRenderer>
-                </div>
-              ) : (
-                <p onClick={onToggleExpand}>{displayText}</p>
-              )}
+              <div className="tl-complete-markdown">
+                <MarkdownRenderer>{event.message}</MarkdownRenderer>
+              </div>
             </div>
             <div className="tl-complete-actions">
-              {long && (
-                <button className="ghost-button small" type="button" onClick={onToggleExpand}>
-                  {isExpanded ? "收起" : "展开完整内容"}
-                </button>
-              )}
               <button
                 className="ghost-button small"
                 type="button"

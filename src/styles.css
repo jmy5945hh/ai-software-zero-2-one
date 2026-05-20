@@ -2755,7 +2755,7 @@ p {
   box-shadow: 0 0 0 2px var(--primary-light);
 }
 
-/* 轮次头部（sticky） */
+/* 轮次头部（sticky + 可点击折叠） */
 .round-group-header {
   display: flex;
   align-items: center;
@@ -2767,6 +2767,13 @@ p {
   position: sticky;
   top: 0;
   z-index: 2;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--duration-fast);
+}
+
+.round-group-header:hover {
+  background: var(--primary-light);
 }
 
 .round-group-index {
@@ -2789,15 +2796,44 @@ p {
   color: var(--terracotta);
 }
 
+/* 标题区域（标签 + 推理预览） */
+.round-group-title-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .round-group-label {
   font-family: var(--font-heading);
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--text);
+  white-space: nowrap;
+}
+
+/* 折叠时显示的推理预览文本（一行截断） */
+.round-group-preview {
+  font-size: 0.7rem;
+  color: var(--muted-warm);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  line-height: 1.3;
+}
+
+/* 头部右侧区域（徽章 + chevron） */
+.round-group-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .round-group-badge {
-  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -2807,6 +2843,28 @@ p {
   color: var(--primary);
   font-size: 0.65rem;
   font-weight: 600;
+}
+
+/* 折叠箭头 */
+.round-group-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--muted-warm);
+  transition: transform var(--duration-fast) var(--ease-gentle);
+}
+
+.round-group-chevron.open {
+  transform: rotate(90deg);
+}
+
+/* 折叠状态：无边框 */
+.trajectory-round-group.collapsed {
+  max-height: none;
+  min-height: unset;
+}
+
+.trajectory-round-group.collapsed .round-group-header {
+  border-bottom: none;
 }
 
 /* 轮次内部可滚动区域 */
@@ -3016,7 +3074,7 @@ p {
 }
 
 .tl-tool-status.running { color: var(--primary); }
-.tl-tool-status.done { color: #34D399; }
+.tl-tool-status.done { color: #B89B6C; }
 .tl-tool-status.error { color: var(--terracotta); }
 
 .tl-tool-chevron {
@@ -3196,17 +3254,17 @@ p {
   gap: 12px;
   margin: 12px 16px;
   padding: 14px;
-  border: 2px solid rgba(52, 211, 153, 0.3);
+  border: 2px solid rgba(184, 155, 108, 0.3);
   border-radius: var(--radius-md);
-  background: rgba(52, 211, 153, 0.06);
+  background: rgba(184, 155, 108, 0.06);
 }
 
 .tl-complete-icon {
   width: 32px;
   height: 32px;
   border-radius: var(--radius-full);
-  background: rgba(52, 211, 153, 0.15);
-  color: #34D399;
+  background: rgba(184, 155, 108, 0.15);
+  color: #B89B6C;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3223,7 +3281,7 @@ p {
 .tl-complete-body strong {
   display: block;
   font-size: 0.82rem;
-  color: #34D399;
+  color: #B89B6C;
   margin-bottom: 4px;
 }
 
