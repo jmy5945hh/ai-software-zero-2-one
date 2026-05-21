@@ -1167,7 +1167,7 @@
   font-size: 0.9rem;
 }
 
-/* ── Agent 连接状态徽章（右上角常驻） ──── */
+/* ── Agent 连接状态徽章（右上角常驻，四态动态展示）──── */
 .agent-status-badge {
   display: inline-flex;
   align-items: center;
@@ -1177,12 +1177,21 @@
   font-size: 0.72rem;
   font-weight: 500;
   white-space: nowrap;
+  transition: background 0.3s, color 0.3s, border-color 0.3s, box-shadow 0.3s;
 }
 
 .agent-status-badge.connected {
   background: var(--primary-light);
   color: var(--primary);
   border: 1px solid var(--primary);
+}
+
+.agent-status-badge.connecting,
+.agent-status-badge.reconnecting {
+  background: #fef9e7;
+  color: #b7950b;
+  border: 1px solid #f0c040;
+  animation: badgePulse 2s ease-in-out infinite;
 }
 
 .agent-status-badge.disconnected {
@@ -1194,6 +1203,24 @@
 .agent-status-badge .agent-disconnected-text {
   color: var(--terracotta);
   font-weight: 600;
+}
+
+/* 连接延迟指示器 */
+.agent-latency {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+  padding: 1px 5px;
+  border-radius: var(--radius-full);
+  background: var(--panel);
+  font-size: 0.65rem;
+  opacity: 0.8;
+}
+
+/* Loader2 旋转动画 */
+.agent-spin {
+  animation: spinClockwise 0.8s linear infinite;
 }
 
 .home-nav-right {

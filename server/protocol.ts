@@ -20,7 +20,9 @@ export type WsMessage =
   | { type: "request"; id: string; method: AgentMethod; params: Record<string, unknown> }
   | { type: "event"; id: string; event: AgentEvent }
   | { type: "response"; id: string; result: unknown }
-  | { type: "error"; id: string; error: { code: string; message: string } };
+  | { type: "error"; id: string; error: { code: string; message: string } }
+  | { type: "ping"; ts: number }
+  | { type: "pong"; ts: number };
 
 /** Agent 事件（与 SDK AgentSessionEvent 对齐） */
 export type AgentEvent =

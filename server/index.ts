@@ -189,6 +189,12 @@ wss.on("connection", (ws: WebSocket) => {
       return;
     }
 
+    // ── 心跳 ping/pong ──────────────────
+    if (msg.type === "ping") {
+      ws.send(JSON.stringify({ type: "pong", ts: msg.ts }));
+      return;
+    }
+
     if (msg.type !== "request") return;
 
     try {

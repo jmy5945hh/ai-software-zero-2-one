@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory, Turn } from "./types";
+import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory, Turn, ConnectionQuality } from "./types";
 import type { FileChange, AgentSummary } from "../data/types";
 import { AgentWebSocket } from "./ws";
 
@@ -173,6 +173,10 @@ export function useAgent(taskId: string | null) {
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("disconnected");
+  const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality>({
+    latency: 0,
+    reconnectAttempt: 0,
+  });
 
   const wsRef = useRef<AgentWebSocket | null>(null);
   const activeStepRef = useRef<string | null>(null);
@@ -296,6 +300,7 @@ export function useAgent(taskId: string | null) {
       wsRef.current?.close();
       wsRef.current = null;
       setConnectionStatus("disconnected");
+      setConnectionQuality({ latency: 0, reconnectAttempt: 0 });
       return;
     }
 
@@ -308,8 +313,20 @@ export function useAgent(taskId: string | null) {
     wsRef.current = ws;
     setConnectionStatus("connecting");
 
-    ws.onOpen(() => setConnectionStatus("connected"));
+    ws.onOpen(() => {
+      setConnectionStatus("connected");
+      setConnectionQuality({ latency: 0, reconnectAttempt: 0 });
+    });
     ws.onClose(() => setConnectionStatus("disconnected"));
+
+    ws.onReconnecting((attempt: number) => {
+      setConnectionStatus("reconnecting");
+      setConnectionQuality((prev) => ({ ...prev, reconnectAttempt: attempt }));
+    });
+
+    ws.onStatusUpdate((quality: ConnectionQuality) => {
+      setConnectionQuality(quality);
+    });
 
     ws.onEvent((event: AgentEvent) => {
       // ── 总结事件分流（独立 session，不影响正常流程）──
@@ -670,6 +687,7 @@ export function useAgent(taskId: string | null) {
     sessions,
     fileTree,
     connectionStatus,
+    connectionQuality,
     createSession,
     prompt,
     steer,

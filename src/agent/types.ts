@@ -25,7 +25,9 @@ export type WsMessage =
   | { type: "request"; id: string; method: string; params: Record<string, unknown> }
   | { type: "event"; id: string; event: AgentEvent }
   | { type: "response"; id: string; result: unknown }
-  | { type: "error"; id: string; error: { code: string; message: string } };
+  | { type: "error"; id: string; error: { code: string; message: string } }
+  | { type: "ping"; ts: number }
+  | { type: "pong"; ts: number };
 
 /** 文件树节点 */
 export type FileNode = {
@@ -87,4 +89,13 @@ export type SessionState = {
 export type ConnectionStatus =
   | "connected"
   | "disconnected"
-  | "connecting";
+  | "connecting"
+  | "reconnecting";
+
+/** 连接质量指标（心跳延迟 + 重连统计） */
+export type ConnectionQuality = {
+  /** 延迟（ms），-1 表示心跳超时 */
+  latency: number;
+  /** 重连尝试次数 */
+  reconnectAttempt: number;
+};

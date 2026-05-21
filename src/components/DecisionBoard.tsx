@@ -237,7 +237,7 @@ function DeliveryCollabTab({
               <KeyPointsGrid keyPoints={summaryResult.key_points} />
               <FileChangesList files={fileChanges} onFileClick={handleFileClick} />
               <TodoSection
-                todos={summaryResult.todos}
+                todos={summaryResult.todos ?? []}
                 onAnswerChange={(todoIndex, answer) => {
                   // 暂做视觉标记，后续反馈给 Agent
                   console.log(`Todo #${todoIndex} answer:`, answer);
