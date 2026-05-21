@@ -170,7 +170,7 @@ export function getFileTreeForStage(stepIndex: number): FileNode[] {
   ];
 
   if (stepIndex >= 1) {
-    // 范围锁定
+    // 技术方案设计
     const src = base[2] as { name: string; type: "folder"; children: FileNode[] };
     src.children.push(
       { name: "pages", type: "folder", children: [

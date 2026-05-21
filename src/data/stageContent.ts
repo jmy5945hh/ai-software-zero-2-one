@@ -180,7 +180,7 @@ paths:
       {
         id: "t1",
         agent: "Architect Agent",
-        action: "根据范围锁定结果，生成数据模型",
+        action: "根据技术方案设计结果，生成数据模型",
         output: "4 个核心实体：Customer、FollowUp、Reminder、Report",
         duration: "5s",
       },

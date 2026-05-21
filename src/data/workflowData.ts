@@ -18,7 +18,7 @@ export const workflow: WorkflowStep[] = [
   },
   {
     id: "scope",
-    label: "范围锁定",
+    label: "技术方案设计",
     detail: "选择本轮交付模块和风险边界",
     userRole: "决定这次先做什么",
   },
@@ -120,7 +120,7 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
       confidence: stepIndex >= 3 ? 93 : 82,
       task: stepIndex >= 3
         ? "架构、数据模型和 API 契约已生成"
-        : "等待范围锁定后生成 Spec",
+        : "等待技术方案设计后生成 Spec",
       icon: Network,
     },
     {
