@@ -251,6 +251,8 @@ function DeliveryCollabTab({
                 onPatch={onPatch}
                 stepId={stepId}
                 agentPrompt={agentPrompt}
+                onContinue={onContinue}
+                stepIndex={state.stepIndex}
               />
             </>
           )}
@@ -430,12 +432,16 @@ function TodoSection({
   onPatch,
   stepId,
   agentPrompt,
+  onContinue,
+  stepIndex,
 }: {
   todos: TodoItem[];
   todoAnswers: Record<number, string | string[]>;
   onPatch: (patch: Partial<AppState>) => void;
   stepId: string;
   agentPrompt: (step: string, text: string) => Promise<void>;
+  onContinue: () => void;
+  stepIndex: number;
 }) {
   if (todos.length === 0) return null;
 
@@ -450,7 +456,23 @@ function TodoSection({
     if (!allAnswered || submitting) return;
     setSubmitting(true);
     try {
-      // 将所有决策结果作为 prompt 发给 Agent，让 Agent 继续推进
+      // 检查是否所有 choice 都选了"进入下一阶段"
+      const choiceIndices = todos
+        .map((t, i) => (t.type === "choice" ? i : -1))
+        .filter((i) => i >= 0);
+      const allChoiceAdvance = choiceIndices.length > 0 && choiceIndices.every((ti) => {
+        const answer = todoAnswers[ti];
+        if (!answer) return false;
+        const selected = Array.isArray(answer) ? answer : [answer];
+        return selected.some((opt) => opt.includes("进入下一阶段"));
+      });
+
+      if (allChoiceAdvance) {
+        onContinue();
+        return;
+      }
+
+      // fill 类型：将输入内容作为提示词发给 Agent 继续对话
       const lines = todos.map((todo, ti) => {
         const answer = todoAnswers[ti];
         const answerText = Array.isArray(answer) ? answer.join("、") : answer;

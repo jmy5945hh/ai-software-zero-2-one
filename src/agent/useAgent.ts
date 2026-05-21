@@ -358,14 +358,38 @@ export function useAgent(taskId: string | null) {
               } catch {
                 result = undefined;
               }
+
+              // 校验 todos 中每个 item 的 type 必须为 "choice" 或 "fill"
+              if (result?.todos) {
+                const valid = result.todos.every(
+                  (t) => t.type === "choice" || t.type === "fill",
+                );
+                if (!valid) {
+                  result = undefined;
+                }
+              }
+
               summarizingStepRef.current = null;
+              if (!result) {
+                // 解析失败或校验不通过 → 重置状态触发重试
+                summarizingRef.current.delete(sumStep);
+                return {
+                  ...prev,
+                  [sumStep]: {
+                    ...s,
+                    summarizationStatus: "pending",
+                    summarizationResult: undefined,
+                    summarizationRaw: raw,
+                  },
+                };
+              }
               summarizingRef.current.delete(sumStep);
               return {
                 ...prev,
                 [sumStep]: {
                   ...s,
-                  summarizationStatus: result ? "done" : "error",
-                  summarizationResult: result || undefined,
+                  summarizationStatus: "done",
+                  summarizationResult: result,
                   summarizationRaw: raw,
                 },
               };

@@ -50,7 +50,9 @@ function buildSummarizationPrompt(summary: string): string {
 
 注意：
 - key_points 数量不限，提取核心要点
-- todos 仅在原文中确实存在待决策事项时才出现
+- todos 为待决策事项，字段必填，且type字段必填
+- 若无待决策问题，则type为choice，且仅包含一个选项:需求已明确，进入下一阶段
+- 必须包含type字段，并且仅支持choice 和fill 两种类型
 - type=choice 时 choices 必填，type=fill 时 choices 可为空数组、placeholder 必填
 - multiSelect 仅 type=choice 时有效，默认 false
 - type=choice 时，必须包含一个选项:需求已明确，进入下一阶段
