@@ -110,6 +110,9 @@ export function DecisionBoard({
             onSwitchToTrajectory={() => setActiveTab("trajectory")}
             agentSession={agentSessions[step.id]}
             isAgentConnected={isAgentConnected}
+            stepId={step.id}
+            agentAnswerQuestion={agentAnswerQuestion}
+            agentPrompt={agentPrompt}
           />
         )}
         {activeTab === "trajectory" && (
@@ -138,6 +141,9 @@ function DeliveryCollabTab({
   onSwitchToTrajectory,
   agentSession,
   isAgentConnected,
+  stepId,
+  agentAnswerQuestion,
+  agentPrompt,
 }: {
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
@@ -146,6 +152,9 @@ function DeliveryCollabTab({
   onSwitchToTrajectory: () => void;
   agentSession?: SessionState;
   isAgentConnected: boolean;
+  stepId: string;
+  agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
+  agentPrompt: (step: string, text: string) => Promise<void>;
 }) {
   const agentCompleted = isAgentConnected && agentSession?.completed && !agentSession?.isStreaming;
   const agentWorking = isAgentConnected && agentSession && !agentCompleted;
@@ -238,9 +247,10 @@ function DeliveryCollabTab({
               <FileChangesList files={fileChanges} onFileClick={handleFileClick} />
               <TodoSection
                 todos={summaryResult.todos ?? []}
-                onAnswerChange={(todoIndex, answer) => {
-                  // 暂做视觉标记，后续反馈给 Agent
-                  console.log(`Todo #${todoIndex} answer:`, answer);
+                todoAnswers={state.todoAnswers}
+                onPatch={onPatch}
+                stepId={stepId}
+                agentPrompt={agentPrompt}
                 }}
               />
             </>
@@ -417,12 +427,42 @@ function FileChangesList({ files, onFileClick }: { files: FileChange[]; onFileCl
 // ── 待决策事项 ───────────────────────────────
 function TodoSection({
   todos,
-  onAnswerChange,
+  todoAnswers,
+  onPatch,
+  stepId,
+  agentPrompt,
 }: {
   todos: TodoItem[];
-  onAnswerChange: (todoIndex: number, answer: string | string[]) => void;
+  todoAnswers: Record<number, string | string[]>;
+  onPatch: (patch: Partial<AppState>) => void;
+  stepId: string;
+  agentPrompt: (step: string, text: string) => Promise<void>;
 }) {
   if (todos.length === 0) return null;
+
+  // 检查是否所有待决策项都已作答
+  const allAnswered = todos.every((_, ti) => {
+    const answer = todoAnswers[ti];
+    return answer !== undefined && (typeof answer === "string" ? answer.trim() !== "" : answer.length > 0);
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!allAnswered || submitting) return;
+    setSubmitting(true);
+    try {
+      // 将所有决策结果作为 prompt 发给 Agent，让 Agent 继续推进
+      const lines = todos.map((todo, ti) => {
+        const answer = todoAnswers[ti];
+        const answerText = Array.isArray(answer) ? answer.join("、") : answer;
+        return `【${todo.task}】\n回答：${answerText}`;
+      });
+      const message = `以下是对待决策事项的回答：\n\n${lines.join("\n\n")}`;
+      await agentPrompt(stepId, message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="summary-section todo-section">
@@ -438,10 +478,28 @@ function TodoSection({
             key={ti}
             todo={todo}
             index={ti}
-            onAnswerChange={(answer) => onAnswerChange(ti, answer)}
+            answer={todoAnswers[ti]}
+            onAnswerChange={(answer) => onPatch({ todoAnswers: { ...todoAnswers, [ti]: answer } })}
           />
         ))}
       </div>
+
+      {allAnswered && (
+        <div className="todo-submit-row">
+          <button
+            className="todo-submit-btn"
+            type="button"
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <><Loader2 size={14} className="spin-icon" /> 提交中...</>
+            ) : (
+              <><CheckCircle2 size={14} /> 确认决策，继续推进</>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -449,18 +507,31 @@ function TodoSection({
 function TodoItemCard({
   todo,
   index,
+  answer,
   onAnswerChange,
 }: {
   todo: TodoItem;
   index: number;
+  answer: string | string[] | undefined;
   onAnswerChange: (answer: string | string[]) => void;
 }) {
   const [selectedChoices, setSelectedChoices] = useState<string[]>(
-    Array.isArray(todo.userAnswer) ? todo.userAnswer as string[] : todo.userAnswer ? [todo.userAnswer as string] : []
+    Array.isArray(answer) ? answer as string[] : answer ? [answer as string] : []
   );
   const [fillValue, setFillValue] = useState(
-    typeof todo.userAnswer === "string" && todo.type === "fill" ? todo.userAnswer : ""
+    typeof answer === "string" && todo.type === "fill" ? answer : ""
   );
+
+  // 当外部 answer 变化时同步本地状态（如切换步骤后重新加载）
+  useEffect(() => {
+    if (todo.type === "choice") {
+      setSelectedChoices(
+        Array.isArray(answer) ? answer as string[] : answer ? [answer as string] : []
+      );
+    } else {
+      setFillValue(typeof answer === "string" ? answer : "");
+    }
+  }, [answer, todo.type]);
 
   const toggleChoice = (option: string) => {
     if (todo.type === "fill") return;
@@ -477,9 +548,14 @@ function TodoItemCard({
     onAnswerChange(todo.multiSelect ? next : next[0] || "");
   };
 
-  const handleFillChange = (value: string) => {
-    setFillValue(value);
-    onAnswerChange(value);
+  const handleFillBlur = () => {
+    onAnswerChange(fillValue);
+  };
+
+  const handleFillKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      (e.target as HTMLInputElement).blur();
+    }
   };
 
   return (
@@ -529,7 +605,9 @@ function TodoItemCard({
             className="todo-fill-input"
             type="text"
             value={fillValue}
-            onChange={(e) => handleFillChange(e.target.value)}
+            onChange={(e) => setFillValue(e.target.value)}
+            onBlur={handleFillBlur}
+            onKeyDown={handleFillKeyDown}
             placeholder={todo.placeholder || "输入你的回答..."}
           />
         </div>

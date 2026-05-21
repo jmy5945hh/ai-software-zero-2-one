@@ -99,6 +99,8 @@ export type AppState = {
   createdAt: string;
   previewTaskId: string | null;
   activeTaskCard: TaskCard | null;
+  /** 待决策事项的用户回答（持久化） */
+  todoAnswers: Record<number, string | string[]>;
 };
 
 // ── 抽屉预览 ────────────────────────────────

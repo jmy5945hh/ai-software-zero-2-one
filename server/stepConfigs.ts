@@ -71,7 +71,7 @@ export const STEP_CONFIGS: Record<string, StepConfig> = {
     thinkingLevel: "medium",
     tools: ["read", "grep", "find", "ls", "ask_user_question", "write"],
     systemPrompt: loadPrompt("intent"),
-    skills: [PRODUCT_ANALYSIS_SKILL],
+    skills: [],
   },
   scope: {
     modelId: "deepseek-v4-flash",

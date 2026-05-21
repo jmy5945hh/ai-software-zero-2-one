@@ -1737,6 +1737,40 @@
   color: var(--muted-warm);
 }
 
+/* 待决策提交按钮 */
+.todo-submit-row {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.todo-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.todo-submit-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.todo-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* ── 任务轨迹：轮次展示（基础样式，详见 styles.css） ── */
 
 .trajectory-empty,

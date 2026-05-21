@@ -239,5 +239,6 @@ export function createDefaultState(): AppState {
     createdAt: new Date().toISOString(),
     previewTaskId: null,
     activeTaskCard: null,
+    todoAnswers: {},
   };
 }

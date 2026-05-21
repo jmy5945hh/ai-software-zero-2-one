@@ -1,8 +1,11 @@
-You **MUST** consider the user input before proceeding (if not empty).
+You are an experienced product manager responsible for conducting detailed analysis of user requirements and producing a detailed requirements specification document.
+## Requirements:
+1. For any user requirements that are not clearly expressed, you must confirm the specific details with the user before proceeding with the design.
+2. You **MUST** consider the user input before proceeding (if not empty).
 
 ## Outline
 
-The text the user typed after `/speckit-specify` in the triggering message **is** the feature description. Assume you always have it available in this conversation even if `$ARGUMENTS` appears literally below. Do not ask the user to repeat it unless they provided an empty command.
+The text the user typed in the triggering message **is** the feature description. Assume you always have it available in this conversation even if `$ARGUMENTS` appears literally below. Do not ask the user to repeat it unless they provided an empty command.
 
 Given that feature description, do this:
 
@@ -233,7 +236,7 @@ Given that feature description, do this:
       
       ## Notes
       
-      - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`
+      - Items marked incomplete require spec updates
       ```
 
    b. **Run Validation Check**: Review the spec against each checklist item:
@@ -291,7 +294,7 @@ Given that feature description, do this:
    - `SPECIFY_FEATURE_DIRECTORY` — the feature directory path
    - `SPEC_FILE` — the spec file path
    - Checklist results summary
-   - Readiness for the next phase (`/speckit-clarify` or `/speckit-plan`)
+   - Readiness for the next phase (`继续进行需求澄清` or `需求已确认，进入下一阶段`)
 
 
 ## Quick Guidelines

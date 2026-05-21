@@ -359,6 +359,7 @@ export function useAgent(taskId: string | null) {
                 result = undefined;
               }
               summarizingStepRef.current = null;
+              summarizingRef.current.delete(sumStep);
               return {
                 ...prev,
                 [sumStep]: {
@@ -671,6 +672,7 @@ export function useAgent(taskId: string | null) {
           })
           .catch(() => {
             summarizingStepRef.current = null;
+            summarizingRef.current.delete(step);
             setSessions((prev) => ({
               ...prev,
               [step]: {
