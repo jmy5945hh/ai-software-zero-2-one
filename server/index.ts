@@ -53,6 +53,7 @@ function buildSummarizationPrompt(summary: string): string {
 - todos 仅在原文中确实存在待决策事项时才出现
 - type=choice 时 choices 必填，type=fill 时 choices 可为空数组、placeholder 必填
 - multiSelect 仅 type=choice 时有效，默认 false
+- type=choice 时，必须包含一个选项:需求已明确，进入下一阶段
 - brief 使用中文
 
 以下是 Agent 工作摘要：

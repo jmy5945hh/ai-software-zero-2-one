@@ -251,7 +251,6 @@ function DeliveryCollabTab({
                 onPatch={onPatch}
                 stepId={stepId}
                 agentPrompt={agentPrompt}
-                }}
               />
             </>
           )}
