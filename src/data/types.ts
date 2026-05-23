@@ -13,6 +13,7 @@ export type TaskCard = {
   category: TaskCategory;
   title: string;
   summary: string;
+  docs?: string;
   priority: "critical" | "high" | "medium" | "low";
   source: string;
 };

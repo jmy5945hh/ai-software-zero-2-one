@@ -9,6 +9,7 @@ import {
   Play,
   ListTodo,
   UserCircle,
+  FileText,
 } from "lucide-react";
 
 import { HomeTaskBoard } from "../components/HomeTaskBoard";
@@ -24,6 +25,8 @@ export function HomePage() {
   const navigate = useNavigate();
   const [state, setState] = useStoredState();
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
+  // docs 读取状态与错误提示
+  const [docsError, setDocsError] = useState<string | null>(null);
 
   // Agent 连接用于文件浏览
   const taskIdForPicker = showWorkspacePicker && state.createdAt
@@ -40,6 +43,7 @@ export function HomePage() {
 
   const requestStartTask = useCallback(
     (intent: string, notes: string, activeTaskCard: AppState["activeTaskCard"]) => {
+      setDocsError(null);
       setState((previous) => ({
         ...createDefaultState(),
         intent,
@@ -53,20 +57,45 @@ export function HomePage() {
   );
 
   const confirmWorkspace = useCallback(
-    (path: string) => {
-      setState((previous) => ({
-        ...previous,
-        workspacePath: path,
-        view: "workspace",
-      }));
+    async (path: string) => {
+      // 如果有 docs 文件，先读取
+      setDocsError(null);
+      const docsPath = state.activeTaskCard?.docs;
+      if (docsPath && agentAvailable) {
+        try {
+          const docsContent = await agent.readFile(docsPath);
+          if (!docsContent) {
+            setDocsError(`文档文件为空: ${docsPath}`);
+            return;
+          }
+          // 将文档内容追加到 intent
+          setState((previous) => ({
+            ...previous,
+            workspacePath: path,
+            intent: `${previous.intent}\n\n--- 需求文档: ${docsPath} ---\n${docsContent}`,
+            view: "workspace",
+          }));
+        } catch (err) {
+          const msg = (err as Error).message || "未知错误";
+          setDocsError(`读取文档失败: ${docsPath}\n${msg}`);
+          return;
+        }
+      } else {
+        setState((previous) => ({
+          ...previous,
+          workspacePath: path,
+          view: "workspace",
+        }));
+      }
       setShowWorkspacePicker(false);
       navigate("/workspace");
     },
-    [setState, navigate],
+    [setState, navigate, state.activeTaskCard, agentAvailable, agent],
   );
 
   const cancelWorkspacePicker = useCallback(() => {
     setShowWorkspacePicker(false);
+    setDocsError(null);
     setState((previous) => ({
       ...previous,
       intent: "",
@@ -140,7 +169,7 @@ export function HomePage() {
           </div>
 
           {state.homeTab === "tasks" ? (
-            <HomeTaskBoard state={state} setState={setState} onPatch={patchState} onRequestStartTask={requestStartTask} />
+            <HomeTaskBoard state={state} setState={setState} onPatch={patchState} onRequestStartTask={requestStartTask} onBrowseDir={agentAvailable ? agent.browseDir : undefined} />
           ) : (
             <div className="launch-panel">
               <label htmlFor="intent">Hi, 今天想创造点什么？</label>
@@ -167,12 +196,32 @@ export function HomePage() {
       </main>
 
       {showWorkspacePicker && (
-        <WorkspaceSelector
-          onConfirm={confirmWorkspace}
-          onCancel={cancelWorkspacePicker}
-          onBrowse={agentAvailable ? agent.browseDir : undefined}
-          initialPath={state.workspacePath || "~"}
-        />
+        <>
+          {docsError && (
+            <div className="docs-error-toast">
+              <div className="docs-error-toast-content">
+                <FileText size={16} />
+                <div>
+                  <strong>文档读取失败</strong>
+                  <p>{docsError}</p>
+                </div>
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={() => setDocsError(null)}
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          )}
+          <WorkspaceSelector
+            onConfirm={confirmWorkspace}
+            onCancel={cancelWorkspacePicker}
+            onBrowse={agentAvailable ? agent.browseDir : undefined}
+            initialPath={state.workspacePath || "~"}
+          />
+        </>
       )}
     </>
   );
