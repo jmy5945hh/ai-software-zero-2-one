@@ -17,7 +17,7 @@ export const workflow: WorkflowStep[] = [
     userRole: "确认方向是否正确",
   },
   {
-    id: "scope",
+    id: "plan",
     label: "技术方案设计",
     detail: "选择本轮交付模块和风险边界",
     userRole: "决定这次先做什么",
@@ -27,12 +27,6 @@ export const workflow: WorkflowStep[] = [
     label: "代码编写",
     detail: "生成可运行代码骨架",
     userRole: "确认代码结构",
-  },
-  {
-    id: "build",
-    label: "Agent 开发",
-    detail: "Agent Team 并行生成代码、测试和文档",
-    userRole: "监控进展,处理阻塞",
   },
   {
     id: "quality",
@@ -116,9 +110,9 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
     {
       name: "Architect Agent",
       role: "可执行设计",
-      status: stepIndex >= 3 ? "done" : stepIndex >= 1 ? "running" : "review",
-      confidence: stepIndex >= 3 ? 93 : 82,
-      task: stepIndex >= 3
+      status: stepIndex >= 2 ? "done" : stepIndex >= 1 ? "running" : "review",
+      confidence: stepIndex >= 2 ? 93 : 82,
+      task: stepIndex >= 2
         ? "架构、数据模型和 API 契约已生成"
         : "等待技术方案设计后生成代码",
       icon: Network,
@@ -126,9 +120,9 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
     {
       name: "Frontend Agent",
       role: "交互实现",
-      status: stepIndex >= 4 ? "done" : stepIndex === 3 ? "running" : "review",
-      confidence: stepIndex >= 4 ? 90 : 74,
-      task: stepIndex >= 4
+      status: stepIndex >= 3 ? "done" : stepIndex === 2 ? "running" : "review",
+      confidence: stepIndex >= 3 ? 90 : 74,
+      task: stepIndex >= 3
         ? "页面和 mock 数据已接入"
         : "准备生成列表、详情和提醒工作流",
       icon: PanelRight,
@@ -136,13 +130,13 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
     {
       name: "Test Agent",
       role: "验证矩阵",
-      status: stepIndex >= 5 || fixApproved
+      status: stepIndex >= 4 || fixApproved
         ? "done"
-        : stepIndex >= 4
+        : stepIndex >= 3
           ? "running"
           : "review",
-      confidence: stepIndex >= 5 || fixApproved ? 94 : 78,
-      task: stepIndex >= 5 || fixApproved
+      confidence: stepIndex >= 4 || fixApproved ? 94 : 78,
+      task: stepIndex >= 4 || fixApproved
         ? "E2E、API、单测全部通过"
         : "正在把验收标准转为测试用例",
       icon: TestTube2,
@@ -150,9 +144,9 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
     {
       name: "DevOps Agent",
       role: "交付流水线",
-      status: stepIndex >= 6 ? "running" : "blocked",
-      confidence: stepIndex >= 6 ? 88 : 62,
-      task: stepIndex >= 6
+      status: stepIndex >= 5 ? "running" : "blocked",
+      confidence: stepIndex >= 5 ? 88 : 62,
+      task: stepIndex >= 5
         ? "准备构建、预发验证和交付包"
         : "等待质量门禁通过",
       icon: Rocket,
@@ -167,14 +161,12 @@ export function nextMoveText(state: AppState): string {
   switch (step) {
     case "intent":
       return "先确认 AI 对业务意图的理解,选择本轮交付模式。";
-    case "scope":
+    case "plan":
       return "勾选本轮必须交付的模块,避免一开始范围过大。";
     case "coding":
       return state.codeConfirmed
         ? "代码结构已确认，可以让 Agent Team 开始完整开发。"
         : "检查生成的代码骨架，确认类型定义、API 接口和组件结构后再进入开发。";
-    case "build":
-      return "观察 Agent 进展和阻塞项,必要时调整策略。";
     case "quality":
       return state.qualityPassed
         ? "质量门禁已通过,可以进入验证修复环节。"

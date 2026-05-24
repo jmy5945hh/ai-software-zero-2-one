@@ -332,12 +332,10 @@ function getStepPrompt(
   switch (step) {
     case "intent":
       return `请分析以下业务意图，识别核心业务对象、角色和场景：\n\n${intent}`;
-    case "scope":
+    case "plan":
       return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围。\n\n业务意图：${intent}`;
     case "coding":
       return `基于技术方案设计，生成可运行的代码骨架，包括类型定义、API 服务层、页面组件和路由配置。\n\n业务意图：${intent}`;
-    case "build":
-      return `基于 Spec 基线，实现页面组件和 mock 数据。请阅读 workspace 中的 API 契约和数据模型文件后开始开发。`;
     case "quality":
       return `请执行代码检视、检查测试覆盖率，运行测试并输出质量报告。`;
     case "verify":

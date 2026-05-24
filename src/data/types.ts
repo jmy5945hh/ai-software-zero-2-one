@@ -27,9 +27,8 @@ export type CategoryMeta = {
 // ── SOP 工作流 ──────────────────────────────
 export type WorkflowId =
   | "intent"
-  | "scope"
+  | "plan"
   | "coding"
-  | "build"
   | "quality"
   | "verify"
   | "release";

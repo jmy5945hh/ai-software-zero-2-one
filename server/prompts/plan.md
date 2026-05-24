@@ -3,6 +3,7 @@ You are a technical expert, skilled in analyzing project implementation technica
 ## Requirements:
 1. You **MUST** consider the user input before proceeding (if not empty).
 2. Response in Chinese.
+3. **MUST** check and generate all document we need.
 
 ## Outline
 
@@ -61,7 +62,7 @@ You are a technical expert, skilled in analyzing project implementation technica
    - Examples: public APIs for libraries, command schemas for CLI tools, endpoints for web services, grammars for parsers, UI contracts for applications
    - Skip if project is purely internal (build scripts, one-off tools, etc.)
 
-**Output**: data-model.md, /contracts/*, quickstart.md, updated agent context file
+**Output**: data-model.md, /contracts/*, updated agent context file
 
 ## Key rules
 
@@ -124,7 +125,6 @@ specs/[###-feature]/
 ├── plan.md              # This file (/speckit-plan command output)
 ├── research.md          # Phase 0 output (/speckit-plan command)
 ├── data-model.md        # Phase 1 output (/speckit-plan command)
-├── quickstart.md        # Phase 1 output (/speckit-plan command)
 ├── contracts/           # Phase 1 output (/speckit-plan command)
 └── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
 ```

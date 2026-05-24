@@ -73,12 +73,12 @@ export const STEP_CONFIGS: Record<string, StepConfig> = {
     systemPrompt: loadPrompt("intent"),
     skills: [],
   },
-  scope: {
+  plan: {
     modelId: "deepseek-v4-flash",
     modelProvider: "deepseek",
     thinkingLevel: "medium",
     tools: ["read", "grep", "find", "ls", "ask_user_question", "write"],
-    systemPrompt: loadPrompt("scope"),
+    systemPrompt: loadPrompt("plan"),
     skills: [],
   },
   coding: {
@@ -87,14 +87,6 @@ export const STEP_CONFIGS: Record<string, StepConfig> = {
     thinkingLevel: "high",
     tools: ["read", "write", "grep", "find", "ls", "bash"],
     systemPrompt: loadPrompt("coding"),
-    skills: [FRONTEND_DEV_SKILL],
-  },
-  build: {
-    modelId: "deepseek-v4-flash",
-    modelProvider: "deepseek",
-    thinkingLevel: "medium",
-    tools: ["read", "write", "grep", "find", "ls"],
-    systemPrompt: loadPrompt("build"),
     skills: [FRONTEND_DEV_SKILL],
   },
   quality: {

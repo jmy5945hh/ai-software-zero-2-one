@@ -280,97 +280,6 @@ export function CustomerList() {
   };
 }
 
-export function getBuildContent(): StageContent {
-  return {
-    summary:
-      "Frontend Agent 生成页面组件、Architect Agent 维护 API 契约、Test Agent 同步编写测试。所有产出基于同一个 ChangeSet 上下文，5 个任务并行执行中。",
-    deliverables: [
-      {
-        id: "build-d1",
-        title: "页面结构",
-        detail: "Frontend Agent 已完成 lead-list.tsx、customer-detail.tsx",
-        tag: "代码",
-      },
-      {
-        id: "build-d2",
-        title: "OpenAPI 契约",
-        detail: "Architect Agent 输出了 12 个端点定义",
-        tag: "契约",
-      },
-      {
-        id: "build-d3",
-        title: "Mock 数据",
-        detail: "Frontend Agent 已生成 leads.json、customers.json",
-        tag: "数据",
-      },
-      {
-        id: "build-d4",
-        title: "单元测试",
-        detail: "Test Agent 覆盖提醒逻辑和报表聚合",
-        tag: "测试",
-        expandedContent: {
-          type: "code",
-          title: "单元测试示例",
-          content: `// reminder.test.ts
-import { describe, it, expect } from "vitest";
-import { generateReminder } from "../src/hooks/use-follow-up";
-
-describe("提醒生成逻辑", () => {
-  it("超过3天未跟进应生成提醒", () => {
-    const lastFollowUp = new Date("2026-04-20");
-    const reminder = generateReminder(lastFollowUp);
-    expect(reminder.urgent).toBe(true);
-    expect(reminder.message).toContain("3 天");
-  });
-
-  it("今天刚跟进不应生成提醒", () => {
-    const lastFollowUp = new Date();
-    const reminder = generateReminder(lastFollowUp);
-    expect(reminder).toBeNull();
-  });
-});`,
-        },
-      },
-      {
-        id: "build-d5",
-        title: "变更日志",
-        detail: "DevOps Agent 已记录本次变更摘要",
-        tag: "文档",
-      },
-    ],
-    trajectory: [
-      {
-        id: "t1",
-        agent: "Frontend Agent",
-        action: "读取 Spec，生成页面组件骨架",
-        output: "lead-list.tsx、customer-detail.tsx 已创建",
-        duration: "12s",
-      },
-      {
-        id: "t2",
-        agent: "Architect Agent",
-        action: "维护 API 契约，同步端点定义",
-        output: "12 个端点 OpenAPI 定义已输出",
-        duration: "8s",
-      },
-      {
-        id: "t3",
-        agent: "Frontend Agent",
-        action: "生成 Mock 数据文件",
-        output: "leads.json、customers.json 已写入",
-        duration: "5s",
-      },
-      {
-        id: "t4",
-        agent: "Test Agent",
-        action: "根据验收标准编写单元测试",
-        output: "提醒逻辑、报表聚合测试用例已生成",
-        duration: "10s",
-      },
-    ],
-  };
-}
-
 export function getQualityContent(): StageContent {
   return {
     summary:
@@ -572,12 +481,11 @@ export function getReleaseContent(): StageContent {
 }
 
 export function getContentForStage(stepIndex: number): StageContent {
-  const id = (["intent", "scope", "coding", "build", "quality", "verify", "release"] as const)[stepIndex];
+  const id = (["intent", "plan", "coding", "quality", "verify", "release"] as const)[stepIndex];
   switch (id) {
     case "intent": return getIntentContent();
-    case "scope": return getScopeContent();
+    case "plan": return getScopeContent();
     case "coding": return getCodingContent();
-    case "build": return getBuildContent();
     case "quality": return getQualityContent();
     case "verify": return getVerifyContent();
     case "release": return getReleaseContent();
