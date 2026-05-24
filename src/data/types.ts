@@ -102,6 +102,8 @@ export type AppState = {
   activeTaskCard: TaskCard | null;
   /** 待决策事项的用户回答（持久化） */
   todoAnswers: Record<number, string | string[]>;
+  /** 各步骤的初始提示词（用于重试时复用 user prompt） */
+  initialPrompts: Record<string, string>;
 };
 
 // ── 抽屉预览 ────────────────────────────────

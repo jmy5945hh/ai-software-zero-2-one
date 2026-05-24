@@ -77,6 +77,7 @@ export class AgentRunner {
     taskId: string,
     step: string,
     workspaceDir: string,
+    systemPromptOverride?: string,
   ): Promise<AgentSession> {
     const stepConfig = STEP_CONFIGS[step] as StepConfig | undefined;
     if (!stepConfig) throw new Error(`Unknown SOP step: ${step}`);
@@ -98,10 +99,11 @@ export class AgentRunner {
     }
     console.log("[AgentRunner] Model found: %s", model.id);
 
+    const systemPrompt = systemPromptOverride ?? stepConfig.systemPrompt;
     const loader = new DefaultResourceLoader({
       cwd: workspaceDir,
       agentDir: workspaceDir,
-      systemPrompt: stepConfig.systemPrompt,
+      systemPrompt,
       skillsOverride: (current) => ({
         skills: [...current.skills, ...stepConfig.skills],
         diagnostics: current.diagnostics,

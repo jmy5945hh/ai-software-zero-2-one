@@ -260,6 +260,30 @@ export function useAgent(taskId: string | null) {
     [taskId],
   );
 
+  // ── 重试整个 Agent 流程 ──
+  const retrySession = useCallback(
+    async (step: string, text: string, initialPrompt?: string) => {
+      if (!taskId || !wsRef.current) return;
+      activeStepRef.current = step;
+
+      // 重置 session 状态（前端立即清理，等待新 session 事件覆盖）
+      setSessions((prev) => ({
+        ...prev,
+        [step]: {
+          ...defaultSession(),
+          id: prev[step]?.id || "",
+          messages: [],
+        },
+      }));
+
+      // 清除该 step 的总结标记，允许重新触发总结
+      summarizingRef.current.delete(step);
+
+      await wsRef.current.request("session.retry", { taskId, step, text, initialPrompt });
+    },
+    [taskId],
+  );
+
   // ── 获取文件树 ──
   const getFileTree = useCallback(async () => {
     if (!taskId || !wsRef.current) return;
@@ -718,6 +742,7 @@ export function useAgent(taskId: string | null) {
     prompt,
     steer,
     answerQuestion,
+    retrySession,
     getFileTree,
     readFile,
     browseDir,

@@ -240,5 +240,6 @@ export function createDefaultState(): AppState {
     previewTaskId: null,
     activeTaskCard: null,
     todoAnswers: {},
+    initialPrompts: {},
   };
 }

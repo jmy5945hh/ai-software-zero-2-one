@@ -22,6 +22,8 @@ import {
   PlusCircle,
   Edit3,
   HelpCircle,
+  RotateCcw,
+  X,
 } from "lucide-react";
 import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
 import { useStepKey } from "../hooks";
@@ -47,6 +49,7 @@ type DecisionBoardProps = {
   agentSteer: (step: string, text: string) => void;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
+  agentRetry: (step: string, text: string) => Promise<void>;
   isAgentConnected: boolean;
 };
 
@@ -59,6 +62,7 @@ export function DecisionBoard({
   agentSteer,
   agentPrompt,
   agentAnswerQuestion,
+  agentRetry,
   isAgentConnected,
 }: DecisionBoardProps) {
   const step = workflow[state.stepIndex];
@@ -113,6 +117,7 @@ export function DecisionBoard({
             stepId={step.id}
             agentAnswerQuestion={agentAnswerQuestion}
             agentPrompt={agentPrompt}
+            agentRetry={agentRetry}
           />
         )}
         {activeTab === "trajectory" && (
@@ -144,6 +149,7 @@ function DeliveryCollabTab({
   stepId,
   agentAnswerQuestion,
   agentPrompt,
+  agentRetry,
 }: {
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
@@ -155,6 +161,7 @@ function DeliveryCollabTab({
   stepId: string;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentPrompt: (step: string, text: string) => Promise<void>;
+  agentRetry: (step: string, text: string) => Promise<void>;
 }) {
   const agentCompleted = isAgentConnected && agentSession?.completed && !agentSession?.isStreaming;
   const agentWorking = isAgentConnected && agentSession && !agentCompleted;
@@ -284,6 +291,11 @@ function DeliveryCollabTab({
                 <MessageSquare size={13} />
                 <span>对结果不满意？和 AI 继续对话</span>
               </button>
+              <RetryButton
+                stepId={stepId}
+                agentRetry={agentRetry}
+                initialPrompt={state.initialPrompts?.[stepId] || ""}
+              />
             </div>
           </div>
         </>
@@ -637,6 +649,117 @@ function TodoItemCard({
   );
 }
 
+// ── 重试按钮 + 提示词输入弹窗 ──────────────
+function RetryButton({
+  stepId,
+  agentRetry,
+  initialPrompt,
+}: {
+  stepId: string;
+  agentRetry: (step: string, text: string, initialPrompt?: string) => Promise<void>;
+  initialPrompt: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const [retrying, setRetrying] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // 打开时自动聚焦
+  useEffect(() => {
+    if (open) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
+
+  const handleRetry = async () => {
+    if (!prompt.trim() || retrying) return;
+    setRetrying(true);
+    try {
+      await agentRetry(stepId, prompt.trim(), initialPrompt);
+      setOpen(false);
+      setPrompt("");
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleRetry();
+    }
+  };
+
+  return (
+    <>
+      <button
+        className="ghost-button retry-btn"
+        type="button"
+        onClick={() => setOpen(true)}
+        title="传入新的提示词，重试整个 Agent 流程"
+      >
+        <RotateCcw size={13} />
+        <span>重试</span>
+      </button>
+
+      {open && (
+        <div className="retry-overlay" onClick={() => setOpen(false)}>
+          <div className="retry-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="retry-dialog-header">
+              <RotateCcw size={15} />
+              <span>重试 Agent 流程</span>
+              <button
+                className="retry-dialog-close"
+                type="button"
+                onClick={() => setOpen(false)}
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="retry-dialog-body">
+              <p className="retry-dialog-hint">
+                输入的提示词将<strong>替换</strong>当前步骤的系统提示词，Agent 将以此作为全新指令重新开始工作。
+              </p>
+              <textarea
+                ref={inputRef}
+                className="retry-dialog-input"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="输入新的系统提示词，描述你希望 Agent 如何重新执行..."
+                rows={4}
+                disabled={retrying}
+              />
+            </div>
+            <div className="retry-dialog-footer">
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setOpen(false)}
+                disabled={retrying}
+              >
+                取消
+              </button>
+              <button
+                className="retry-dialog-submit"
+                type="button"
+                onClick={handleRetry}
+                disabled={!prompt.trim() || retrying}
+              >
+                {retrying ? (
+                  <><Loader2 size={14} className="spin-icon" /> 重试中...</>
+                ) : (
+                  <><RotateCcw size={14} /> 开始重试</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Tab 2: AI 任务轨迹（单栏·固定高度轮次） ──
 function TrajectoryChatTab({
   trajectory,
@@ -689,10 +812,11 @@ function TrajectoryChatTab({
   const handleSend = () => {
     const text = input.trim();
     if (!text) return;
-    setInput("");
-    if (isAgentConnected) {
-      agentSteer(stepId, text);
+    if (!isAgentConnected) {
+      return; // 不清空输入，让用户知道未连接
     }
+    setInput("");
+    agentSteer(stepId, text);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

@@ -300,6 +300,51 @@ wss.on("connection", (ws: WebSocket) => {
           break;
         }
 
+        // ── 重试整个 Agent 流程 ──────────────
+        case "session.retry": {
+          const { taskId, step, text, initialPrompt } = msg.params as {
+            taskId: string;
+            step: string;
+            text: string;
+            initialPrompt?: string;
+          };
+          // 1. 销毁旧 session
+          pool.dispose(taskId, step);
+          // 2. 重新创建 session，用用户提示词替换系统提示词
+          const intent = (msg.params as { intent?: string }).intent || "";
+          const extPath = (msg.params as { workspacePath?: string }).workspacePath;
+          let workspaceDir: string;
+          if (extPath) {
+            workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
+          } else {
+            workspaceDir = workspace.initWorkspace(taskId, intent);
+          }
+          const newSession = await runner.createSession(taskId, step, workspaceDir, text);
+          pool.set(taskId, step, newSession);
+
+          const unsub = newSession.subscribe((sdkEvent) => {
+            const event = mapSdkEvent(sdkEvent);
+            if (!event) return;
+            ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
+          });
+          pool.setUnsub(taskId, step, unsub);
+
+          // 3. 发响应（前端准备接收事件）
+          ws.send(
+            JSON.stringify({
+              type: "response",
+              id: msg.id,
+              result: { sessionId: newSession.sessionId },
+            }),
+          );
+
+          // 4. 发送初始 user prompt（复用步骤原本的提示词）
+          if (initialPrompt) {
+            await newSession.prompt(initialPrompt);
+          }
+          break;
+        }
+
         // ── 用户回答问题 ────────────────────
         case "session.answerQuestion": {
           const { taskId, step, answer } = msg.params as {

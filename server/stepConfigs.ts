@@ -87,7 +87,7 @@ export const STEP_CONFIGS: Record<string, StepConfig> = {
     thinkingLevel: "high",
     tools: ["read", "write", "grep", "find", "ls"],
     systemPrompt: loadPrompt("spec"),
-    skills: [ARCHITECTURE_DESIGN_SKILL],
+    skills: [],
   },
   build: {
     modelId: "deepseek-v4-flash",

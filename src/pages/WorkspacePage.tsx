@@ -85,15 +85,16 @@ export function WorkspacePage() {
       state.intent
     ) {
       sessionInitRef.current = true;
+      const intentPrompt = `请分析以下业务意图，识别核心业务对象、角色和场景：\n\n${state.intent}`;
+      patchState({
+        initialPrompts: { ...state.initialPrompts, intent: intentPrompt },
+      });
       agent.createSession("intent", state.intent, state.workspacePath).then(() => {
-        agent.prompt(
-          "intent",
-          `请分析以下业务意图，识别核心业务对象、角色和场景：\n\n${state.intent}`,
-        );
+        agent.prompt("intent", intentPrompt);
         agent.getFileTree();
       });
     }
-  }, [isAgentConnected, state.stepIndex, state.intent]);
+  }, [isAgentConnected, state.stepIndex, state.intent, state.initialPrompts, patchState]);
 
   const continueTask = useCallback(() => {
     const nextIndex = Math.min(state.stepIndex + 1, workflow.length - 1);
@@ -101,13 +102,17 @@ export function WorkspacePage() {
     const nextStep = workflow[nextIndex];
 
     if (isAgentConnected) {
+      const promptText = getStepPrompt(
+        nextStep.id,
+        state.intent,
+        state.scope,
+        state.selectedModules,
+      );
+      // 保存初始提示词，供重试时复用
+      patchState({
+        initialPrompts: { ...state.initialPrompts, [nextStep.id]: promptText },
+      });
       agent.createSession(nextStep.id, state.intent, state.workspacePath).then(() => {
-        const promptText = getStepPrompt(
-          nextStep.id,
-          state.intent,
-          state.scope,
-          state.selectedModules,
-        );
         agent.prompt(nextStep.id, promptText);
         agent.getFileTree();
       });
@@ -119,7 +124,7 @@ export function WorkspacePage() {
       specConfirmed: state.specConfirmed || state.stepIndex >= 2,
     });
     window.scrollTo({ top: 0 });
-  }, [state.stepIndex, isAgentConnected, agent, patchState, state.intent, state.scope, state.selectedModules, state.specConfirmed]);
+  }, [state.stepIndex, state.intent, state.scope, state.selectedModules, state.initialPrompts, isAgentConnected, agent, patchState, state.specConfirmed]);
 
   const handleStepClick = (index: number) => {
     patchState({
@@ -236,6 +241,7 @@ export function WorkspacePage() {
               agentSteer={agent.steer}
               agentPrompt={agent.prompt}
               agentAnswerQuestion={agent.answerQuestion}
+              agentRetry={agent.retrySession}
               isAgentConnected={isAgentConnected}
             />
           </div>
@@ -329,7 +335,7 @@ function getStepPrompt(
     case "scope":
       return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围。\n\n业务意图：${intent}`;
     case "spec":
-      return `基于范围定义，请生成数据模型、页面地图、API 契约和权限模型。\n\n业务意图：${intent}\n交付模式：${scope}\n选定模块：${selectedModules.join("、")}`;
+      return `基于spec 基线，进行代码实现。\n\n业务意图：${intent}`;
     case "build":
       return `基于 Spec 基线，实现页面组件和 mock 数据。请阅读 workspace 中的 API 契约和数据模型文件后开始开发。`;
     case "quality":
