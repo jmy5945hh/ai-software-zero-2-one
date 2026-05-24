@@ -115,88 +115,166 @@ export function getScopeContent(): StageContent {
   };
 }
 
-export function getSpecContent(): StageContent {
+export function getCodingContent(): StageContent {
   return {
     summary:
-      "我已生成 4 类机器可读资产：业务对象模型、页面地图、API 契约、权限模型。这些是后续代码和测试的唯一事实来源。",
+      "我已生成 3 类代码模块：类型定义、API 服务层、页面组件。这些是后续开发阶段可直接使用的代码骨架。",
     deliverables: [
       {
-        id: "spec-d1",
-        title: "API 契约 12 个端点",
-        detail: "覆盖 CRUD、提醒调度、报表聚合",
-        tag: "契约",
+        id: "code-d1",
+        title: "类型定义 (TypeScript)",
+        detail: "Customer、FollowUp、Reminder、Report 等核心实体类型",
+        tag: "代码",
         expandedContent: {
           type: "code",
-          title: "API 契约 (OpenAPI)",
-          content: `openapi: "3.0.0"
-info:
-  title: 销售线索跟进系统
-  version: "1.0.0"
-paths:
-  /customers:
-    get:
-      summary: 获取客户列表
-    post:
-      summary: 创建客户
-  /customers/{id}:
-    get:
-      summary: 获取客户详情
-    patch:
-      summary: 更新客户信息
-  /customers/{id}/follow-ups:
-    get:
-      summary: 获取客户跟进记录
-    post:
-      summary: 创建跟进记录
-  /reminders:
-    get:
-      summary: 获取待处理提醒
-    post:
-      summary: 创建提醒规则
-  /reports/weekly:
-    get:
-      summary: 获取团队周报`,
+          title: "类型定义 (types.ts)",
+          content: `export interface Customer {
+  id: string;
+  name: string;
+  company: string;
+  phone: string;
+  email: string;
+  ownerId: string;
+  teamId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FollowUp {
+  id: string;
+  customerId: string;
+  content: string;
+  type: "call" | "meeting" | "email" | "other";
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface Reminder {
+  id: string;
+  customerId: string;
+  title: string;
+  dueDate: string;
+  done: boolean;
+}
+
+export interface Report {
+  teamId: string;
+  weekStart: string;
+  totalCustomers: number;
+  totalFollowUps: number;
+}`,
         },
       },
       {
-        id: "spec-d2",
-        title: "权限模型确认",
-        detail: "销售仅看本人客户、主管查看团队汇总",
-        tag: "权限",
+        id: "code-d2",
+        title: "API 服务层",
+        detail: "封装客户、跟进、提醒、报表的 CRUD 调用",
+        tag: "代码",
         expandedContent: {
-          type: "document",
-          title: "权限矩阵",
-          content: `# 权限模型\n\n## 角色定义\n\n| 角色 | 权限范围 |\n|------|---------|\n| 销售 | 仅查看、编辑本人负责的客户 |\n| 主管 | 查看团队内所有客户和汇总报表 |\n| 管理员 | 全部数据 + 系统配置 |\n\n## 数据访问规则\n\n- 销售查询客户列表：自动过滤 owner_id = current_user\n- 主管查询客户列表：自动过滤 team_id = current_team\n- 周报聚合：按 team 维度\n- 提醒规则：每个销售仅管理自己客户的提醒`,
+          type: "code",
+          title: "API 服务层 (api.ts)",
+          content: `import { Customer, FollowUp, Reminder, Report } from "./types";
+
+const BASE_URL = "/api";
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(\`\${BASE_URL}\${path}\`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!res.ok) throw new Error(\`API error: \${res.status}\`);
+  return res.json();
+}
+
+export const customerApi = {
+  list: () => request<Customer[]>("/customers"),
+  get: (id: string) => request<Customer>(\`/customers/\${id}\`),
+  create: (data: Partial<Customer>) =>
+    request<Customer>("/customers", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<Customer>) =>
+    request<Customer>(\`/customers/\${id}\`, { method: "PATCH", body: JSON.stringify(data) }),
+};
+
+export const followUpApi = {
+  list: (customerId: string) =>
+    request<FollowUp[]>(\`/customers/\${customerId}/follow-ups\`),
+  create: (customerId: string, data: Partial<FollowUp>) =>
+    request<FollowUp>(\`/customers/\${customerId}/follow-ups\`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+export const reminderApi = {
+  list: () => request<Reminder[]>("/reminders"),
+  create: (data: Partial<Reminder>) =>
+    request<Reminder>("/reminders", { method: "POST", body: JSON.stringify(data) }),
+};
+
+export const reportApi = {
+  weekly: (teamId: string) => request<Report>(\`/reports/weekly?teamId=\${teamId}\`),
+};`,
         },
       },
       {
-        id: "spec-d3",
-        title: "数据模型 ER",
-        detail: "Customer(1)→(N)FollowUp(1)→(N)Reminder; Customer(1)→(N)Report",
-        tag: "模型",
+        id: "code-d3",
+        title: "页面组件",
+        detail: "客户列表、客户详情、跟进记录、提醒面板",
+        tag: "代码",
+        expandedContent: {
+          type: "code",
+          title: "页面组件 (CustomerList.tsx)",
+          content: `import React, { useEffect, useState } from "react";
+import { Customer } from "../types";
+import { customerApi } from "../api";
+
+export function CustomerList() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    customerApi.list().then(setCustomers).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div>加载中...</div>;
+
+  return (
+    <div>
+      <h2>客户列表</h2>
+      <ul>
+        {customers.map((c) => (
+          <li key={c.id}>
+            {c.name} - {c.company}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}`,
+        },
       },
     ],
     trajectory: [
       {
         id: "t1",
-        agent: "Architect Agent",
-        action: "根据技术方案设计结果，生成数据模型",
-        output: "4 个核心实体：Customer、FollowUp、Reminder、Report",
-        duration: "5s",
+        agent: "Code Generator",
+        action: "根据数据模型生成 TypeScript 类型定义",
+        output: "5 个接口定义：Customer、FollowUp、Reminder、Report",
+        duration: "3s",
       },
       {
         id: "t2",
-        agent: "Architect Agent",
-        action: "生成 API 契约（OpenAPI 格式）",
-        output: "12 个端点定义，覆盖 CRUD + 调度 + 聚合",
+        agent: "Code Generator",
+        action: "生成 API 服务层封装",
+        output: "4 个 API 模块：customerApi、followUpApi、reminderApi、reportApi",
         duration: "4s",
       },
       {
         id: "t3",
-        agent: "Architect Agent",
-        action: "定义权限模型和访问规则",
-        output: "3 个角色、4 条数据访问规则",
-        duration: "2s",
+        agent: "Code Generator",
+        action: "生成页面组件骨架",
+        output: "CustomerList 组件，含加载状态和列表渲染",
+        duration: "5s",
       },
     ],
   };
@@ -494,11 +572,11 @@ export function getReleaseContent(): StageContent {
 }
 
 export function getContentForStage(stepIndex: number): StageContent {
-  const id = (["intent", "scope", "spec", "build", "quality", "verify", "release"] as const)[stepIndex];
+  const id = (["intent", "scope", "coding", "build", "quality", "verify", "release"] as const)[stepIndex];
   switch (id) {
     case "intent": return getIntentContent();
     case "scope": return getScopeContent();
-    case "spec": return getSpecContent();
+    case "coding": return getCodingContent();
     case "build": return getBuildContent();
     case "quality": return getQualityContent();
     case "verify": return getVerifyContent();

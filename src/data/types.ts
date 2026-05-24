@@ -28,7 +28,7 @@ export type CategoryMeta = {
 export type WorkflowId =
   | "intent"
   | "scope"
-  | "spec"
+  | "coding"
   | "build"
   | "quality"
   | "verify"
@@ -71,8 +71,8 @@ export type Gate = {
   status: GateStatus;
 };
 
-// ── Spec 资产 ───────────────────────────────
-export type SpecItem = {
+// ── 代码资产 ───────────────────────────────
+export type CodeItem = {
   title: string;
   detail: string;
   icon: LucideIcon;
@@ -93,7 +93,7 @@ export type AppState = {
   scope: ScopeChoice;
   selectedModules: string[];
   notes: string;
-  specConfirmed: boolean;
+  codeConfirmed: boolean;
   fixApproved: boolean;
   releaseApproved: boolean;
   qualityPassed: boolean;

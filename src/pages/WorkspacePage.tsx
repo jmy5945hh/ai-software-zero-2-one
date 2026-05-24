@@ -121,10 +121,10 @@ export function WorkspacePage() {
     patchState({
       stepIndex: nextIndex,
       activeStage: nextStep.id,
-      specConfirmed: state.specConfirmed || state.stepIndex >= 2,
+      codeConfirmed: state.codeConfirmed || state.stepIndex >= 2,
     });
     window.scrollTo({ top: 0 });
-  }, [state.stepIndex, state.intent, state.scope, state.selectedModules, state.initialPrompts, isAgentConnected, agent, patchState, state.specConfirmed]);
+  }, [state.stepIndex, state.intent, state.scope, state.selectedModules, state.initialPrompts, isAgentConnected, agent, patchState, state.codeConfirmed]);
 
   const handleStepClick = (index: number) => {
     patchState({
@@ -334,8 +334,8 @@ function getStepPrompt(
       return `请分析以下业务意图，识别核心业务对象、角色和场景：\n\n${intent}`;
     case "scope":
       return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围。\n\n业务意图：${intent}`;
-    case "spec":
-      return `基于spec 基线，进行代码实现。\n\n业务意图：${intent}`;
+    case "coding":
+      return `基于技术方案设计，生成可运行的代码骨架，包括类型定义、API 服务层、页面组件和路由配置。\n\n业务意图：${intent}`;
     case "build":
       return `基于 Spec 基线，实现页面组件和 mock 数据。请阅读 workspace 中的 API 契约和数据模型文件后开始开发。`;
     case "quality":

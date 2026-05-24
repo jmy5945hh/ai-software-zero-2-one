@@ -81,13 +81,13 @@ export const STEP_CONFIGS: Record<string, StepConfig> = {
     systemPrompt: loadPrompt("scope"),
     skills: [],
   },
-  spec: {
+  coding: {
     modelId: "deepseek-v4-flash",
     modelProvider: "deepseek",
     thinkingLevel: "high",
-    tools: ["read", "write", "grep", "find", "ls"],
-    systemPrompt: loadPrompt("spec"),
-    skills: [],
+    tools: ["read", "write", "grep", "find", "ls", "bash"],
+    systemPrompt: loadPrompt("coding"),
+    skills: [FRONTEND_DEV_SKILL],
   },
   build: {
     modelId: "deepseek-v4-flash",

@@ -1857,7 +1857,7 @@ function getPlaceholderForStage(stepIndex: number): string {
   const prompts = [
     "补充更多业务背景或边界条件...",
     "说明本轮交付的特殊约束...",
-    "对 AI 生成的 Spec 有什么修正意见？",
+    "对生成的代码结构有什么调整意见？",
     "对 Agent 进展有什么额外要求？",
     "对质量报告有任何疑问？",
     "补充修复策略或优先级调整...",

@@ -23,10 +23,10 @@ export const workflow: WorkflowStep[] = [
     userRole: "决定这次先做什么",
   },
   {
-    id: "spec",
-    label: "Spec 基线",
-    detail: "生成可执行规格与验收标准",
-    userRole: "确认设计基线",
+    id: "coding",
+    label: "代码编写",
+    detail: "生成可运行代码骨架",
+    userRole: "确认代码结构",
   },
   {
     id: "build",
@@ -120,7 +120,7 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
       confidence: stepIndex >= 3 ? 93 : 82,
       task: stepIndex >= 3
         ? "架构、数据模型和 API 契约已生成"
-        : "等待技术方案设计后生成 Spec",
+        : "等待技术方案设计后生成代码",
       icon: Network,
     },
     {
@@ -169,10 +169,10 @@ export function nextMoveText(state: AppState): string {
       return "先确认 AI 对业务意图的理解,选择本轮交付模式。";
     case "scope":
       return "勾选本轮必须交付的模块,避免一开始范围过大。";
-    case "spec":
-      return state.specConfirmed
-        ? "Spec 已确认,可以让 Agent Team 开始拆任务。"
-        : "检查可执行规格和验收标准,确认后再进入开发。";
+    case "coding":
+      return state.codeConfirmed
+        ? "代码结构已确认，可以让 Agent Team 开始完整开发。"
+        : "检查生成的代码骨架，确认类型定义、API 接口和组件结构后再进入开发。";
     case "build":
       return "观察 Agent 进展和阻塞项,必要时调整策略。";
     case "quality":
@@ -232,7 +232,7 @@ export function createDefaultState(): AppState {
     scope: "mvp",
     selectedModules: ["线索池", "客户详情", "跟进提醒", "沟通记录"],
     notes: "",
-    specConfirmed: false,
+    codeConfirmed: false,
     fixApproved: false,
     releaseApproved: false,
     qualityPassed: false,

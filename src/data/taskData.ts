@@ -127,32 +127,32 @@ export const moduleOptions = [
   "主管看板",
 ];
 
-// ── Spec 资产数据 ───────────────────────────
-import type { SpecItem } from "./types";
+// ── 代码资产数据 ───────────────────────────
+import type { CodeItem } from "./types";
 import { Boxes, Layers3, FileCode2, LockKeyhole } from "lucide-react";
 
-export const specs: SpecItem[] = [
+export const codeModules: CodeItem[] = [
   {
-    title: "业务对象",
-    detail: "客户、销售、跟进记录、提醒、周报",
+    title: "类型定义",
+    detail: "Customer、FollowUp、Reminder、Report 实体 + API 类型",
     icon: Boxes,
     accent: "cyan",
   },
   {
-    title: "页面地图",
-    detail: "线索列表、客户详情、提醒中心、周报仪表盘",
+    title: "API 服务层",
+    detail: "12 个接口函数，覆盖 CRUD、提醒调度与报表聚合",
     icon: Layers3,
     accent: "green",
   },
   {
-    title: "API 契约",
-    detail: "12 个端点,覆盖 CRUD、提醒调度与报表聚合",
+    title: "页面组件",
+    detail: "客户列表、客户详情、提醒中心、周报仪表盘",
     icon: FileCode2,
     accent: "amber",
   },
   {
-    title: "权限模型",
-    detail: "销售仅看本人客户,主管可查看团队汇总",
+    title: "路由配置",
+    detail: "4 条路由映射，集成权限守卫与导航布局",
     icon: LockKeyhole,
     accent: "rose",
   },
@@ -196,16 +196,25 @@ export function getFileTreeForStage(stepIndex: number): FileNode[] {
   }
 
   if (stepIndex >= 2) {
-    // Spec 基线
+    // 代码编写 — 代码生成
     const src = base[2] as { name: string; type: "folder"; children: FileNode[] };
     src.children.push(
-      { name: "domain", type: "folder", children: [
+      { name: "types", type: "folder", children: [
         { name: "customer.ts", type: "file", highlight: true },
         { name: "follow-up.ts", type: "file" },
         { name: "reminder.ts", type: "file" },
+        { name: "report.ts", type: "file" },
       ]},
-      { name: "specs", type: "folder", children: [
-        { name: "acceptance.md", type: "file", highlight: true },
+      { name: "api", type: "folder", children: [
+        { name: "customer.ts", type: "file", highlight: true },
+        { name: "reminder.ts", type: "file" },
+        { name: "report.ts", type: "file" },
+      ]},
+      { name: "pages", type: "folder", children: [
+        { name: "CustomerList.tsx", type: "file", highlight: true },
+        { name: "CustomerDetail.tsx", type: "file" },
+        { name: "ReminderCenter.tsx", type: "file" },
+        { name: "WeeklyDashboard.tsx", type: "file" },
       ]},
     );
   }
