@@ -230,6 +230,6 @@ export function createDefaultState(): AppState {
     activeTaskCard: null,
     todoAnswers: {},
     initialPrompts: {},
-    worktreePaths: {},
+    snapshotPaths: {},
   };
 }

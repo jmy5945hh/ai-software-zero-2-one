@@ -7,7 +7,7 @@ import { AgentRunner } from "./AgentRunner";
 import { SessionPool } from "./SessionPool";
 import { SummaryStore } from "./SummaryStore";
 import { WorkspaceManager } from "./WorkspaceManager";
-import { resolveQuestion } from "./customTools";
+import { resolveQuestion, continueQuestion } from "./customTools";
 import type { WsMessage, AgentEvent } from "./protocol";
 
 const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
@@ -248,6 +248,7 @@ wss.on("connection", (ws: WebSocket) => {
             step: string;
             text: string;
           };
+          console.log("[session.prompt] userPrompt=%.20s systemPrompt=N/A step=%s", text.slice(0, 20), step);
           const session = pool.get(taskId, step);
           if (!session) throw new Error(`Session not found: ${taskId}:${step}`);
           await session.prompt(text);
@@ -261,6 +262,7 @@ wss.on("connection", (ws: WebSocket) => {
             step: string;
             text: string;
           };
+          console.log("[session.steer] userPrompt=%.20s systemPrompt=N/A step=%s", text.slice(0, 20), step);
           const session = pool.get(taskId, step);
           if (!session) throw new Error(`Session not found: ${taskId}:${step}`);
           session.steer(text);
@@ -311,6 +313,7 @@ wss.on("connection", (ws: WebSocket) => {
             text: string;
             initialPrompt?: string;
           };
+          console.log("[session.retry] systemPromptOverride=%.20s initialPrompt=%.20s step=%s", text.slice(0, 20), (initialPrompt || "").slice(0, 20), step);
           // 1. 销毁旧 session
           pool.dispose(taskId, step);
           // 2. 重新创建 session，用用户提示词替换系统提示词
@@ -358,6 +361,20 @@ wss.on("connection", (ws: WebSocket) => {
           const resolved = resolveQuestion(taskId, step, answer);
           if (!resolved) {
             throw new Error(`No pending question for ${taskId}:${step}`);
+          }
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
+          break;
+        }
+
+        // ── 用户点击"继续"（回答后手动触发）──
+        case "session.continueQuestion": {
+          const { taskId, step } = msg.params as {
+            taskId: string;
+            step: string;
+          };
+          const continued = continueQuestion(taskId, step);
+          if (!continued) {
+            throw new Error(`No answered question to continue for ${taskId}:${step}`);
           }
           ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
           break;
@@ -412,6 +429,7 @@ wss.on("connection", (ws: WebSocket) => {
 
           // 发送总结 prompt
           const promptText = buildSummarizationPrompt(saved);
+          console.log("[summarization.trigger] userPrompt=%.20s", promptText.slice(0, 20));
           await session.prompt(promptText);
           break;
         }
@@ -447,95 +465,36 @@ wss.on("connection", (ws: WebSocket) => {
           break;
         }
 
-        // ── Git 快照 ────────────────────────
-        case "git.snapshot": {
+        // ── 文件系统快照保存 ────────────────
+        // 使用纯 rsync 复制，不依赖 git commit，避免在用户 git 历史中留下痕迹
+        case "fs.snapshotSave": {
           const { taskId, label } = msg.params as {
             taskId: string;
             label: string;
           };
           const wsDir = workspace.getDir(taskId);
-          let hash: string | null = null;
-          try {
-            // 检查是否是 git 仓库
-            execSync("git rev-parse --is-inside-work-tree", { cwd: wsDir, stdio: "pipe" });
-            // 暂存所有变更
-            execSync("git add -A", { cwd: wsDir, stdio: "pipe" });
-            // 检查是否有变更
-            const status = execSync("git status --porcelain", { cwd: wsDir, encoding: "utf-8" });
-            if (status.trim()) {
-              execSync(`git commit -m "snapshot: ${label}"`, { cwd: wsDir, stdio: "pipe" });
-            }
-            hash = execSync("git rev-parse HEAD", { cwd: wsDir, encoding: "utf-8" }).trim();
-          } catch {
-            // 不是 git 仓库或命令失败，hash 保持 null
-          }
-          ws.send(
-            JSON.stringify({ type: "response", id: msg.id, result: { hash } }),
-          );
-          break;
-        }
-
-        // ── Git 回滚 ────────────────────────
-        case "git.restore": {
-          const { taskId, hash } = msg.params as {
-            taskId: string;
-            hash: string;
-          };
-          const wsDir = workspace.getDir(taskId);
-          let success = false;
-          try {
-            execSync(`git reset --hard ${hash}`, { cwd: wsDir, stdio: "pipe" });
-            execSync("git clean -fd", { cwd: wsDir, stdio: "pipe" });
-            success = true;
-          } catch {
-            success = false;
-          }
-          ws.send(
-            JSON.stringify({ type: "response", id: msg.id, result: { success } }),
-          );
-          break;
-        }
-
-        // ── Git Worktree 保存 ────────────────
-        case "git.worktreeSave": {
-          const { taskId, label } = msg.params as {
-            taskId: string;
-            label: string;
-          };
-          const wsDir = workspace.getDir(taskId);
-          const worktreesDir = path.join(wsDir, ".git-worktrees");
-          const worktreePath = path.join(worktreesDir, label);
+          const snapshotsDir = path.join(wsDir, ".snapshots");
+          const snapshotPath = path.join(snapshotsDir, label);
           let path_: string | null = null;
           try {
-            // 确保目录存在
-            fs.mkdirSync(wsDir, { recursive: true });
-            // 确保是 git 仓库（如果不是则初始化）
-            try {
-              execSync("git rev-parse --is-inside-work-tree", { cwd: wsDir, stdio: "pipe" });
-            } catch {
-              execSync("git init", { cwd: wsDir, stdio: "pipe" });
-              execSync("git add -A", { cwd: wsDir, stdio: "pipe" });
-              execSync('git commit -m "init" --allow-empty', { cwd: wsDir, stdio: "pipe" });
+            fs.mkdirSync(snapshotsDir, { recursive: true });
+            // 如果快照已存在，先删除再重新创建（确保是最新状态）
+            if (fs.existsSync(snapshotPath)) {
+              fs.rmSync(snapshotPath, { recursive: true, force: true });
             }
-            // 暂存所有变更
-            execSync("git add -A", { cwd: wsDir, stdio: "pipe" });
-            // 检查是否有变更，有则提交（--allow-empty 防止边缘情况报错）
-            const status = execSync("git status --porcelain", { cwd: wsDir, encoding: "utf-8" });
-            if (status.trim()) {
-              execSync(`git commit --allow-empty -m "snapshot: ${label}"`, { cwd: wsDir, stdio: "pipe" });
-            }
-            // 如果 worktree 已存在，先删除
-            if (fs.existsSync(worktreePath)) {
-              execSync(`git worktree remove --force "${worktreePath}"`, { cwd: wsDir, stdio: "pipe" });
-              fs.rmSync(worktreePath, { recursive: true, force: true });
-            }
-            fs.mkdirSync(worktreesDir, { recursive: true });
-            // 创建 worktree（detached HEAD，只读快照）
-            execSync(`git worktree add --detach "${worktreePath}" HEAD`, { cwd: wsDir, stdio: "pipe" });
-            path_ = worktreePath;
-            console.log(`[ws] worktreeSave: ${taskId}:${label} -> ${worktreePath}`);
+            fs.mkdirSync(snapshotPath, { recursive: true });
+            // 用 rsync 将 workspace 内容复制到快照目录
+            // --delete 确保快照中多余的文件被删除（首次创建时无意义，但保持一致性）
+            // -a 保持权限、符号链接等
+            // --exclude=.git 和 --exclude=.snapshots 避免复制 git 目录和其他快照
+            execSync(
+              `rsync -a --delete --exclude=.git --exclude=.snapshots "${wsDir}/" "${snapshotPath}/" || test $? -eq 24`,
+              { stdio: "pipe", shell: true },
+            );
+            path_ = snapshotPath;
+            console.log(`[ws] snapshotSave: ${taskId}:${label} -> ${snapshotPath}`);
           } catch (e) {
-            console.error(`[ws] worktreeSave error for ${taskId}:${label}:`, e);
+            console.error(`[ws] snapshotSave error for ${taskId}:${label}:`, e);
           }
           ws.send(
             JSON.stringify({ type: "response", id: msg.id, result: { path: path_ } }),
@@ -543,28 +502,27 @@ wss.on("connection", (ws: WebSocket) => {
           break;
         }
 
-        // ── Git Worktree 恢复 ────────────────
-        case "git.worktreeRestore": {
-          const { taskId, worktreePath } = msg.params as {
+        // ── 文件系统快照恢复 ────────────────
+        case "fs.snapshotRestore": {
+          const { taskId, snapshotPath } = msg.params as {
             taskId: string;
-            worktreePath: string;
+            snapshotPath: string;
           };
           const wsDir = workspace.getDir(taskId);
           let success = false;
           try {
-            console.log(`[ws] worktreeRestore: ${taskId} <- ${worktreePath}`);
-            // 用 rsync 将 worktree 内容同步回 workspace 目录
+            console.log(`[ws] snapshotRestore: ${taskId} <- ${snapshotPath}`);
+            // 用 rsync 将快照内容同步回 workspace 目录
             // --delete 确保 workspace 中多余的文件被删除
             // -a 保持权限、符号链接等
-            // --exclude=.git 避免覆盖 workspace 的 .git 目录
-            // exit code 24 = "vanished source files"（git worktree 临时文件），不影响结果
+            // --exclude=.git 和 --exclude=.snapshots 避免覆盖 workspace 的 git 目录和其他快照
             execSync(
-              `rsync -a --delete --exclude=.git "${worktreePath}/" "${wsDir}/" || test $? -eq 24`,
+              `rsync -a --delete --exclude=.git --exclude=.snapshots "${snapshotPath}/" "${wsDir}/" || test $? -eq 24`,
               { stdio: "pipe", shell: true },
             );
             success = true;
           } catch (e) {
-            console.error(`[ws] worktreeRestore error for ${taskId}:`, e);
+            console.error(`[ws] snapshotRestore error for ${taskId}:`, e);
           }
           ws.send(
             JSON.stringify({ type: "response", id: msg.id, result: { success } }),

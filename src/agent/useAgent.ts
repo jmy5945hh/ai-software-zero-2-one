@@ -235,6 +235,7 @@ export function useAgent(taskId: string | null) {
   const steer = useCallback(
     (step: string, text: string) => {
       if (!taskId || !wsRef.current) return;
+      activeStepRef.current = step;
       setSessions((prev) => ({
         ...prev,
         [step]: {
@@ -260,16 +261,25 @@ export function useAgent(taskId: string | null) {
     [taskId],
   );
 
+  // ── 回答后手动触发继续 ──
+  const continueQuestion = useCallback(
+    async (step: string) => {
+      if (!taskId || !wsRef.current) return;
+      await wsRef.current.request("session.continueQuestion", { taskId, step });
+    },
+    [taskId],
+  );
+
   // ── 重试整个 Agent 流程 ──
   const retrySession = useCallback(
-    async (step: string, text: string, initialPrompt?: string, worktreePath?: string) => {
+    async (step: string, text: string, initialPrompt?: string, snapshotPath?: string) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
 
-      // 先回滚 git worktree（如果有）
-      if (worktreePath) {
+      // 先回滚文件系统快照（如果有）
+      if (snapshotPath) {
         try {
-          await wsRef.current.request("git.worktreeRestore", { taskId, worktreePath });
+          await wsRef.current.request("fs.snapshotRestore", { taskId, snapshotPath });
         } catch {
           // 回滚失败不阻塞重试
         }
@@ -751,6 +761,7 @@ export function useAgent(taskId: string | null) {
     prompt,
     steer,
     answerQuestion,
+    continueQuestion,
     retrySession,
     getFileTree,
     readFile,

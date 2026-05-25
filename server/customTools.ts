@@ -3,19 +3,31 @@ import { defineTool } from "@earendil-works/pi-coding-agent";
 
 /**
  * Pending question registry.
- * Maps (taskId:step) → a resolver that the WebSocket handler calls
- * when the user responds via the frontend.
+ *
+ * Two-phase flow:
+ *   1. User answers → answer is stored (agent stays blocked)
+ *   2. User clicks "continue" → Promise resolves (agent resumes)
+ *
+ * Maps (taskId:step) → { question, storedAnswer, resolve, reject }
  */
 export const pendingQuestions = new Map<
   string,
-  { question: string; resolve: (answer: string) => void; reject: (err: Error) => void }
+  {
+    question: string;
+    storedAnswer: string | null;
+    resolve: (answer: string) => void;
+    reject: (err: Error) => void;
+  }
 >();
 
 function makeKey(taskId: string, step: string): string {
   return `${taskId}:${step}`;
 }
 
-/** Resolve a pending question (called from WebSocket handler) */
+/**
+ * Phase 1: Store the user's answer but do NOT unblock the agent.
+ * Returns false if no pending question exists for this (taskId, step).
+ */
 export function resolveQuestion(
   taskId: string,
   step: string,
@@ -24,7 +36,19 @@ export function resolveQuestion(
   const key = makeKey(taskId, step);
   const entry = pendingQuestions.get(key);
   if (!entry) return false;
-  entry.resolve(answer);
+  entry.storedAnswer = answer;
+  return true;
+}
+
+/**
+ * Phase 2: Unblock the agent with the previously stored answer.
+ * Returns false if no answered question is waiting to continue.
+ */
+export function continueQuestion(taskId: string, step: string): boolean {
+  const key = makeKey(taskId, step);
+  const entry = pendingQuestions.get(key);
+  if (!entry || entry.storedAnswer === null) return false;
+  entry.resolve(entry.storedAnswer);
   pendingQuestions.delete(key);
   return true;
 }
@@ -62,7 +86,7 @@ export function createAskUserQuestionTool(taskId: string, step: string) {
       }
 
       const answer = await new Promise<string>((resolve, reject) => {
-        pendingQuestions.set(key, { question, resolve, reject });
+        pendingQuestions.set(key, { question, storedAnswer: null, resolve, reject });
 
         // 超时保护：5分钟后自动取消
         setTimeout(() => {

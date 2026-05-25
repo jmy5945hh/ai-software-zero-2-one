@@ -5,7 +5,7 @@ import { useAgent } from "../agent";
 import { titleFromIntent, workflow } from "../data";
 import type { DrawerContent } from "../data/types";
 import type { ConnectionStatus } from "../agent/types";
-import { worktreeSave } from "../utils/gitSnapshot";
+import { snapshotSave } from "../utils/snapshot";
 
 import {
   Wifi,
@@ -92,17 +92,17 @@ export function WorkspacePage() {
         initialPrompts: { ...state.initialPrompts, intent: intentPrompt },
       });
 
-      // 在 intent step 的 agent 开始工作前，先保存当前代码状态的 worktree
+      // 在 intent step 的 agent 开始工作前，先保存当前代码状态的文件系统快照
       const startIntent = async () => {
         // 先创建 session（确保 workspace 已初始化）
         await agent.createSession("intent", state.intent, state.workspacePath);
-        // workspace 就绪后保存 worktree 快照
+        // workspace 就绪后保存文件系统快照
         const ws = agent.getWs();
         if (ws && taskId) {
-          const worktreePath = await worktreeSave(ws, taskId, "intent");
-          if (worktreePath) {
+          const snapshotPath = await snapshotSave(ws, taskId, "intent");
+          if (snapshotPath) {
             patchState({
-              worktreePaths: { ...state.worktreePaths, intent: worktreePath },
+              snapshotPaths: { ...state.snapshotPaths, intent: snapshotPath },
             });
           }
         }
@@ -126,13 +126,13 @@ export function WorkspacePage() {
         state.selectedModules,
       );
 
-      // 在下一个 step 的 agent 开始工作前，保存当前代码状态的 worktree
+      // 在下一个 step 的 agent 开始工作前，保存当前代码状态的文件系统快照
       const ws = agent.getWs();
       if (ws) {
-        const worktreePath = await worktreeSave(ws, taskId, nextStep.id);
-        if (worktreePath) {
+        const snapshotPath = await snapshotSave(ws, taskId, nextStep.id);
+        if (snapshotPath) {
           patchState({
-            worktreePaths: { ...state.worktreePaths, [nextStep.id]: worktreePath },
+            snapshotPaths: { ...state.snapshotPaths, [nextStep.id]: snapshotPath },
           });
         }
       }
@@ -153,7 +153,7 @@ export function WorkspacePage() {
       codeConfirmed: state.codeConfirmed || state.stepIndex >= 2,
     });
     window.scrollTo({ top: 0 });
-  }, [state.stepIndex, state.intent, state.scope, state.selectedModules, state.initialPrompts, state.worktreePaths, isAgentConnected, taskId, agent, patchState, state.codeConfirmed]);
+  }, [state.stepIndex, state.intent, state.scope, state.selectedModules, state.initialPrompts, state.snapshotPaths, isAgentConnected, taskId, agent, patchState, state.codeConfirmed]);
 
   const handleStepClick = (index: number) => {
     patchState({
@@ -258,6 +258,7 @@ export function WorkspacePage() {
               agentSteer={agent.steer}
               agentPrompt={agent.prompt}
               agentAnswerQuestion={agent.answerQuestion}
+              agentContinueQuestion={agent.continueQuestion}
               agentRetry={agent.retrySession}
               isAgentConnected={isAgentConnected}
             />

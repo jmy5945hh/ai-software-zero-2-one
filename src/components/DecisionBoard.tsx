@@ -22,6 +22,7 @@ import {
   Edit3,
   HelpCircle,
   RotateCcw,
+  Play,
   X,
 } from "lucide-react";
 import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
@@ -48,7 +49,8 @@ type DecisionBoardProps = {
   agentSteer: (step: string, text: string) => void;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
-  agentRetry: (step: string, text: string, initialPrompt?: string, worktreePath?: string) => Promise<void>;
+  agentContinueQuestion: (step: string) => Promise<void>;
+  agentRetry: (step: string, text: string, initialPrompt?: string, snapshotPath?: string) => Promise<void>;
   isAgentConnected: boolean;
 };
 
@@ -61,6 +63,7 @@ export function DecisionBoard({
   agentSteer,
   agentPrompt,
   agentAnswerQuestion,
+  agentContinueQuestion,
   agentRetry,
   isAgentConnected,
 }: DecisionBoardProps) {
@@ -68,6 +71,14 @@ export function DecisionBoard({
   const stepKey = useStepKey(state.stepIndex);
   const content = getContentForStage(state.stepIndex);
   const [activeTab, setActiveTab] = useState<BoardTab>("delivery");
+  const [pendingAutoMessage, setPendingAutoMessage] = useState<string | null>(null);
+
+  const handleSwitchToTrajectory = (msg?: string) => {
+    setActiveTab("trajectory");
+    if (msg) {
+      setPendingAutoMessage(msg);
+    }
+  };
 
   return (
     <section className="decision-board" key={stepKey}>
@@ -106,11 +117,12 @@ export function DecisionBoard({
             onPatch={onPatch}
             onContinue={onContinue}
             onPreview={onPreview}
-            onSwitchToTrajectory={() => setActiveTab("trajectory")}
+            onSwitchToTrajectory={() => handleSwitchToTrajectory(state.notes)}
             agentSession={agentSessions[step.id]}
             isAgentConnected={isAgentConnected}
             stepId={step.id}
             agentAnswerQuestion={agentAnswerQuestion}
+            agentContinueQuestion={agentContinueQuestion}
             agentPrompt={agentPrompt}
             agentRetry={agentRetry}
           />
@@ -123,8 +135,11 @@ export function DecisionBoard({
             agentSteer={agentSteer}
             agentPrompt={agentPrompt}
             agentAnswerQuestion={agentAnswerQuestion}
+            agentContinueQuestion={agentContinueQuestion}
             agentSession={agentSessions[step.id]}
             isAgentConnected={isAgentConnected}
+            pendingAutoMessage={pendingAutoMessage}
+            onConsumeAutoMessage={() => setPendingAutoMessage(null)}
           />
         )}
       </div>
@@ -143,6 +158,7 @@ function DeliveryCollabTab({
   isAgentConnected,
   stepId,
   agentAnswerQuestion,
+  agentContinueQuestion,
   agentPrompt,
   agentRetry,
 }: {
@@ -155,8 +171,9 @@ function DeliveryCollabTab({
   isAgentConnected: boolean;
   stepId: string;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
+  agentContinueQuestion: (step: string) => Promise<void>;
   agentPrompt: (step: string, text: string) => Promise<void>;
-  agentRetry: (step: string, text: string, initialPrompt?: string, worktreePath?: string) => Promise<void>;
+  agentRetry: (step: string, text: string, initialPrompt?: string, snapshotPath?: string) => Promise<void>;
 }) {
   const agentCompleted = isAgentConnected && agentSession?.completed && !agentSession?.isStreaming;
   const agentWorking = isAgentConnected && agentSession && !agentCompleted;
@@ -305,7 +322,7 @@ function DeliveryCollabTab({
                 stepId={stepId}
                 agentRetry={agentRetry}
                 initialPrompt={state.initialPrompts?.[stepId] || ""}
-                worktreePath={state.worktreePaths?.[stepId]}
+                snapshotPath={state.snapshotPaths?.[stepId]}
               />
             </div>
           </div>
@@ -665,12 +682,12 @@ function RetryButton({
   stepId,
   agentRetry,
   initialPrompt,
-  worktreePath,
+  snapshotPath,
 }: {
   stepId: string;
-  agentRetry: (step: string, text: string, initialPrompt?: string, worktreePath?: string) => Promise<void>;
+  agentRetry: (step: string, text: string, initialPrompt?: string, snapshotPath?: string) => Promise<void>;
   initialPrompt: string;
-  worktreePath?: string;
+  snapshotPath?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -688,7 +705,7 @@ function RetryButton({
     if (!prompt.trim() || retrying) return;
     setRetrying(true);
     try {
-      await agentRetry(stepId, prompt.trim(), initialPrompt, worktreePath);
+      await agentRetry(stepId, prompt.trim(), initialPrompt, snapshotPath);
       setOpen(false);
       setPrompt("");
     } finally {
@@ -781,8 +798,11 @@ function TrajectoryChatTab({
   agentSteer,
   agentPrompt,
   agentAnswerQuestion,
+  agentContinueQuestion,
   agentSession,
   isAgentConnected,
+  pendingAutoMessage,
+  onConsumeAutoMessage,
 }: {
   trajectory: TrajectoryTurn[];
   stepIndex: number;
@@ -790,8 +810,11 @@ function TrajectoryChatTab({
   agentSteer: (step: string, text: string) => void;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
+  agentContinueQuestion: (step: string) => Promise<void>;
   agentSession?: SessionState;
   isAgentConnected: boolean;
+  pendingAutoMessage: string | null;
+  onConsumeAutoMessage: () => void;
 }) {
   const [input, setInput] = useState("");
   const [expandedRoundIds, setExpandedRoundIds] = useState<Set<string>>(new Set());
@@ -821,6 +844,17 @@ function TrajectoryChatTab({
       }
     }
   }, [roundGroups]);
+
+  // 自动发送 pendingAutoMessage（来自"继续对话"按钮）
+  useEffect(() => {
+    if (pendingAutoMessage && isAgentConnected) {
+      const msg = pendingAutoMessage;
+      onConsumeAutoMessage();
+      requestAnimationFrame(() => {
+        agentSteer(stepId, msg);
+      });
+    }
+  }, [pendingAutoMessage, isAgentConnected, stepId, agentSteer, onConsumeAutoMessage]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -932,6 +966,7 @@ function TrajectoryChatTab({
                     event={event}
                     stepId={stepId}
                     agentAnswerQuestion={agentAnswerQuestion}
+                    agentContinueQuestion={agentContinueQuestion}
                     isExpanded={event.type === "tool" || event.type === "diff"}
                     onToggleExpand={() => {}}
                     onOpenModal={openModal}
@@ -953,6 +988,7 @@ function TrajectoryChatTab({
                   <TimelineEventV2
                     key={event.id}
                     event={event}
+                    agentContinueQuestion={agentContinueQuestion}
                     isExpanded={expandedPostId === event.id}
                     onToggleExpand={() =>
                       setExpandedPostId((prev) =>
@@ -1272,6 +1308,7 @@ function AskUserQuestionCard({
   toolCall: tc,
   stepId,
   agentAnswerQuestion,
+  agentContinueQuestion,
   isExpanded,
   onToggleExpand,
   onOpenModal,
@@ -1279,6 +1316,7 @@ function AskUserQuestionCard({
   toolCall: ToolCallRecord;
   stepId?: string;
   agentAnswerQuestion?: (step: string, answer: string) => Promise<void>;
+  agentContinueQuestion?: (step: string) => Promise<void>;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onOpenModal: (mc: ModalContent) => void;
@@ -1286,6 +1324,7 @@ function AskUserQuestionCard({
   const [answer, setAnswer] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // 从 input 中解析 question 字段
@@ -1313,6 +1352,18 @@ function AskUserQuestionCard({
     }
   };
 
+  const handleContinue = async () => {
+    if (!stepId || !agentContinueQuestion) return;
+    setContinuing(true);
+    try {
+      await agentContinueQuestion(stepId);
+    } catch {
+      // 错误由 ws 层处理
+    } finally {
+      setContinuing(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -1332,7 +1383,7 @@ function AskUserQuestionCard({
             <span className="tl-tool-name">向您提问</span>
           </div>
           <span className="tl-tool-subtitle">
-            {alreadyAnswered ? "已回答" : "等待您的回答"}
+            {alreadyAnswered ? "已回答" : submitted ? "已提交，等待继续" : "等待您的回答"}
           </span>
         </div>
         <span className={`tl-tool-status ${tc.status}`}>
@@ -1362,6 +1413,24 @@ function AskUserQuestionCard({
               <div className="ask-question-answered">
                 <div className="ask-question-answer-label">您的回答：</div>
                 <div className="ask-question-answer-value">{tc.result}</div>
+              </div>
+            ) : submitted ? (
+              <div className="ask-question-answered">
+                <div className="ask-question-answer-label">您的回答：</div>
+                <div className="ask-question-answer-value">{answer}</div>
+                <button
+                  className="ask-question-continue"
+                  type="button"
+                  onClick={handleContinue}
+                  disabled={continuing}
+                >
+                  {continuing ? (
+                    <Loader2 size={14} className="spin-icon" />
+                  ) : (
+                    <Play size={14} />
+                  )}
+                  <span>继续</span>
+                </button>
               </div>
             ) : (
               <div className="ask-question-input-area">
@@ -1402,6 +1471,7 @@ function TimelineEventV2({
   event,
   stepId,
   agentAnswerQuestion,
+  agentContinueQuestion,
   isExpanded,
   onToggleExpand,
   onOpenModal,
@@ -1409,6 +1479,7 @@ function TimelineEventV2({
   event: TimelineEvent;
   stepId?: string;
   agentAnswerQuestion?: (step: string, answer: string) => Promise<void>;
+  agentContinueQuestion?: (step: string) => Promise<void>;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onOpenModal: (mc: ModalContent) => void;
@@ -1623,6 +1694,7 @@ function TimelineEventV2({
           toolCall={tc}
           stepId={stepId}
           agentAnswerQuestion={agentAnswerQuestion}
+          agentContinueQuestion={agentContinueQuestion}
           isExpanded={isExpanded}
           onToggleExpand={onToggleExpand}
           onOpenModal={onOpenModal}

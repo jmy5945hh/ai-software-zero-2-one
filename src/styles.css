@@ -4302,3 +4302,29 @@ p {
   border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
   border-radius: 8px;
 }
+
+.ask-question-continue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  align-self: flex-start;
+  margin-top: 4px;
+  transition: opacity 0.15s;
+}
+
+.ask-question-continue:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.ask-question-continue:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

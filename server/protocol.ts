@@ -9,16 +9,15 @@ export type AgentMethod =
   | "session.abort"
   | "session.dispose"
   | "session.answerQuestion"
+  | "session.continueQuestion"
   | "session.retry"
   | "summarization.save"
   | "summarization.trigger"
   | "workspace.tree"
   | "workspace.readFile"
   | "workspace.browse"
-  | "git.snapshot"
-  | "git.restore"
-  | "git.worktreeSave"
-  | "git.worktreeRestore";
+  | "fs.snapshotSave"
+  | "fs.snapshotRestore";
 
 /** 所有 WebSocket 消息统一格式 */
 export type WsMessage =

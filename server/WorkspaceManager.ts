@@ -1,7 +1,6 @@
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { execSync } from "child_process";
 
 export type FileNode = {
   name: string;
@@ -56,15 +55,6 @@ export class WorkspaceManager {
       path.join(dir, "package.json"),
       JSON.stringify({ name: taskId, private: true, type: "module" }, null, 2),
     );
-
-    // 初始化为 git 仓库（worktree 快照依赖 git）
-    try {
-      execSync("git init", { cwd: dir, stdio: "pipe" });
-      execSync("git add -A", { cwd: dir, stdio: "pipe" });
-      execSync('git commit -m "init" --allow-empty', { cwd: dir, stdio: "pipe" });
-    } catch {
-      // git init 失败不阻塞流程，但 worktree 快照将不可用
-    }
 
     return dir;
   }
