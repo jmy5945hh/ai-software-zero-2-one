@@ -5,6 +5,7 @@ import { useAgent } from "../agent";
 import { titleFromIntent, workflow } from "../data";
 import type { DrawerContent } from "../data/types";
 import type { ConnectionStatus } from "../agent/types";
+import { worktreeSave } from "../utils/gitSnapshot";
 
 import {
   Wifi,
@@ -85,29 +86,57 @@ export function WorkspacePage() {
       state.intent
     ) {
       sessionInitRef.current = true;
+
       const intentPrompt = `请分析以下业务意图，识别核心业务对象、角色和场景：\n\n${state.intent}`;
       patchState({
         initialPrompts: { ...state.initialPrompts, intent: intentPrompt },
       });
-      agent.createSession("intent", state.intent, state.workspacePath).then(() => {
-        agent.prompt("intent", intentPrompt);
+
+      // 在 intent step 的 agent 开始工作前，先保存当前代码状态的 worktree
+      const startIntent = async () => {
+        // 先创建 session（确保 workspace 已初始化）
+        await agent.createSession("intent", state.intent, state.workspacePath);
+        // workspace 就绪后保存 worktree 快照
+        const ws = agent.getWs();
+        if (ws && taskId) {
+          const worktreePath = await worktreeSave(ws, taskId, "intent");
+          if (worktreePath) {
+            patchState({
+              worktreePaths: { ...state.worktreePaths, intent: worktreePath },
+            });
+          }
+        }
+        await agent.prompt("intent", intentPrompt);
         agent.getFileTree();
-      });
+      };
+      startIntent();
     }
   }, [isAgentConnected, state.stepIndex, state.intent, state.initialPrompts, patchState]);
 
-  const continueTask = useCallback(() => {
+  const continueTask = useCallback(async () => {
     const nextIndex = Math.min(state.stepIndex + 1, workflow.length - 1);
     const currentStep = workflow[state.stepIndex];
     const nextStep = workflow[nextIndex];
 
-    if (isAgentConnected) {
+    if (isAgentConnected && taskId) {
       const promptText = getStepPrompt(
         nextStep.id,
         state.intent,
         state.scope,
         state.selectedModules,
       );
+
+      // 在下一个 step 的 agent 开始工作前，保存当前代码状态的 worktree
+      const ws = agent.getWs();
+      if (ws) {
+        const worktreePath = await worktreeSave(ws, taskId, nextStep.id);
+        if (worktreePath) {
+          patchState({
+            worktreePaths: { ...state.worktreePaths, [nextStep.id]: worktreePath },
+          });
+        }
+      }
+
       // 保存初始提示词，供重试时复用
       patchState({
         initialPrompts: { ...state.initialPrompts, [nextStep.id]: promptText },
@@ -124,7 +153,7 @@ export function WorkspacePage() {
       codeConfirmed: state.codeConfirmed || state.stepIndex >= 2,
     });
     window.scrollTo({ top: 0 });
-  }, [state.stepIndex, state.intent, state.scope, state.selectedModules, state.initialPrompts, isAgentConnected, agent, patchState, state.codeConfirmed]);
+  }, [state.stepIndex, state.intent, state.scope, state.selectedModules, state.initialPrompts, state.worktreePaths, isAgentConnected, taskId, agent, patchState, state.codeConfirmed]);
 
   const handleStepClick = (index: number) => {
     patchState({

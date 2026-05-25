@@ -48,7 +48,7 @@ type DecisionBoardProps = {
   agentSteer: (step: string, text: string) => void;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
-  agentRetry: (step: string, text: string) => Promise<void>;
+  agentRetry: (step: string, text: string, initialPrompt?: string, worktreePath?: string) => Promise<void>;
   isAgentConnected: boolean;
 };
 
@@ -156,7 +156,7 @@ function DeliveryCollabTab({
   stepId: string;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentPrompt: (step: string, text: string) => Promise<void>;
-  agentRetry: (step: string, text: string) => Promise<void>;
+  agentRetry: (step: string, text: string, initialPrompt?: string, worktreePath?: string) => Promise<void>;
 }) {
   const agentCompleted = isAgentConnected && agentSession?.completed && !agentSession?.isStreaming;
   const agentWorking = isAgentConnected && agentSession && !agentCompleted;
@@ -305,6 +305,7 @@ function DeliveryCollabTab({
                 stepId={stepId}
                 agentRetry={agentRetry}
                 initialPrompt={state.initialPrompts?.[stepId] || ""}
+                worktreePath={state.worktreePaths?.[stepId]}
               />
             </div>
           </div>
@@ -664,10 +665,12 @@ function RetryButton({
   stepId,
   agentRetry,
   initialPrompt,
+  worktreePath,
 }: {
   stepId: string;
-  agentRetry: (step: string, text: string, initialPrompt?: string) => Promise<void>;
+  agentRetry: (step: string, text: string, initialPrompt?: string, worktreePath?: string) => Promise<void>;
   initialPrompt: string;
+  worktreePath?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -685,7 +688,7 @@ function RetryButton({
     if (!prompt.trim() || retrying) return;
     setRetrying(true);
     try {
-      await agentRetry(stepId, prompt.trim(), initialPrompt);
+      await agentRetry(stepId, prompt.trim(), initialPrompt, worktreePath);
       setOpen(false);
       setPrompt("");
     } finally {

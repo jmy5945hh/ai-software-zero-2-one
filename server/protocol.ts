@@ -14,7 +14,11 @@ export type AgentMethod =
   | "summarization.trigger"
   | "workspace.tree"
   | "workspace.readFile"
-  | "workspace.browse";
+  | "workspace.browse"
+  | "git.snapshot"
+  | "git.restore"
+  | "git.worktreeSave"
+  | "git.worktreeRestore";
 
 /** 所有 WebSocket 消息统一格式 */
 export type WsMessage =

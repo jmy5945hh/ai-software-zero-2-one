@@ -103,6 +103,8 @@ export type AppState = {
   todoAnswers: Record<number, string | string[]>;
   /** 各步骤的初始提示词（用于重试时复用 user prompt） */
   initialPrompts: Record<string, string>;
+  /** 各步骤的 git worktree 路径（用于重试时回滚代码） */
+  worktreePaths: Record<string, string>;
 };
 
 // ── 抽屉预览 ────────────────────────────────

@@ -262,9 +262,18 @@ export function useAgent(taskId: string | null) {
 
   // ── 重试整个 Agent 流程 ──
   const retrySession = useCallback(
-    async (step: string, text: string, initialPrompt?: string) => {
+    async (step: string, text: string, initialPrompt?: string, worktreePath?: string) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
+
+      // 先回滚 git worktree（如果有）
+      if (worktreePath) {
+        try {
+          await wsRef.current.request("git.worktreeRestore", { taskId, worktreePath });
+        } catch {
+          // 回滚失败不阻塞重试
+        }
+      }
 
       // 重置 session 状态（前端立即清理，等待新 session 事件覆盖）
       setSessions((prev) => ({
@@ -746,5 +755,7 @@ export function useAgent(taskId: string | null) {
     getFileTree,
     readFile,
     browseDir,
+    /** 获取底层 WebSocket 实例，用于直接发送请求（如 git 操作） */
+    getWs: () => wsRef.current,
   } as const;
 }
