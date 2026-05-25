@@ -6,7 +6,7 @@
 /* ── Workspace Shell ──────────────────────── */
 .workspace-shell {
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto 1fr;
   min-height: 100vh;
 }
 
@@ -15,18 +15,18 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  padding: 18px 28px 14px;
+  padding: 10px 28px 8px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   box-shadow: var(--shadow-sm);
 }
 
 .sop-progress-track {
-  height: 3px;
+  height: 2px;
   overflow: hidden;
   border-radius: var(--radius-full);
   background: var(--secondary);
-  margin-bottom: 18px;
+  margin-bottom: 10px;
 }
 
 .sop-progress-track span {
@@ -42,6 +42,8 @@
   align-items: center;
   justify-content: center;
   gap: 0;
+  flex: 1;
+  min-width: 0;
 }
 
 .sop-step {
@@ -163,21 +165,51 @@
   overflow: hidden;
 }
 
-/* ── 信息栏（底部） ──────────────────────── */
-.workspace-infobar {
+/* ── 合并行：标题栏 + 流程节点 ────────────── */
+.sop-nav-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 10px 28px;
-  border-top: 1px solid var(--line);
-  background: var(--panel);
+  gap: 0;
 }
 
-.infobar-left {
+.sop-nav-left {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
+  flex-shrink: 0;
+  padding-right: 16px;
+}
+
+.sop-nav-divider {
+  color: var(--line);
+  font-size: 1.1rem;
+  font-weight: 200;
+  opacity: 0.6;
+  user-select: none;
+  margin-left: 4px;
+}
+
+.sop-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sop-title span {
+  color: var(--muted-warm);
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.sop-title strong {
+  font-family: var(--font-heading);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.25;
 }
 
 /* ── 左侧面板 ────────────────────────────── */
@@ -399,22 +431,7 @@
   font-size: 0.78rem;
 }
 
-.board-user-role-compact {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-full);
-  background: var(--primary-light);
-  color: var(--primary);
-  font-size: 0.72rem;
-  font-weight: 500;
-}
 
-.board-user-role-compact svg {
-  flex-shrink: 0;
-}
 
 /* ── Tab 切换 ─────────────────────────────── */
 .board-tabs {
@@ -478,6 +495,51 @@
   padding: 18px 0;
   overflow-y: auto;
   min-height: 0;
+}
+
+.panel-delivery .delivery-user-role-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--primary-light);
+}
+
+.panel-delivery .user-role-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background: var(--primary);
+  color: white;
+  flex-shrink: 0;
+}
+
+.panel-delivery .user-role-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.panel-delivery .user-role-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.panel-delivery .user-role-text {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.5;
 }
 
 .panel-delivery .delivery-summary {
@@ -1351,11 +1413,7 @@
   gap: 12px;
 }
 
-.infobar-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+/* infobar-right merged into sop-nav-row as inline status badge */
 
 /* ── Agent 未连接提示 ────────────────────── */
 .workspace-no-agent {
@@ -2172,6 +2230,15 @@
     border-right: 0;
     border-bottom: 1px solid var(--line);
     max-height: 280px;
+  }
+
+  .sop-nav-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .sop-nav-left {
+    padding-right: 8px;
   }
 
   .sop-steps {

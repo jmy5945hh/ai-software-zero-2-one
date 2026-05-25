@@ -479,21 +479,7 @@ p {
   grid-template-columns: auto 250px minmax(280px, 1fr) auto;
 }
 
-.workspace-title span,
-.workspace-title strong {
-  display: block;
-}
-
-.workspace-title span {
-  color: var(--muted);
-  font-family: var(--font-body);
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.workspace-title strong {
-  margin-top: 4px;
+/* workspace-title removed — merged into sop-nav */
   font-family: var(--font-heading);
   font-size: 1.1rem;
   font-weight: 600;

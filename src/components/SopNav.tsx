@@ -1,18 +1,24 @@
 import { Check, CircleDot } from "lucide-react";
 import type { WorkflowStep, StageStatus } from "../data/types";
+import { formatTime } from "../data";
 
 type SopNavProps = {
   workflow: WorkflowStep[];
   stepIndex: number;
   progress: number;
   onStepClick: (index: number) => void;
+  /** 标题栏属性 — 与流程节点融合为一行 */
+  goHome: () => void;
+  taskTitle: string;
+  createdAt: string;
+  statusBadge: React.ReactNode;
 };
 
 /**
  * 横置 SOP 进度导航条 —— 页面顶部的研发任务导航。
- * 横向展示 7 个步骤节点，当前步骤居中高亮。
+ * 标题栏与流程节点融合为一行，竖线分隔，更紧凑聚焦。
  */
-export function SopNav({ workflow, stepIndex, progress, onStepClick }: SopNavProps) {
+export function SopNav({ workflow, stepIndex, progress, onStepClick, goHome, taskTitle, createdAt, statusBadge }: SopNavProps) {
   return (
     <nav className="sop-nav" aria-label="研发任务导航">
       {/* 全局进度条 */}
@@ -20,7 +26,20 @@ export function SopNav({ workflow, stepIndex, progress, onStepClick }: SopNavPro
         <span style={{ width: `${progress}%` }} />
       </div>
 
-      <div className="sop-steps">
+      {/* 合并行：标题 | 流程节点 + 状态徽章 */}
+      <div className="sop-nav-row">
+        <div className="sop-nav-left">
+          <button className="ghost-button" type="button" onClick={goHome}>
+            ← 新任务
+          </button>
+          <div className="sop-title">
+            <span>CS-2026-0518 · {formatTime(createdAt)}</span>
+            <strong>{taskTitle}</strong>
+          </div>
+          <span className="sop-nav-divider" aria-hidden="true">|</span>
+        </div>
+
+        <div className="sop-steps">
         {workflow.map((step, index) => {
           const status: StageStatus =
             index < stepIndex
@@ -66,6 +85,10 @@ export function SopNav({ workflow, stepIndex, progress, onStepClick }: SopNavPro
           );
         })}
       </div>
+
+      {/* 连接状态徽章 */}
+      {statusBadge}
+    </div>
     </nav>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStoredState } from "../hooks/useStoredState";
 import { useAgent } from "../agent";
-import { titleFromIntent, formatTime, workflow } from "../data";
+import { titleFromIntent, workflow } from "../data";
 import type { DrawerContent } from "../data/types";
 import type { ConnectionStatus } from "../agent/types";
 
@@ -163,28 +163,16 @@ export function WorkspacePage() {
 
   return (
     <main className="workspace-shell">
-      {/* Topbar 信息条 */}
-      <div className="workspace-infobar">
-        <div className="infobar-left">
-          <button className="ghost-button" type="button" onClick={goHome}>
-            ← 新任务
-          </button>
-          <div className="workspace-title">
-            <span>CS-2026-0518 · {formatTime(state.createdAt)}</span>
-            <strong>{taskTitle}</strong>
-          </div>
-        </div>
-        <div className="infobar-right">
-          <AgentStatusBadge status={connectionStatus} quality={connectionQuality} />
-        </div>
-      </div>
-
-      {/* 顶部横置 SOP 导航 */}
+      {/* 合并导航条：标题 | 流程节点 + 状态徽章 */}
       <SopNav
         workflow={workflow}
         stepIndex={state.stepIndex}
         progress={progress}
         onStepClick={handleStepClick}
+        goHome={goHome}
+        taskTitle={taskTitle}
+        createdAt={state.createdAt}
+        statusBadge={<AgentStatusBadge status={connectionStatus} quality={connectionQuality} />}
       />
 
       {/* Agent 未连接 / 连接中 / 重连中 */}

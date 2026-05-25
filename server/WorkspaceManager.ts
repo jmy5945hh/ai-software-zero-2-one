@@ -79,16 +79,34 @@ export class WorkspaceManager {
     return this.scanDir(dir, dir);
   }
 
-  /** 安全读取 workspace 文件内容 */
+  /** 安全读取文件内容，支持绝对路径（任意本地文件）和 workspace 相对路径 */
   readFile(taskId: string, filePath: string): string {
-    const full = path.join(this.dir(taskId), filePath);
-    if (!full.startsWith(path.resolve(this.dir(taskId)))) {
-      throw new Error("Path traversal detected");
-    }
+    const full = this.isAbsolutePath(filePath)
+      ? this.resolveAbsolute(filePath)
+      : this.resolveWorkspace(taskId, filePath);
     if (!fs.existsSync(full)) {
       throw new Error(`File not found: ${filePath}`);
     }
     return fs.readFileSync(full, "utf-8");
+  }
+
+  /** 判断是否为绝对路径 */
+  private isAbsolutePath(p: string): boolean {
+    return p.startsWith("/") || p.startsWith("~/") || p === "~";
+  }
+
+  /** 解析绝对路径（含 ~ 展开） */
+  private resolveAbsolute(p: string): string {
+    return path.resolve(this.expandHome(p));
+  }
+
+  /** 解析 workspace 相对路径，防止路径遍历 */
+  private resolveWorkspace(taskId: string, filePath: string): string {
+    const full = path.resolve(this.dir(taskId), filePath);
+    if (!full.startsWith(path.resolve(this.dir(taskId)))) {
+      throw new Error("Path traversal detected");
+    }
+    return full;
   }
 
   /** 展开 ~ 为用户主目录 */

@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Bot,
-  Sparkles,
   ChevronRight,
   ChevronDown,
   Loader2,
@@ -78,10 +77,6 @@ export function DecisionBoard({
           <span className="board-step-label">{step.label}</span>
           <span className="board-step-sep">·</span>
           <span className="board-step-detail">{step.detail}</span>
-        </div>
-        <div className="board-user-role-compact">
-          <Sparkles size={13} />
-          <span>{step.userRole}</span>
         </div>
       </div>
 
@@ -201,8 +196,23 @@ function DeliveryCollabTab({
     [onPreview],
   );
 
+  const currentStep = workflow.find(s => s.id === stepId);
+
   return (
     <div className="tab-panel panel-delivery">
+      {/* 👤 用户协作角色提示 */}
+      {currentStep?.userRole && (
+        <div className="delivery-user-role-banner">
+          <div className="user-role-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <div className="user-role-content">
+            <span className="user-role-label">你的协作角色</span>
+            <span className="user-role-text">{currentStep.userRole}</span>
+          </div>
+        </div>
+      )}
+
       {/* Agent 工作中 */}
       {agentWorking && (
         <div className="delivery-working-notice">

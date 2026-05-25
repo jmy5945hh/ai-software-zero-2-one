@@ -12,27 +12,27 @@ import {
 export const workflow: WorkflowStep[] = [
   {
     id: "intent",
-    label: "意图校准",
-    detail: "AI 提炼目标、用户和边界",
-    userRole: "确认方向是否正确",
+    label: "需求分析",
+    detail: "AI 提炼任务目标和边界",
+    userRole: "和 DevAgent 一起脑暴，将模糊需求打磨地清晰、可实现",
   },
   {
     id: "plan",
-    label: "技术方案设计",
+    label: "技术设计",
     detail: "选择本轮交付模块和风险边界",
-    userRole: "决定这次先做什么",
+    userRole: "作为 Tech Leader，评审 DevAgent 的技术详设材料",
   },
   {
     id: "coding",
-    label: "代码编写",
+    label: "编码开发",
     detail: "生成可运行代码骨架",
-    userRole: "确认代码结构",
+    userRole: "没有什么特别要参与的，喝杯咖啡歇一歇吧 :)",
   },
   {
     id: "quality",
-    label: "质量门禁",
+    label: "质量QA",
     detail: "代码检视、单测、API测试、E2E 集中审查",
-    userRole: "审查质量报告,决定放行或修复",
+    userRole: "走读软件质量报告，决定放行或修复",
   },
   {
     id: "verify",
@@ -186,9 +186,6 @@ export function nextMoveText(state: AppState): string {
 
 // ── 标题推断 ────────────────────────────────
 export function titleFromIntent(intent: string) {
-  if (intent.includes("采购")) return "采购审批工具";
-  if (intent.includes("客服") || intent.includes("工单")) return "客服工单系统";
-  if (intent.includes("销售") || intent.includes("客户")) return "销售线索跟进系统";
   return "新研发任务";
 }
 
