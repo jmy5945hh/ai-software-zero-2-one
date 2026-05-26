@@ -18,7 +18,17 @@ const pool = new SessionPool();
 const summaryStore = new SummaryStore();
 const workspace = new WorkspaceManager("./server/workspaces");
 
-const server = http.createServer();
+const server = http.createServer((req, res) => {
+  // 健康检查端点（前端连通性验证）
+  if (req.method === "GET" && req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok", timestamp: Date.now() }));
+    return;
+  }
+  // 其他 HTTP 请求返回 404
+  res.writeHead(404);
+  res.end();
+});
 const wss = new WebSocketServer({ server, path: "/agent" });
 
 console.log("Agent Server starting...");
@@ -554,6 +564,7 @@ wss.on("connection", (ws: WebSocket) => {
 });
 
 // ── 启动服务 ────────────────────────────────
-server.listen(PORT, () => {
-  console.log(`Agent Server listening on ws://localhost:${PORT}/agent`);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Agent Server listening on ws://0.0.0.0:${PORT}/agent`);
+  console.log(`  Health check: http://0.0.0.0:${PORT}/health`);
 });

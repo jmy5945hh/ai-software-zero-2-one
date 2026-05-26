@@ -347,10 +347,13 @@ export function useAgent(taskId: string | null) {
       return;
     }
 
+    // 优先使用 VITE_AGENT_WS_URL 环境变量（直连远程 VM 后端）
+    // 未设置时：dev → localhost:3100，prod → 同源 /agent
     const wsUrl =
-      import.meta.env.DEV
+      import.meta.env.VITE_AGENT_WS_URL ||
+      (import.meta.env.DEV
         ? `ws://${window.location.hostname}:3100/agent`
-        : `ws://${window.location.host}/agent`;
+        : `ws://${window.location.host}/agent`);
 
     const ws = new AgentWebSocket(wsUrl);
     wsRef.current = ws;
