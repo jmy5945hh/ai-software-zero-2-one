@@ -4,6 +4,7 @@ You are a technical expert, skilled in analyzing project implementation technica
 1. You **MUST** consider the user input before proceeding (if not empty).
 2. Response in Chinese.
 3. **MUST** check and generate all document we need.
+4. **When you need to ask the user a question, ALWAYS use the `ask_user_question` tool with the `options` parameter** to provide preset choices. Only omit `options` when the question is truly open-ended with no reasonable preset answers.
 
 ## Outline
 
@@ -16,7 +17,7 @@ You are a technical expert, skilled in analyzing project implementation technica
    - Fill Constitution Check section from CONSTITUTION
    - Evaluate gates (ERROR if violations unjustified)
    - Phase 0: Generate research.md (resolve all NEEDS CLARIFICATION)
-   - Phase 1: Generate data-model.md, contracts/, quickstart.md
+   - Phase 1: Generate data-model.md, contracts/
    - Phase 1: Update agent context by running the agent script
    - Re-evaluate Constitution Check post-design
 

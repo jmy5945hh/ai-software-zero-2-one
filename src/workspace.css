@@ -751,6 +751,84 @@
   justify-content: flex-end;
 }
 
+/* ── 补充业务背景/边界条件 — 专用输入 ──────── */
+.context-submit-row {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.context-submit-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.context-submit-body {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.context-submit-input {
+  flex: 1;
+  min-height: 44px;
+  max-height: 120px;
+  resize: vertical;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  outline: 0;
+  color: var(--text);
+  background: var(--bg);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  transition: border-color var(--duration-fast) var(--ease-gentle);
+}
+
+.context-submit-input:focus {
+  border-color: var(--primary);
+}
+
+.context-submit-input::placeholder {
+  color: var(--muted-warm);
+}
+
+.context-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  height: 42px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.context-submit-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.context-submit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .switch-trajectory-btn {
   display: inline-flex;
   align-items: center;
@@ -760,128 +838,6 @@
 
 .switch-trajectory-btn svg {
   color: var(--terracotta);
-}
-
-/* ── 重试按钮 ──────────────────────────────── */
-.retry-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.72rem;
-  margin-left: 8px;
-  color: var(--muted);
-}
-.retry-btn:hover {
-  color: var(--text);
-}
-
-/* ── 重试弹窗 ──────────────────────────────── */
-.retry-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.retry-dialog {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  width: 480px;
-  max-width: 90vw;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  overflow: hidden;
-}
-
-.retry-dialog-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.retry-dialog-close {
-  margin-left: auto;
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-}
-.retry-dialog-close:hover {
-  color: var(--text);
-  background: var(--hover-bg);
-}
-
-.retry-dialog-body {
-  padding: 16px;
-}
-
-.retry-dialog-hint {
-  margin: 0 0 12px;
-  font-size: 0.78rem;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
-.retry-dialog-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-secondary);
-  color: var(--text);
-  font-size: 0.82rem;
-  font-family: inherit;
-  line-height: 1.5;
-  resize: vertical;
-  min-height: 80px;
-}
-.retry-dialog-input:focus {
-  outline: none;
-  border-color: var(--terracotta);
-  box-shadow: 0 0 0 2px rgba(180, 100, 80, 0.15);
-}
-
-.retry-dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-}
-
-.retry-dialog-submit {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border: none;
-  border-radius: 6px;
-  background: var(--terracotta);
-  color: #fff;
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.retry-dialog-submit:hover:not(:disabled) {
-  background: var(--terracotta-hover);
-}
-.retry-dialog-submit:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* ── Tab 2: AI 任务轨迹（Chat 风格） ──────── */
@@ -1462,6 +1418,46 @@
   text-align: center;
 }
 
+/* ── 交付板块：Agent 问答等待提示 ────────── */
+.delivery-question-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 28px 24px;
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 8%, transparent);
+  margin-bottom: 16px;
+}
+
+.question-notice-icon {
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.question-notice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.question-notice-body strong {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+.question-notice-desc {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 /* ── 交付板块：Agent 工作中提示 ──────────── */
 .delivery-working-notice {
   display: flex;
@@ -1914,6 +1910,58 @@
 }
 
 .todo-fill-input::placeholder {
+  color: var(--muted-warm);
+}
+
+/* 补充诉求与约束 — 合并到待决策模块 */
+.todo-context-row {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.todo-context-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.todo-context-optional {
+  font-weight: 400;
+  font-size: 0.68rem;
+  color: var(--muted-warm);
+  margin-left: auto;
+}
+
+.todo-context-input {
+  width: 100%;
+  min-height: 44px;
+  max-height: 120px;
+  resize: vertical;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  outline: 0;
+  color: var(--text);
+  background: var(--bg);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  transition: border-color var(--duration-fast) var(--ease-gentle);
+  box-sizing: border-box;
+}
+
+.todo-context-input:focus {
+  border-color: var(--primary);
+}
+
+.todo-context-input::placeholder {
   color: var(--muted-warm);
 }
 

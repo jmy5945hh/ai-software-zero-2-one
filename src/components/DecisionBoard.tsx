@@ -21,7 +21,6 @@ import {
   PlusCircle,
   Edit3,
   HelpCircle,
-  RotateCcw,
   Play,
   X,
 } from "lucide-react";
@@ -50,7 +49,6 @@ type DecisionBoardProps = {
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion: (step: string) => Promise<void>;
-  agentRetry: (step: string, text: string, initialPrompt?: string, snapshotPath?: string) => Promise<void>;
   isAgentConnected: boolean;
 };
 
@@ -64,7 +62,6 @@ export function DecisionBoard({
   agentPrompt,
   agentAnswerQuestion,
   agentContinueQuestion,
-  agentRetry,
   isAgentConnected,
 }: DecisionBoardProps) {
   const step = workflow[state.stepIndex];
@@ -72,9 +69,13 @@ export function DecisionBoard({
   const content = getContentForStage(state.stepIndex);
   const [activeTab, setActiveTab] = useState<BoardTab>("delivery");
   const [pendingAutoMessage, setPendingAutoMessage] = useState<string | null>(null);
+  const [scrollToRound, setScrollToRound] = useState<number | null>(null);
 
-  const handleSwitchToTrajectory = (msg?: string) => {
+  const handleSwitchToTrajectory = (msg?: string, roundIndex?: number) => {
     setActiveTab("trajectory");
+    if (roundIndex != null) {
+      setScrollToRound(roundIndex);
+    }
     if (msg) {
       setPendingAutoMessage(msg);
     }
@@ -117,14 +118,17 @@ export function DecisionBoard({
             onPatch={onPatch}
             onContinue={onContinue}
             onPreview={onPreview}
-            onSwitchToTrajectory={() => handleSwitchToTrajectory(state.notes)}
+            onSwitchToTrajectory={() => {
+              const roundIdx = findLatestQuestionRound(agentSessions[step.id]);
+              handleSwitchToTrajectory(state.notes, roundIdx ?? undefined);
+            }}
             agentSession={agentSessions[step.id]}
             isAgentConnected={isAgentConnected}
             stepId={step.id}
             agentAnswerQuestion={agentAnswerQuestion}
             agentContinueQuestion={agentContinueQuestion}
             agentPrompt={agentPrompt}
-            agentRetry={agentRetry}
+            agentSteer={agentSteer}
           />
         )}
         {activeTab === "trajectory" && (
@@ -140,11 +144,43 @@ export function DecisionBoard({
             isAgentConnected={isAgentConnected}
             pendingAutoMessage={pendingAutoMessage}
             onConsumeAutoMessage={() => setPendingAutoMessage(null)}
+            scrollToRound={scrollToRound}
+            onConsumeScrollToRound={() => setScrollToRound(null)}
+            intent={state.intent}
+            initialPrompts={state.initialPrompts}
           />
         )}
       </div>
     </section>
   );
+}
+
+// ── 检测 session 中是否有正在问答的 ask_user_question ──
+function hasPendingQuestion(session: SessionState | undefined): boolean {
+  if (!session) return false;
+  for (const turn of session.turns) {
+    for (const tc of turn.toolCalls) {
+      if (tc.name === "ask_user_question" && tc.status === "running") {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/** 找到最新一轮 ask_user_question 的 round index */
+function findLatestQuestionRound(session: SessionState | undefined): number | null {
+  if (!session) return null;
+  // 从后往前遍历，找到第一个 ask_user_question 所在的轮次
+  for (let ti = session.turns.length - 1; ti >= 0; ti--) {
+    const turn = session.turns[ti];
+    for (const tc of turn.toolCalls) {
+      if (tc.name === "ask_user_question") {
+        return ti + 1; // round index 从 1 开始
+      }
+    }
+  }
+  return null;
 }
 
 // ── Tab 1: 交付 & 协作 ──────────────────────
@@ -160,7 +196,7 @@ function DeliveryCollabTab({
   agentAnswerQuestion,
   agentContinueQuestion,
   agentPrompt,
-  agentRetry,
+  agentSteer,
 }: {
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
@@ -173,10 +209,11 @@ function DeliveryCollabTab({
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion: (step: string) => Promise<void>;
   agentPrompt: (step: string, text: string) => Promise<void>;
-  agentRetry: (step: string, text: string, initialPrompt?: string, snapshotPath?: string) => Promise<void>;
+  agentSteer: (step: string, text: string) => void;
 }) {
   const agentCompleted = isAgentConnected && agentSession?.completed && !agentSession?.isStreaming;
   const agentWorking = isAgentConnected && agentSession && !agentCompleted;
+  const pendingQuestion = hasPendingQuestion(agentSession);
 
   // 结构化总结状态
   const summaryResult = agentSession?.summarizationResult;
@@ -189,28 +226,31 @@ function DeliveryCollabTab({
     ? extractFileChanges(agentSession.turns)
     : [];
 
-  // 点击文件变更 → 打开右侧抽屉查看详情
+  // 点击文件变更 → 全屏弹窗查看详情
+  const [modalContent, setModalContent] = useState<ModalContent | null>(null);
+
   const handleFileClick = useCallback(
     (fc: FileChange) => {
+      const fileName = fc.path.split("/").pop() || fc.path;
+      const isMarkdown = /\.md$/i.test(fc.path);
+
       if (fc.action === "modify" && fc.diffContent) {
-        onPreview({
-          type: "diff",
-          title: fc.path.split("/").pop() || fc.path,
-          path: fc.path,
+        // .md 文件的 diff 也以 markdown 渲染展示（更直观）
+        setModalContent({
+          type: isMarkdown ? "markdown" : "diff",
+          title: fileName,
           content: fc.diffContent,
-          additions: fc.additions || 0,
-          deletions: fc.deletions || 0,
         });
       } else if (fc.action === "create" && fc.diffContent) {
-        onPreview({
-          type: "code",
-          title: fc.path.split("/").pop() || fc.path,
-          language: getLanguageFromPath(fc.path),
+        setModalContent({
+          type: isMarkdown ? "markdown" : "code",
+          title: fileName,
           content: fc.diffContent,
+          language: isMarkdown ? undefined : getLanguageFromPath(fc.path),
         });
       }
     },
-    [onPreview],
+    [],
   );
 
   const currentStep = workflow.find(s => s.id === stepId);
@@ -231,7 +271,7 @@ function DeliveryCollabTab({
       )}
 
       {/* Agent 工作中 */}
-      {agentWorking && (
+      {agentWorking && !pendingQuestion && (
         <div className="delivery-working-notice">
           <div className="working-notice-icon">
             <Loader2 size={22} className="spin-icon" />
@@ -245,6 +285,28 @@ function DeliveryCollabTab({
             >
               <Eye size={13} />
               <span>点此查看实时状态</span>
+              <ArrowRight size={12} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Agent 正在问答，等待用户确认 */}
+      {pendingQuestion && (
+        <div className="delivery-question-notice">
+          <div className="question-notice-icon">
+            <HelpCircle size={22} />
+          </div>
+          <div className="question-notice-body">
+            <strong>问答过程需要用户确认</strong>
+            <p className="question-notice-desc">Agent 正在等待您的回答，请前往任务轨迹查看并回复</p>
+            <button
+              className="working-notice-link"
+              type="button"
+              onClick={onSwitchToTrajectory}
+            >
+              <Eye size={13} />
+              <span>跳转到最新一轮</span>
               <ArrowRight size={12} />
             </button>
           </div>
@@ -285,6 +347,7 @@ function DeliveryCollabTab({
                 onPatch={onPatch}
                 stepId={stepId}
                 agentPrompt={agentPrompt}
+                agentSteer={agentSteer}
                 onContinue={onContinue}
                 stepIndex={state.stepIndex}
               />
@@ -297,39 +360,8 @@ function DeliveryCollabTab({
               <MarkdownRenderer>{agentSession.summary}</MarkdownRenderer>
             </div>
           )}
-
-          <div className="collab-section">
-            <div className="collab-input-row">
-              <textarea
-                className="board-input"
-                value={state.notes}
-                onChange={(e) => onPatch({ notes: e.target.value })}
-                placeholder={getPlaceholderForStage(state.stepIndex)}
-                rows={2}
-              />
-            </div>
-
-            <div className="collab-footer">
-              <button
-                className="ghost-button switch-trajectory-btn"
-                type="button"
-                onClick={onSwitchToTrajectory}
-              >
-                <MessageSquare size={13} />
-                <span>对结果不满意？和 AI 继续对话</span>
-              </button>
-              <RetryButton
-                stepId={stepId}
-                agentRetry={agentRetry}
-                initialPrompt={state.initialPrompts?.[stepId] || ""}
-                snapshotPath={state.snapshotPaths?.[stepId]}
-              />
-            </div>
-          </div>
         </>
       )}
-
-      {/* 未连接 Agent 时：空白态 */}
       {!isAgentConnected && (
         <div className="delivery-empty">
           <Bot size={24} />
@@ -344,6 +376,12 @@ function DeliveryCollabTab({
           <p>请通过任务轨迹创建 Agent 会话来开始本阶段工作</p>
         </div>
       )}
+
+      {/* 文件变更全屏弹窗 */}
+      <ContentModal
+        content={modalContent}
+        onClose={() => setModalContent(null)}
+      />
     </div>
   );
 }
@@ -472,6 +510,7 @@ function TodoSection({
   onPatch,
   stepId,
   agentPrompt,
+  agentSteer,
   onContinue,
   stepIndex,
 }: {
@@ -480,12 +519,17 @@ function TodoSection({
   onPatch: (patch: Partial<AppState>) => void;
   stepId: string;
   agentPrompt: (step: string, text: string) => Promise<void>;
+  agentSteer: (step: string, text: string) => void;
   onContinue: () => void;
   stepIndex: number;
 }) {
   if (todos.length === 0) return null;
 
-  // 检查是否所有待决策项都已作答
+  // 上下文输入 key（使用负数避免与 todo index 冲突）
+  const CONTEXT_KEY = -1;
+  const contextValue = (todoAnswers[CONTEXT_KEY] as string) || "";
+
+  // 检查是否所有待决策项都已作答（上下文输入为可选）
   const allAnswered = todos.every((_, ti) => {
     const answer = todoAnswers[ti];
     return answer !== undefined && (typeof answer === "string" ? answer.trim() !== "" : answer.length > 0);
@@ -507,12 +551,27 @@ function TodoSection({
         return selected.some((opt) => opt.includes("进入下一阶段"));
       });
 
+      // 如果有补充的业务背景，先通过 agentSteer 发送，然后继续对话（不进入下一阶段）
+      const contextText = contextValue.trim();
+      if (contextText) {
+        agentSteer(stepId, contextText);
+        // 有补充输入时不进入下一阶段，而是继续与 Agent 对话
+        const lines = todos.map((todo, ti) => {
+          const answer = todoAnswers[ti];
+          const answerText = Array.isArray(answer) ? answer.join("、") : answer;
+          return `【${todo.task}】\n回答：${answerText}`;
+        });
+        const message = `以下是对待决策事项的回答：\n\n${lines.join("\n\n")}`;
+        await agentPrompt(stepId, message);
+        return;
+      }
+
       if (allChoiceAdvance) {
         onContinue();
         return;
       }
 
-      // fill 类型：将输入内容作为提示词发给 Agent 继续对话
+      // 将输入内容作为提示词发给 Agent 继续对话
       const lines = todos.map((todo, ti) => {
         const answer = todoAnswers[ti];
         const answerText = Array.isArray(answer) ? answer.join("、") : answer;
@@ -523,6 +582,10 @@ function TodoSection({
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleContextChange = (value: string) => {
+    onPatch({ todoAnswers: { ...todoAnswers, [CONTEXT_KEY]: value } });
   };
 
   return (
@@ -543,6 +606,22 @@ function TodoSection({
             onAnswerChange={(answer) => onPatch({ todoAnswers: { ...todoAnswers, [ti]: answer } })}
           />
         ))}
+      </div>
+
+      {/* 补充诉求与约束 — 合并到待决策模块 */}
+      <div className="todo-context-row">
+        <div className="todo-context-header">
+          <MessageSquare size={13} />
+          <span>补充诉求与约束</span>
+          <span className="todo-context-optional">可选</span>
+        </div>
+        <textarea
+          className="todo-context-input"
+          value={contextValue}
+          onChange={(e) => handleContextChange(e.target.value)}
+          placeholder={getPlaceholderForStage(stepIndex)}
+          rows={2}
+        />
       </div>
 
       {allAnswered && (
@@ -677,116 +756,62 @@ function TodoItemCard({
   );
 }
 
-// ── 重试按钮 + 提示词输入弹窗 ──────────────
-function RetryButton({
+// ── 补充业务背景/边界条件 — 专用输入 + 提交按钮 ──
+function ContextSubmitInput({
   stepId,
-  agentRetry,
-  initialPrompt,
-  snapshotPath,
+  agentSteer,
+  placeholder,
 }: {
   stepId: string;
-  agentRetry: (step: string, text: string, initialPrompt?: string, snapshotPath?: string) => Promise<void>;
-  initialPrompt: string;
-  snapshotPath?: string;
+  agentSteer: (step: string, text: string) => void;
+  placeholder: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const [prompt, setPrompt] = useState("");
-  const [retrying, setRetrying] = useState(false);
+  const [input, setInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // 打开时自动聚焦
-  useEffect(() => {
-    if (open) {
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
-  }, [open]);
-
-  const handleRetry = async () => {
-    if (!prompt.trim() || retrying) return;
-    setRetrying(true);
-    try {
-      await agentRetry(stepId, prompt.trim(), initialPrompt, snapshotPath);
-      setOpen(false);
-      setPrompt("");
-    } finally {
-      setRetrying(false);
-    }
+  const handleSubmit = () => {
+    const text = input.trim();
+    if (!text) return;
+    agentSteer(stepId, text);
+    setInput("");
+    // 提交后自动聚焦，方便连续输入
+    requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleRetry();
+      handleSubmit();
     }
   };
 
   return (
-    <>
-      <button
-        className="ghost-button retry-btn"
-        type="button"
-        onClick={() => setOpen(true)}
-        title="传入新的提示词，重试整个 Agent 流程"
-      >
-        <RotateCcw size={13} />
-        <span>重试</span>
-      </button>
-
-      {open && (
-        <div className="retry-overlay" onClick={() => setOpen(false)}>
-          <div className="retry-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="retry-dialog-header">
-              <RotateCcw size={15} />
-              <span>重试 Agent 流程</span>
-              <button
-                className="retry-dialog-close"
-                type="button"
-                onClick={() => setOpen(false)}
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <div className="retry-dialog-body">
-              <p className="retry-dialog-hint">
-                输入的提示词将<strong>替换</strong>当前步骤的系统提示词，Agent 将以此作为全新指令重新开始工作。
-              </p>
-              <textarea
-                ref={inputRef}
-                className="retry-dialog-input"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="输入新的系统提示词，描述你希望 Agent 如何重新执行..."
-                rows={4}
-                disabled={retrying}
-              />
-            </div>
-            <div className="retry-dialog-footer">
-              <button
-                className="ghost-button"
-                type="button"
-                onClick={() => setOpen(false)}
-                disabled={retrying}
-              >
-                取消
-              </button>
-              <button
-                className="retry-dialog-submit"
-                type="button"
-                onClick={handleRetry}
-                disabled={!prompt.trim() || retrying}
-              >
-                {retrying ? (
-                  <><Loader2 size={14} className="spin-icon" /> 重试中...</>
-                ) : (
-                  <><RotateCcw size={14} /> 开始重试</>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    <div className="context-submit-row">
+      <div className="context-submit-header">
+        <MessageSquare size={13} />
+        <span>补充诉求与约束</span>
+      </div>
+      <div className="context-submit-body">
+        <textarea
+          ref={inputRef}
+          className="context-submit-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          rows={2}
+        />
+        <button
+          className="context-submit-btn"
+          type="button"
+          onClick={handleSubmit}
+          disabled={!input.trim()}
+        >
+          <Send size={14} />
+          <span>提交</span>
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -803,6 +828,10 @@ function TrajectoryChatTab({
   isAgentConnected,
   pendingAutoMessage,
   onConsumeAutoMessage,
+  scrollToRound,
+  onConsumeScrollToRound,
+  intent,
+  initialPrompts,
 }: {
   trajectory: TrajectoryTurn[];
   stepIndex: number;
@@ -815,6 +844,10 @@ function TrajectoryChatTab({
   isAgentConnected: boolean;
   pendingAutoMessage: string | null;
   onConsumeAutoMessage: () => void;
+  scrollToRound?: number | null;
+  onConsumeScrollToRound?: () => void;
+  intent: string;
+  initialPrompts: Record<string, string>;
 }) {
   const [input, setInput] = useState("");
   const [expandedRoundIds, setExpandedRoundIds] = useState<Set<string>>(new Set());
@@ -822,12 +855,13 @@ function TrajectoryChatTab({
   const [modalContent, setModalContent] = useState<ModalContent | null>(null);
   // final round 在最后一轮完成时自动展开
   const lastExpandedRef = useRef<string | null>(null);
+  const roundsContainerRef = useRef<HTMLDivElement>(null);
 
   // 构建展示用的轮次列表
   const displayTurns = buildDisplayTurns(agentSession, trajectory, isAgentConnected);
 
   // 从所有轮次中收集事件时间线（扁平化）
-  const timeline = useTimeline(displayTurns, isAgentConnected, agentSession);
+  const timeline = useTimeline(displayTurns, isAgentConnected, agentSession, initialPrompts);
 
   // 将事件按轮次分组
   const roundGroups = useRoundGroups(timeline);
@@ -855,6 +889,26 @@ function TrajectoryChatTab({
       });
     }
   }, [pendingAutoMessage, isAgentConnected, stepId, agentSteer, onConsumeAutoMessage]);
+
+  // 跳转到指定轮次（来自交付协作模块的"跳转到最新一轮"）
+  useEffect(() => {
+    if (scrollToRound == null) return;
+    // 展开目标轮次
+    const targetGroup = roundGroups.find((g) => g.index === scrollToRound);
+    if (targetGroup) {
+      setExpandedRoundIds((prev) => new Set([...prev, targetGroup.id]));
+      // 等待 DOM 更新后滚动
+      requestAnimationFrame(() => {
+        const el = roundsContainerRef.current?.querySelector(
+          `[data-round-index="${scrollToRound}"]`
+        );
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+    }
+    onConsumeScrollToRound?.();
+  }, [scrollToRound, roundGroups, onConsumeScrollToRound]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -903,7 +957,18 @@ function TrajectoryChatTab({
           </div>
         )}
 
-        <div className="trajectory-rounds">
+        <div className="trajectory-rounds" ref={roundsContainerRef}>
+          {/* 任务描述卡片 */}
+          {intent && (
+            <div className="trajectory-task-desc">
+              <div className="task-desc-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <span>用户输入</span>
+              </div>
+              <p className="task-desc-text">{intent}</p>
+            </div>
+          )}
+
           {displayTurns.length === 0 && !isAgentConnected && (
             <div className="trajectory-empty">
               <Bot size={24} />
@@ -917,65 +982,116 @@ function TrajectoryChatTab({
             </div>
           )}
 
-          {/* 按轮次分组渲染 */}
-          {roundGroups.map((group) => {
-            const isExpanded = expandedRoundIds.has(group.id);
-            const reasoningPreview = getReasoningPreview(group.events);
-            return (
-            <div
-              key={group.id}
-              className={`trajectory-round-group ${group.status === "running" ? "running" : ""} ${isExpanded ? "expanded" : "collapsed"}`}
-            >
-              {/* 轮次头部 */}
-              <div className="round-group-header" onClick={() => toggleRound(group.id)}>
-                <div className="round-group-index">
-                  {group.status === "running" ? (
-                    <Loader2 size={12} className="spin-icon" />
-                  ) : (
-                    <span>{group.index}</span>
-                  )}
-                </div>
-                <div className="round-group-title-area">
-                  <span className="round-group-label">
-                    Round {group.index}
-                    {group.status === "running" ? " — 进行中" : ""}
-                  </span>
-                  {!isExpanded && reasoningPreview && (
-                    <span className="round-group-preview">{reasoningPreview}</span>
-                  )}
-                </div>
-                <div className="round-group-header-right">
-                  {group.toolCount > 0 && (
-                    <span className="round-group-badge">
-                      <Wrench size={10} />
-                      {group.toolCount} 工具
-                    </span>
-                  )}
-                  <span className={`round-group-chevron ${isExpanded ? "open" : ""}`}>
-                    <ChevronRight size={16} />
-                  </span>
-                </div>
-              </div>
+          {/* 按轮次分组渲染，用户输入穿插在轮次之间 */}
+          {(() => {
+            // 收集所有 user 事件
+            const userEvents = timeline.filter((e) => e.type === "user");
+            // 收集所有 complete/error 事件
+            const postEvents = timeline.filter((e) => e.type === "complete" || e.type === "error");
 
-              {/* 轮次内部：可滚动 */}
-              {isExpanded && (
-              <div className="round-group-body">
-                {group.events.map((event) => (
+            // 构建交错列表：每个 round group 前插入对应的 user 事件
+            const items: { type: "round" | "user" | "post"; group?: typeof roundGroups[0]; event?: TimelineEvent }[] = [];
+
+            // 按 timeline 原始顺序交错：遍历 timeline，遇到 user 就插入 user，遇到 round-divider 就插入对应的 round group
+            let groupIdx = 0;
+            for (const evt of timeline) {
+              if (evt.type === "user") {
+                items.push({ type: "user", event: evt });
+              } else if (evt.type === "round-divider") {
+                if (groupIdx < roundGroups.length) {
+                  items.push({ type: "round", group: roundGroups[groupIdx] });
+                  groupIdx++;
+                }
+              }
+            }
+
+            // 追加剩余的 round groups（兜底）
+            while (groupIdx < roundGroups.length) {
+              items.push({ type: "round", group: roundGroups[groupIdx] });
+              groupIdx++;
+            }
+
+            return items.map((item) => {
+              if (item.type === "user" && item.event) {
+                return (
                   <TimelineEventV2
-                    key={event.id}
-                    event={event}
+                    key={item.event.id}
+                    event={item.event}
                     stepId={stepId}
                     agentAnswerQuestion={agentAnswerQuestion}
                     agentContinueQuestion={agentContinueQuestion}
-                    isExpanded={event.type === "tool" || event.type === "diff"}
+                    isExpanded={false}
                     onToggleExpand={() => {}}
                     onOpenModal={openModal}
                   />
-                ))}
-              </div>
-              )}
-            </div>
-          );})}
+                );
+              }
+
+              if (item.type === "round" && item.group) {
+                const group = item.group;
+                const isExpanded = expandedRoundIds.has(group.id);
+                const reasoningPreview = getReasoningPreview(group.events);
+                return (
+                  <div
+                    key={group.id}
+                    data-round-index={group.index}
+                    className={`trajectory-round-group ${group.status === "running" ? "running" : ""} ${isExpanded ? "expanded" : "collapsed"}`}
+                  >
+                    {/* 轮次头部 */}
+                    <div className="round-group-header" onClick={() => toggleRound(group.id)}>
+                      <div className="round-group-index">
+                        {group.status === "running" ? (
+                          <Loader2 size={12} className="spin-icon" />
+                        ) : (
+                          <span>{group.index}</span>
+                        )}
+                      </div>
+                      <div className="round-group-title-area">
+                        <span className="round-group-label">
+                          Round {group.index}
+                          {group.status === "running" ? " — 进行中" : ""}
+                        </span>
+                        {!isExpanded && reasoningPreview && (
+                          <span className="round-group-preview">{reasoningPreview}</span>
+                        )}
+                      </div>
+                      <div className="round-group-header-right">
+                        {group.toolCount > 0 && (
+                          <span className="round-group-badge">
+                            <Wrench size={10} />
+                            {group.toolCount} 工具
+                          </span>
+                        )}
+                        <span className={`round-group-chevron ${isExpanded ? "open" : ""}`}>
+                          <ChevronRight size={16} />
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 轮次内部：可滚动 */}
+                    {isExpanded && (
+                      <div className="round-group-body">
+                        {group.events.map((event) => (
+                          <TimelineEventV2
+                            key={event.id}
+                            event={event}
+                            stepId={stepId}
+                            agentAnswerQuestion={agentAnswerQuestion}
+                            agentContinueQuestion={agentContinueQuestion}
+                            isExpanded={event.type === "tool" || event.type === "diff"}
+                            onToggleExpand={() => {}}
+                            onOpenModal={openModal}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return null;
+            });
+          })()}
 
           {/* 独立事件（完成/错误） */}
           {timeline
@@ -1125,27 +1241,52 @@ type TimelineEvent =
   | { type: "error"; id: string; message: string }
   | { type: "round-divider"; id: string; roundIndex: number; status: "running" | "done" };
 
+/**
+ * useTimeline — 将 turns 和 session.messages 扁平化为事件流。
+ *
+ * 用户输入展示策略：
+ * - 仅展示用户主动输入（steer），过滤掉系统自动生成的 initialPrompts
+ * - 每个 turn 前展示对应的用户输入（按 messages 中 user 消息的顺序匹配）
+ * - 未被消费的用户消息（如 steer 后 agent 尚未产生新 turn）追加到末尾
+ */
 function useTimeline(
   turns: Turn[],
   isAgentConnected: boolean,
   agentSession?: SessionState,
+  initialPrompts?: Record<string, string>,
 ): TimelineEvent[] {
   const events: TimelineEvent[] = [];
 
-  // 用户消息从 session.messages 中提取
-  const userMessages = agentSession?.messages.filter((m) => m.role === "user") || [];
+  // 收集所有系统自动生成的 prompt 文本，用于过滤
+  const systemPromptSet = new Set(Object.values(initialPrompts || {}));
+
+  // 判断一条 user 消息是否应该展示
+  function shouldShowUserMessage(content: string): boolean {
+    if (systemPromptSet.has(content)) return false;
+    if (content.startsWith("以下是对待决策事项的回答：")) return false;
+    return true;
+  }
+
+  // 从 session.messages 中提取所有 user 消息（不过滤），用于按原始顺序匹配 turn
+  const allUserMessages = agentSession?.messages.filter((m) => m.role === "user") || [];
+
+  // 按顺序匹配：第 N 条 user 消息（不过滤）→ 第 N 个 turn 之前
+  // 但只展示 shouldShowUserMessage 为 true 的消息
   let userMsgIdx = 0;
 
   for (let ri = 0; ri < turns.length; ri++) {
     const turn = turns[ri];
 
-    // 在每个轮次前插入用户消息（如果有的话）
-    if (userMsgIdx < userMessages.length) {
-      events.push({
-        type: "user",
-        id: `user-${ri}`,
-        content: userMessages[userMsgIdx].content,
-      });
+    // 在每个轮次前插入用户消息（按 messages 原始顺序匹配）
+    if (userMsgIdx < allUserMessages.length) {
+      const msg = allUserMessages[userMsgIdx];
+      if (shouldShowUserMessage(msg.content)) {
+        events.push({
+          type: "user",
+          id: `user-${ri}`,
+          content: msg.content,
+        });
+      }
       userMsgIdx++;
     }
 
@@ -1201,15 +1342,29 @@ function useTimeline(
         status: turn.status === "running" ? "running" : "done",
       });
     }
+
+    // ask_user_question 的回答 → 作为用户输入事件，与轮次同级
+    for (const tc of turn.toolCalls) {
+      if (tc.name === "ask_user_question" && tc.status === "done" && tc.result) {
+        events.push({
+          type: "user",
+          id: `user-answer-${tc.id}`,
+          content: tc.result,
+        });
+      }
+    }
   }
 
-  // 剩余的用户消息（如 steer 消息）
-  while (userMsgIdx < userMessages.length) {
-    events.push({
-      type: "user",
-      id: `user-extra-${userMsgIdx}`,
-      content: userMessages[userMsgIdx].content,
-    });
+  // 剩余未被消费的用户消息（如 steer 后 agent 尚未产生新 turn）
+  while (userMsgIdx < allUserMessages.length) {
+    const msg = allUserMessages[userMsgIdx];
+    if (shouldShowUserMessage(msg.content)) {
+      events.push({
+        type: "user",
+        id: `user-extra-${userMsgIdx}`,
+        content: msg.content,
+      });
+    }
     userMsgIdx++;
   }
 
@@ -1284,9 +1439,9 @@ function useRoundGroups(timeline: TimelineEvent[]): RoundGroup[] {
     // 取从该 divider 到下一个 divider 之间的所有事件
     const allEvents = timeline.slice(pos, nextPos);
 
-    // 过滤掉 complete、error 和 round-divider（它们由头部或外部渲染）
+    // 过滤掉 complete、error、user 和 round-divider（它们由头部或外部渲染）
     const events = allEvents.filter(
-      (e) => e.type !== "complete" && e.type !== "error" && e.type !== "round-divider",
+      (e) => e.type !== "complete" && e.type !== "error" && e.type !== "round-divider" && e.type !== "user",
     );
 
     const toolCount = events.filter((e) => e.type === "tool" || e.type === "diff").length;
@@ -1325,13 +1480,16 @@ function AskUserQuestionCard({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [continuing, setContinuing] = useState(false);
+  const [showCustomInput, setShowCustomInput] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // 从 input 中解析 question 字段
+  // 从 input 中解析 question 和 options 字段
   let question = "";
+  let options: string[] | undefined;
   try {
     const parsed = JSON.parse(tc.input);
     question = parsed.question || tc.input;
+    options = parsed.options;
   } catch {
     question = tc.input;
   }
@@ -1339,12 +1497,34 @@ function AskUserQuestionCard({
   // 如果已有 result（已回答过），显示结果
   const alreadyAnswered = tc.status === "done" && tc.result;
 
+  const handleSelectOption = async (opt: string) => {
+    if (!stepId || !agentAnswerQuestion) return;
+    setAnswer(opt);
+    setSubmitting(true);
+    try {
+      await agentAnswerQuestion(stepId, opt);
+      setSubmitted(true);
+      // 选项点击后自动继续
+      if (agentContinueQuestion) {
+        await agentContinueQuestion(stepId);
+      }
+    } catch {
+      // 错误由 ws 层处理
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!answer.trim() || !stepId || !agentAnswerQuestion) return;
     setSubmitting(true);
     try {
       await agentAnswerQuestion(stepId, answer.trim());
       setSubmitted(true);
+      // 自定义输入提交后自动继续
+      if (agentContinueQuestion) {
+        await agentContinueQuestion(stepId);
+      }
     } catch {
       // 错误由 ws 层处理
     } finally {
@@ -1418,22 +1598,46 @@ function AskUserQuestionCard({
               <div className="ask-question-answered">
                 <div className="ask-question-answer-label">您的回答：</div>
                 <div className="ask-question-answer-value">{answer}</div>
+              </div>
+            ) : options && options.length > 0 && !showCustomInput ? (
+              <div className="ask-question-options-area">
+                <div className="ask-question-options">
+                  {options.map((opt, i) => (
+                    <button
+                      key={i}
+                      className="ask-question-option-btn"
+                      type="button"
+                      onClick={() => handleSelectOption(opt)}
+                      disabled={submitting}
+                    >
+                      <span className="ask-question-option-num">{i + 1}</span>
+                      <span>{opt}</span>
+                    </button>
+                  ))}
+                </div>
                 <button
-                  className="ask-question-continue"
+                  className="ask-question-custom-toggle"
                   type="button"
-                  onClick={handleContinue}
-                  disabled={continuing}
+                  onClick={() => {
+                    setShowCustomInput(true);
+                    setTimeout(() => inputRef.current?.focus(), 50);
+                  }}
                 >
-                  {continuing ? (
-                    <Loader2 size={14} className="spin-icon" />
-                  ) : (
-                    <Play size={14} />
-                  )}
-                  <span>继续</span>
+                  <Edit3 size={12} />
+                  <span>自定义输入</span>
                 </button>
               </div>
             ) : (
               <div className="ask-question-input-area">
+                {options && options.length > 0 && (
+                  <button
+                    className="ask-question-back-options"
+                    type="button"
+                    onClick={() => setShowCustomInput(false)}
+                  >
+                    <span>← 返回选项</span>
+                  </button>
+                )}
                 <textarea
                   ref={inputRef}
                   className="ask-question-textarea"
@@ -1488,11 +1692,12 @@ function TimelineEventV2({
     case "user":
       return (
         <div className="timeline-user">
-          <div className="tl-user-bubble">
-            <p>{event.content}</p>
-          </div>
-          <div className="tl-user-avatar">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <div className="tl-user-card">
+            <div className="tl-user-card-header">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              <span>用户输入</span>
+            </div>
+            <p className="tl-user-card-text">{event.content}</p>
           </div>
         </div>
       );
@@ -1520,6 +1725,7 @@ function TimelineEventV2({
     case "message":
       return (
         <div className="timeline-message">
+          <div className="tl-message-label">DevAgent</div>
           <div className="tl-message-content">
             <MarkdownRenderer>
               {event.content}

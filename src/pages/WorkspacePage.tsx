@@ -259,7 +259,6 @@ export function WorkspacePage() {
               agentPrompt={agent.prompt}
               agentAnswerQuestion={agent.answerQuestion}
               agentContinueQuestion={agent.continueQuestion}
-              agentRetry={agent.retrySession}
               isAgentConnected={isAgentConnected}
             />
           </div>
@@ -349,9 +348,9 @@ function getStepPrompt(
 ): string {
   switch (step) {
     case "intent":
-      return `请分析以下业务意图，识别核心业务对象、角色和场景：\n\n${intent}`;
+      return `请分析以下业务意图，识别核心业务对象、角色和场景，并生成Spec 文档：\n\n${intent}`;
     case "plan":
-      return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围。\n\n业务意图：${intent}`;
+      return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围，生成对应的技术方案文档。\n\n业务意图：${intent}`;
     case "coding":
       return `基于技术方案设计，生成可运行的代码骨架，包括类型定义、API 服务层、页面组件和路由配置。\n\n业务意图：${intent}`;
     case "quality":

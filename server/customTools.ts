@@ -8,17 +8,17 @@ import { defineTool } from "@earendil-works/pi-coding-agent";
  *   1. User answers → answer is stored (agent stays blocked)
  *   2. User clicks "continue" → Promise resolves (agent resumes)
  *
- * Maps (taskId:step) → { question, storedAnswer, resolve, reject }
+ * Maps (taskId:step) → { question, options, storedAnswer, resolve, reject }
  */
-export const pendingQuestions = new Map<
-  string,
-  {
-    question: string;
-    storedAnswer: string | null;
-    resolve: (answer: string) => void;
-    reject: (err: Error) => void;
-  }
->();
+export interface PendingQuestion {
+  question: string;
+  options?: string[];
+  storedAnswer: string | null;
+  resolve: (answer: string) => void;
+  reject: (err: Error) => void;
+}
+
+export const pendingQuestions = new Map<string, PendingQuestion>();
 
 function makeKey(taskId: string, step: string): string {
   return `${taskId}:${step}`;
@@ -72,12 +72,19 @@ export function createAskUserQuestionTool(taskId: string, step: string) {
       "向用户提问并等待回答。当你需要澄清需求、确认方案或获取用户决策时使用此工具。会暂停执行直到用户回复。",
     parameters: Type.Object({
       question: Type.String({
-        description: "向用户提出的问题，应清晰、具体，包含选项供用户选择",
+        description: "向用户提出的问题，应清晰、具体",
       }),
+      options: Type.Optional(
+        Type.Array(Type.String(), {
+          description:
+            "预设选项列表（可选）。提供后用户可直接点击选择，减少打字。最多10个选项，每个不超过100字。",
+        }),
+      ),
     }),
     execute: async (_toolCallId, params) => {
       const key = makeKey(taskId, step);
       const question = params.question as string;
+      const options = params.options as string[] | undefined;
 
       // 如果已有 pending 问题，先 reject 旧的
       const existing = pendingQuestions.get(key);
@@ -86,7 +93,13 @@ export function createAskUserQuestionTool(taskId: string, step: string) {
       }
 
       const answer = await new Promise<string>((resolve, reject) => {
-        pendingQuestions.set(key, { question, storedAnswer: null, resolve, reject });
+        pendingQuestions.set(key, {
+          question,
+          options,
+          storedAnswer: null,
+          resolve,
+          reject,
+        });
 
         // 超时保护：5分钟后自动取消
         setTimeout(() => {
