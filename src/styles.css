@@ -4474,3 +4474,524 @@ p {
 .ask-question-back-options:hover {
   color: var(--accent);
 }
+
+/* ============================================
+   Session History Panel
+   ============================================ */
+
+.session-history-panel {
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.session-history-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0 12px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+
+.session-history-header span {
+  font-family: var(--font-body);
+}
+
+.session-history-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+  background: var(--bg-soft);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.session-history-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.session-history-refresh:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.session-history-loading,
+.session-history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  color: var(--muted);
+  gap: 8px;
+  text-align: center;
+}
+
+.session-history-empty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.session-history-empty-hint {
+  font-size: 12px !important;
+  color: var(--muted-warm);
+}
+
+.session-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-history-item {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.session-history-item:hover {
+  border-color: var(--primary-mid);
+  box-shadow: var(--shadow-sm);
+}
+
+.session-history-item-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.session-history-item-header:hover {
+  background: var(--bg-soft);
+}
+
+.session-history-item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-light);
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.session-history-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-history-item-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+.session-history-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.session-history-item-step {
+  background: var(--bg-soft);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.session-history-item-time {
+  color: var(--muted-warm);
+}
+
+.session-history-item-progress {
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.session-history-chevron {
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform var(--duration-fast) var(--ease-gentle);
+}
+
+.session-history-chevron.rotated {
+  transform: rotate(90deg);
+}
+
+/* ── 展开详情 ── */
+
+.session-history-item-detail {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--line);
+  animation: slideDown 0.2s var(--ease-gentle);
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+  }
+}
+
+.session-history-detail-intent {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 0;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+
+.session-history-detail-intent svg {
+  margin-top: 2px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.session-history-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.detail-label {
+  color: var(--muted);
+  min-width: 64px;
+  flex-shrink: 0;
+}
+
+.detail-value {
+  color: var(--text);
+  font-family: var(--font-body);
+  word-break: break-all;
+}
+
+/* ── 步骤摘要 ── */
+
+.session-history-step-summaries {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+}
+
+.session-history-step-summaries .detail-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.step-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.step-summary-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--bg-soft);
+  border-radius: var(--radius-sm);
+}
+
+.step-summary-step {
+  color: var(--primary);
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 48px;
+}
+
+.step-summary-brief {
+  color: var(--text);
+  line-height: 1.4;
+}
+
+/* ── 各步骤对话记录 ── */
+.session-history-step-sessions {
+  margin-top: 10px;
+}
+
+.session-history-step-sessions > .detail-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #888);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.step-session-block {
+  border: 1px solid var(--border-color, #e8e8e8);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  background: var(--bg-secondary, #fafafa);
+}
+
+.step-session-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  background: var(--bg-tertiary, #f0f0f0);
+  border-bottom: 1px solid var(--border-color, #e8e8e8);
+}
+
+.step-session-count {
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-secondary, #999);
+}
+
+.step-session-messages {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 6px 10px;
+}
+
+.step-session-msg {
+  display: flex;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  border-bottom: 1px solid var(--border-color, #f0f0f0);
+}
+
+.step-session-msg:last-child {
+  border-bottom: none;
+}
+
+.step-session-role {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.step-session-text {
+  color: var(--text-primary, #333);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+}
+
+.step-session-summary {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-secondary, #666);
+  border-top: 1px solid var(--border-color, #e8e8e8);
+  background: var(--bg-tertiary, #f8f8f8);
+  line-height: 1.5;
+}
+
+.step-session-summary-label {
+  font-weight: 600;
+  color: var(--text-secondary, #888);
+}
+
+/* ── 操作按钮 ── */
+
+.session-history-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.session-history-continue-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font-body);
+}
+
+.session-history-continue-btn:hover {
+  background: var(--terracotta);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.session-history-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: none;
+  color: var(--muted-warm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font-body);
+}
+
+.session-history-delete-btn:hover {
+  color: #c0392b;
+  border-color: #c0392b;
+  background: rgba(192, 57, 43, 0.04);
+}
+
+.session-history-delete-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── 补充需求输入 ── */
+.session-history-followup {
+  margin-top: 10px;
+  border-top: 1px solid var(--border-color, #e8e8e8);
+  padding-top: 10px;
+}
+
+.session-history-followup-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color, #d9d9d9);
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+  background: var(--bg-secondary, #fafafa);
+  color: var(--text-primary, #333);
+  transition: border-color 0.2s;
+  line-height: 1.5;
+}
+
+.session-history-followup-input:focus {
+  outline: none;
+  border-color: #4a90d9;
+  box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.15);
+}
+
+.session-history-followup-input::placeholder {
+  color: #bbb;
+}
+
+/* ── 历史恢复对话展示 ── */
+.trajectory-restored-history {
+  margin: 12px 16px;
+  border: 1px solid var(--border-color, #e8e8e8);
+  border-radius: 8px;
+  background: var(--bg-secondary, #f8f9fa);
+  overflow: hidden;
+}
+
+.restored-history-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  background: var(--bg-tertiary, #f0f0f0);
+  border-bottom: 1px solid var(--border-color, #e8e8e8);
+}
+
+.restored-history-body {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 8px 12px;
+}
+
+.restored-history-msg {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color, #eee);
+}
+
+.restored-history-msg:last-child {
+  border-bottom: none;
+}
+
+.restored-history-role {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #888);
+  margin-bottom: 4px;
+}
+
+.restored-history-msg.assistant .restored-history-role {
+  color: #4a90d9;
+}
+
+.restored-history-content {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary, #333);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.restored-history-summary {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-color, #e8e8e8);
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+  background: var(--bg-tertiary, #f5f5f5);
+}
+
+.restored-history-summary .detail-label {
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.restored-history-summary p {
+  margin: 4px 0 0;
+  line-height: 1.5;
+}

@@ -184,6 +184,10 @@ export function useAgent(taskId: string | null) {
   const summarizingRef = useRef<Set<string>>(new Set());
   /** 当前正在总结的 step（用于分流总结事件到对应 session） */
   const summarizingStepRef = useRef<string | null>(null);
+  /** 外部注册的轮次完成回调（接收 step 和最新的 sessions 快照） */
+  const onSessionCompleteRef = useRef<((step: string, sessions: Record<string, SessionState>) => void) | null>(null);
+  /** 记录每个 step 的 steer 输入（ref 方式，不受 React 批处理影响） */
+  const steerInputsRef = useRef<Record<string, string[]>>({});
 
   // ── 创建 session ──
   const createSession = useCallback(
@@ -233,21 +237,37 @@ export function useAgent(taskId: string | null) {
 
   // ── 流式修正 ──
   const steer = useCallback(
-    (step: string, text: string) => {
+    (step: string, text: string, intent?: string) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
-      setSessions((prev) => ({
-        ...prev,
-        [step]: {
-          ...(prev[step] || defaultSession()),
-          completed: false,
-          messages: [
-            ...(prev[step]?.messages || []),
-            { role: "user" as const, content: text },
-          ],
-        },
-      }));
-      wsRef.current.request("session.steer", { taskId, step, text });
+      // 记录到 ref（不受 React 批处理影响）
+      const inputs = steerInputsRef.current[step] || [];
+      inputs.push(text);
+      steerInputsRef.current[step] = inputs;
+      setSessions((prev) => {
+        const existing = prev[step] || defaultSession();
+        // 在最后一个 turn 上记录 user 输入（如果没有 turn，创建一个占位）
+        const turns = existing.turns.length > 0
+          ? existing.turns.map((t, i) =>
+              i === existing.turns.length - 1
+                ? { ...t, userInput: text }
+                : t,
+            )
+          : existing.turns;
+        return {
+          ...prev,
+          [step]: {
+            ...existing,
+            completed: false,
+            messages: [
+              ...(existing.messages || []),
+              { role: "user" as const, content: text },
+            ],
+            turns,
+          },
+        };
+      });
+      wsRef.current.request("session.steer", { taskId, step, text, intent });
     },
     [taskId],
   );
@@ -272,18 +292,9 @@ export function useAgent(taskId: string | null) {
 
   // ── 重试整个 Agent 流程 ──
   const retrySession = useCallback(
-    async (step: string, text: string, initialPrompt?: string, snapshotPath?: string) => {
+    async (step: string, text: string, initialPrompt?: string) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
-
-      // 先回滚文件系统快照（如果有）
-      if (snapshotPath) {
-        try {
-          await wsRef.current.request("fs.snapshotRestore", { taskId, snapshotPath });
-        } catch {
-          // 回滚失败不阻塞重试
-        }
-      }
 
       // 重置 session 状态（前端立即清理，等待新 session 事件覆盖）
       setSessions((prev) => ({
@@ -519,7 +530,27 @@ export function useAgent(taskId: string | null) {
             if (lastTurn && !lastTurn.textContent && finalText) {
               lastTurn.textContent = finalText;
             }
-            return {
+            console.log("[useAgent] agent_end building newState, step:", step, "s.messages.length:", s.messages?.length, "s.turns.length:", s.turns?.length, "finalText.length:", finalText?.length);
+            // 补充 messages：如果 messages 中 user 消息数量少于 turns 数量，
+            // 说明 steer 添加的 user 消息未被正确累积，从 steerInputsRef 中提取
+            const turnCount = updatedTurns.length;
+            const userMsgCount = s.messages.filter((m) => m.role === "user").length;
+            const expectedUserCount = turnCount;
+            let messages = s.messages;
+            if (userMsgCount < expectedUserCount) {
+              const missing = expectedUserCount - userMsgCount;
+              console.log("[useAgent] agent_end 补充 user 消息, missing:", missing);
+              const filled = [...s.messages];
+              const steerInputs = steerInputsRef.current[step] || [];
+              for (let i = 0; i < missing; i++) {
+                const userContent = steerInputs[i];
+                if (userContent) {
+                  filled.push({ role: "user" as const, content: userContent });
+                }
+              }
+              messages = filled;
+            }
+            const newState = {
               ...prev,
               [step]: {
                 ...s,
@@ -527,7 +558,7 @@ export function useAgent(taskId: string | null) {
                 completed: true,
                 summary,
                 messages: [
-                  ...s.messages,
+                  ...messages,
                   ...(finalText
                     ? [{ role: "assistant" as const, content: finalText }]
                     : []),
@@ -538,6 +569,13 @@ export function useAgent(taskId: string | null) {
                 summarizationStatus: "pending",
               },
             };
+            // 在 setSessions 完成后通知外部保存
+            // 使用 queueMicrotask 确保 state 已更新
+            queueMicrotask(() => {
+              console.log("[useAgent] agent_end queueMicrotask, step:", step, "has callback:", !!onSessionCompleteRef.current, "turns:", newState[step]?.turns?.length);
+              onSessionCompleteRef.current?.(step, newState);
+            });
+            return newState;
           }
 
           case "turn_start": {
@@ -771,5 +809,9 @@ export function useAgent(taskId: string | null) {
     browseDir,
     /** 获取底层 WebSocket 实例，用于直接发送请求（如 git 操作） */
     getWs: () => wsRef.current,
+    /** 注册轮次完成回调（接收 step 和最新的 sessions 快照） */
+    setOnSessionComplete: (cb: ((step: string, sessions: Record<string, SessionState>) => void) | null) => {
+      onSessionCompleteRef.current = cb;
+    },
   } as const;
 }

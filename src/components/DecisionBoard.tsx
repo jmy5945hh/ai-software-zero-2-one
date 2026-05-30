@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   Bot,
   ChevronRight,
@@ -45,7 +45,27 @@ type DecisionBoardProps = {
   onContinue: () => void;
   onPreview: (content: DrawerContent) => void;
   agentSessions: Record<string, SessionState>;
-  agentSteer: (step: string, text: string) => void;
+  restoredSessions: Record<string, {
+    messages: Array<{ role: "user" | "assistant"; content: string }>;
+    turns: Array<{
+      id: string;
+      index: number;
+      status: "running" | "done";
+      textContent: string;
+      thinking: string;
+      toolCalls: Array<{
+        id: string;
+        name: string;
+        status: "running" | "done" | "error";
+        category: string;
+        input: string;
+        result?: string;
+      }>;
+    }>;
+    summary: string;
+    summarizationResult?: import("../data/types").AgentSummary | null;
+  }>;
+  agentSteer: (step: string, text: string, intent?: string) => void;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion: (step: string) => Promise<void>;
@@ -58,6 +78,7 @@ export function DecisionBoard({
   onContinue,
   onPreview,
   agentSessions,
+  restoredSessions,
   agentSteer,
   agentPrompt,
   agentAnswerQuestion,
@@ -67,7 +88,13 @@ export function DecisionBoard({
   const step = workflow[state.stepIndex];
   const stepKey = useStepKey(state.stepIndex);
   const content = getContentForStage(state.stepIndex);
-  const [activeTab, setActiveTab] = useState<BoardTab>("delivery");
+  const hasRestoredHistory = useMemo(
+    () => Object.values(restoredSessions).some((s) => s.messages.length > 0),
+    [restoredSessions],
+  );
+  const [activeTab, setActiveTab] = useState<BoardTab>(
+    hasRestoredHistory ? "trajectory" : "delivery",
+  );
   const [pendingAutoMessage, setPendingAutoMessage] = useState<string | null>(null);
   const [scrollToRound, setScrollToRound] = useState<number | null>(null);
 
@@ -141,6 +168,7 @@ export function DecisionBoard({
             agentAnswerQuestion={agentAnswerQuestion}
             agentContinueQuestion={agentContinueQuestion}
             agentSession={agentSessions[step.id]}
+            restoredSession={restoredSessions[step.id]}
             isAgentConnected={isAgentConnected}
             pendingAutoMessage={pendingAutoMessage}
             onConsumeAutoMessage={() => setPendingAutoMessage(null)}
@@ -209,7 +237,7 @@ function DeliveryCollabTab({
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion: (step: string) => Promise<void>;
   agentPrompt: (step: string, text: string) => Promise<void>;
-  agentSteer: (step: string, text: string) => void;
+  agentSteer: (step: string, text: string, intent?: string) => void;
 }) {
   const agentCompleted = isAgentConnected && agentSession?.completed && !agentSession?.isStreaming;
   const agentWorking = isAgentConnected && agentSession && !agentCompleted;
@@ -519,7 +547,7 @@ function TodoSection({
   onPatch: (patch: Partial<AppState>) => void;
   stepId: string;
   agentPrompt: (step: string, text: string) => Promise<void>;
-  agentSteer: (step: string, text: string) => void;
+  agentSteer: (step: string, text: string, intent?: string) => void;
   onContinue: () => void;
   stepIndex: number;
 }) {
@@ -554,7 +582,7 @@ function TodoSection({
       // 如果有补充的业务背景，先通过 agentSteer 发送，然后继续对话（不进入下一阶段）
       const contextText = contextValue.trim();
       if (contextText) {
-        agentSteer(stepId, contextText);
+        agentSteer(stepId, contextText, intent);
         // 有补充输入时不进入下一阶段，而是继续与 Agent 对话
         const lines = todos.map((todo, ti) => {
           const answer = todoAnswers[ti];
@@ -763,7 +791,7 @@ function ContextSubmitInput({
   placeholder,
 }: {
   stepId: string;
-  agentSteer: (step: string, text: string) => void;
+  agentSteer: (step: string, text: string, intent?: string) => void;
   placeholder: string;
 }) {
   const [input, setInput] = useState("");
@@ -825,6 +853,7 @@ function TrajectoryChatTab({
   agentAnswerQuestion,
   agentContinueQuestion,
   agentSession,
+  restoredSession,
   isAgentConnected,
   pendingAutoMessage,
   onConsumeAutoMessage,
@@ -836,11 +865,32 @@ function TrajectoryChatTab({
   trajectory: TrajectoryTurn[];
   stepIndex: number;
   stepId: string;
-  agentSteer: (step: string, text: string) => void;
+  agentSteer: (step: string, text: string, intent?: string) => void;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion: (step: string) => Promise<void>;
   agentSession?: SessionState;
+  restoredSession?: {
+    messages: Array<{ role: "user" | "assistant"; content: string }>;
+    turns: Array<{
+      id: string;
+      index: number;
+      status: "running" | "done";
+      textContent: string;
+      thinking: string;
+      toolCalls: Array<{
+        id: string;
+        name: string;
+        status: "running" | "done" | "error";
+        category: string;
+        input: string;
+        result?: string;
+        outputFragments: string[];
+      }>;
+    }>;
+    summary: string;
+    summarizationResult?: import("../data/types").AgentSummary | null;
+  };
   isAgentConnected: boolean;
   pendingAutoMessage: string | null;
   onConsumeAutoMessage: () => void;
@@ -861,7 +911,7 @@ function TrajectoryChatTab({
   const displayTurns = buildDisplayTurns(agentSession, trajectory, isAgentConnected);
 
   // 从所有轮次中收集事件时间线（扁平化）
-  const timeline = useTimeline(displayTurns, isAgentConnected, agentSession, initialPrompts);
+  const timeline = useTimeline(displayTurns, isAgentConnected, agentSession, initialPrompts, restoredSession);
 
   // 将事件按轮次分组
   const roundGroups = useRoundGroups(timeline);
@@ -917,7 +967,7 @@ function TrajectoryChatTab({
       return; // 不清空输入，让用户知道未连接
     }
     setInput("");
-    agentSteer(stepId, text);
+    agentSteer(stepId, text, intent);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -963,19 +1013,27 @@ function TrajectoryChatTab({
             <div className="trajectory-task-desc">
               <div className="task-desc-header">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                <span>用户输入</span>
+                <span>任务描述</span>
               </div>
               <p className="task-desc-text">{intent}</p>
             </div>
           )}
 
-          {displayTurns.length === 0 && !isAgentConnected && (
+          {/* 从历史记录恢复的对话 — 已通过 timeline 按轮次渲染 */}
+          {restoredSession && restoredSession.summary && (
+            <div className="restored-history-summary">
+              <span className="detail-label">步骤总结</span>
+              <p>{restoredSession.summary}</p>
+            </div>
+          )}
+
+          {displayTurns.length === 0 && timeline.length === 0 && !isAgentConnected && (
             <div className="trajectory-empty">
               <Bot size={24} />
               <p>连接 Agent 后将在此展示实时工作轨迹</p>
             </div>
           )}
-          {displayTurns.length === 0 && isAgentConnected && (
+          {displayTurns.length === 0 && timeline.length === 0 && isAgentConnected && (
             <div className="trajectory-waiting">
               <Loader2 size={20} className="spin-icon" />
               <p>等待 Agent 开始工作...</p>
@@ -1254,8 +1312,100 @@ function useTimeline(
   isAgentConnected: boolean,
   agentSession?: SessionState,
   initialPrompts?: Record<string, string>,
+  restoredSession?: StepSessionSnapshot,
 ): TimelineEvent[] {
   const events: TimelineEvent[] = [];
+
+  // 如果存在 restoredSession，将历史消息注入 timeline 作为初始事件
+  if (restoredSession) {
+    const restoredTurns = restoredSession.turns || [];
+    const restoredMsgs = restoredSession.messages || [];
+
+    if (restoredTurns.length > 0) {
+      // 从 turns 构建 timeline，不再依赖 messages（messages 可能不完整）。
+      // 每个 turn 前插入对应的 user 消息（从 messages 中按顺序取，跳过第 0 条初始 prompt）。
+      // 如果 messages 中 user 消息不足，用占位文本。
+      const userMsgs = restoredMsgs.filter((m) => m.role === "user").slice(1);
+
+      for (let ti = 0; ti < restoredTurns.length; ti++) {
+        const turn = restoredTurns[ti];
+        // 第一个 turn 前没有 user 消息（初始 prompt 已在"任务描述"中展示）
+        if (ti > 0) {
+          // 优先从 messages 中取，其次从 turn.userInput 中取
+          const userContent = ti - 1 < userMsgs.length
+            ? userMsgs[ti - 1].content
+            : (turn as any).userInput || "";
+          if (userContent) {
+            events.push({
+              type: "user",
+              id: `restored-user-${ti}`,
+              content: userContent,
+            });
+          }
+        }
+        events.push({
+          type: "round-divider",
+          id: `restored-div-${turn.id}`,
+          roundIndex: ti + 1,
+          status: "done",
+        });
+        if (turn.thinking) {
+          events.push({
+            type: "thought",
+            id: `restored-thought-${turn.id}`,
+            content: turn.thinking,
+            status: "done",
+          });
+        }
+        for (const tc of turn.toolCalls) {
+          events.push({
+            type: "tool",
+            id: `restored-tool-${tc.id}`,
+            toolCall: tc,
+          });
+        }
+        // 历史轮次中的 ask_user_question 回答
+        for (const tc of turn.toolCalls) {
+          if (tc.name === "ask_user_question" && tc.status === "done" && tc.result) {
+            events.push({
+              type: "user",
+              id: `restored-answer-${tc.id}`,
+              content: tc.result,
+            });
+          }
+        }
+        if (turn.textContent) {
+          events.push({
+            type: "message",
+            id: `restored-msg-${turn.id}`,
+            content: turn.textContent,
+            status: "done",
+          });
+        }
+      }
+    } else if (restoredTurns.length === 0) {
+      // 没有 turns，退回到用 messages 构建简单事件
+      for (const msg of restoredMsgs) {
+        if (msg.role === "user") {
+          events.push({
+            type: "user",
+            id: `restored-user-${events.length}`,
+            content: msg.content,
+          });
+        } else {
+          events.push({
+            type: "message",
+            id: `restored-msg-${events.length}`,
+            content: msg.content,
+            status: "done",
+          });
+        }
+      }
+    }
+  }
+
+  // 记录历史轮次数量，用于实时轮次的 roundIndex 偏移
+  const restoredRoundCount = restoredSession ? (restoredSession.turns || []).length : 0;
 
   // 收集所有系统自动生成的 prompt 文本，用于过滤
   const systemPromptSet = new Set(Object.values(initialPrompts || {}));
@@ -1268,18 +1418,21 @@ function useTimeline(
   }
 
   // 从 session.messages 中提取所有 user 消息（不过滤），用于按原始顺序匹配 turn
-  const allUserMessages = agentSession?.messages.filter((m) => m.role === "user") || [];
+  // 无历史恢复时：第 0 条 user 是初始 prompt（已在"任务描述"中展示），跳过
+  // 有历史恢复时：agentSession 是新创建的，messages 中不包含初始 prompt，不过滤
+  const allUserMessages = (agentSession?.messages.filter((m) => m.role === "user") || []);
+  const allUserMessagesSliced = restoredSession ? allUserMessages : allUserMessages.slice(1);
 
   // 按顺序匹配：第 N 条 user 消息（不过滤）→ 第 N 个 turn 之前
   // 但只展示 shouldShowUserMessage 为 true 的消息
-  let userMsgIdx = 0;
+  let userMsgIdx = 0; // 始终从 0 开始，allUserMessagesSliced 已过滤历史消息
 
   for (let ri = 0; ri < turns.length; ri++) {
     const turn = turns[ri];
 
     // 在每个轮次前插入用户消息（按 messages 原始顺序匹配）
-    if (userMsgIdx < allUserMessages.length) {
-      const msg = allUserMessages[userMsgIdx];
+    if (userMsgIdx < allUserMessagesSliced.length) {
+      const msg = allUserMessagesSliced[userMsgIdx];
       if (shouldShowUserMessage(msg.content)) {
         events.push({
           type: "user",
@@ -1294,7 +1447,7 @@ function useTimeline(
     events.push({
       type: "round-divider",
       id: `div-${turn.id}`,
-      roundIndex: ri + 1,
+      roundIndex: ri + 1 + restoredRoundCount,
       status: turn.status,
     });
 
@@ -1356,8 +1509,8 @@ function useTimeline(
   }
 
   // 剩余未被消费的用户消息（如 steer 后 agent 尚未产生新 turn）
-  while (userMsgIdx < allUserMessages.length) {
-    const msg = allUserMessages[userMsgIdx];
+  while (userMsgIdx < allUserMessagesSliced.length) {
+    const msg = allUserMessagesSliced[userMsgIdx];
     if (shouldShowUserMessage(msg.content)) {
       events.push({
         type: "user",
@@ -1373,7 +1526,7 @@ function useTimeline(
     events.push({
       type: "round-divider",
       id: "div-streaming",
-      roundIndex: 1,
+      roundIndex: 1 + restoredRoundCount,
       status: "running",
     });
     events.push({
@@ -1695,7 +1848,6 @@ function TimelineEventV2({
           <div className="tl-user-card">
             <div className="tl-user-card-header">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-              <span>用户输入</span>
             </div>
             <p className="tl-user-card-text">{event.content}</p>
           </div>

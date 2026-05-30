@@ -2,11 +2,11 @@ import http from "http";
 import path from "path";
 import fs from "fs";
 import { WebSocketServer, type WebSocket } from "ws";
-import { execSync } from "child_process";
 import { AgentRunner } from "./AgentRunner";
 import { SessionPool } from "./SessionPool";
 import { SummaryStore } from "./SummaryStore";
 import { WorkspaceManager } from "./WorkspaceManager";
+import { SessionStore } from "./SessionStore";
 import { resolveQuestion, continueQuestion } from "./customTools";
 import type { WsMessage, AgentEvent } from "./protocol";
 
@@ -17,6 +17,7 @@ const runner = new AgentRunner("./server/models.json");
 const pool = new SessionPool();
 const summaryStore = new SummaryStore();
 const workspace = new WorkspaceManager("./server/workspaces");
+const sessionStore = new SessionStore();
 
 const server = http.createServer((req, res) => {
   // 健康检查端点（前端连通性验证）
@@ -106,6 +107,30 @@ function extractAgentSummary(messages: unknown): string {
       .join("");
   }
   return "";
+}
+
+/**
+ * 确保 session 的事件订阅指向当前 WebSocket 连接。
+ * WebSocket 重连后，旧的订阅会失效，需要重新注册。
+ */
+function ensureSubscription(
+  pool: SessionPool,
+  taskId: string,
+  step: string,
+  ws: WebSocket,
+  msgId: string,
+): void {
+  // 先取消旧的订阅
+  pool.clearUnsub(taskId, step);
+  // 重新注册
+  const session = pool.get(taskId, step);
+  if (!session) return;
+  const unsub = session.subscribe((sdkEvent) => {
+    const event = mapSdkEvent(sdkEvent);
+    if (!event) return;
+    ws.send(JSON.stringify({ type: "event", id: msgId, event }));
+  });
+  pool.setUnsub(taskId, step, unsub);
 }
 
 function mapSdkEvent(raw: unknown): AgentEvent | null {
@@ -261,6 +286,10 @@ wss.on("connection", (ws: WebSocket) => {
           console.log("[session.prompt] userPrompt=%.20s systemPrompt=N/A step=%s", text.slice(0, 20), step);
           const session = pool.get(taskId, step);
           if (!session) throw new Error(`Session not found: ${taskId}:${step}`);
+
+          // WebSocket 可能已重连，重新注册订阅确保事件能转发到当前连接
+          ensureSubscription(pool, taskId, step, ws, msg.id);
+
           await session.prompt(text);
           ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
           break;
@@ -273,9 +302,41 @@ wss.on("connection", (ws: WebSocket) => {
             text: string;
           };
           console.log("[session.steer] userPrompt=%.20s systemPrompt=N/A step=%s", text.slice(0, 20), step);
-          const session = pool.get(taskId, step);
-          if (!session) throw new Error(`Session not found: ${taskId}:${step}`);
-          session.steer(text);
+          let session = pool.get(taskId, step);
+          if (!session) {
+            // 自动创建 session（从历史恢复后首次 steer）
+            const intent = (msg.params as { intent?: string }).intent || "";
+            const extPath = (msg.params as { workspacePath?: string }).workspacePath;
+            let workspaceDir: string;
+            if (extPath) {
+              workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
+            } else {
+              workspaceDir = workspace.initWorkspace(taskId, intent);
+            }
+            session = await runner.createSession(taskId, step, workspaceDir);
+            pool.set(taskId, step, session);
+          }
+
+          // WebSocket 可能已重连，重新注册订阅确保事件能转发到当前连接
+          ensureSubscription(pool, taskId, step, ws, msg.id);
+
+          // 关键修复：session.steer() 仅入队，不触发模型执行。
+          // 当 agent 空闲时，入队的消息永远不会被处理。
+          // 因此：streaming 中 → 用 steer() 入队中断；空闲时 → 用 prompt() 直接触发新轮次。
+          console.log(`[session.steer] isStreaming=${session.isStreaming} step=${step} text=%.20s`, text.slice(0, 20));
+          if (session.isStreaming) {
+            console.log(`[session.steer] → steer() (queue during streaming)`);
+            session.steer(text);
+          } else {
+            console.log(`[session.steer] → prompt() (idle, start new run)`);
+            try {
+              await session.prompt(text);
+              console.log(`[session.steer] prompt() completed successfully`);
+            } catch (err) {
+              console.error(`[session.steer] prompt() FAILED:`, err);
+            }
+          }
+
           ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
           break;
         }
@@ -286,9 +347,38 @@ wss.on("connection", (ws: WebSocket) => {
             step: string;
             text: string;
           };
-          const session = pool.get(taskId, step);
-          if (!session) throw new Error(`Session not found: ${taskId}:${step}`);
-          session.followUp(text);
+          let session = pool.get(taskId, step);
+          if (!session) {
+            // 自动创建 session（从历史恢复后首次 followUp）
+            const intent = (msg.params as { intent?: string }).intent || "";
+            const extPath = (msg.params as { workspacePath?: string }).workspacePath;
+            let workspaceDir: string;
+            if (extPath) {
+              workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
+            } else {
+              workspaceDir = workspace.initWorkspace(taskId, intent);
+            }
+            session = await runner.createSession(taskId, step, workspaceDir);
+            pool.set(taskId, step, session);
+          }
+
+          // WebSocket 可能已重连，重新注册订阅确保事件能转发到当前连接
+          ensureSubscription(pool, taskId, step, ws, msg.id);
+
+          // 同 steer：followUp() 仅入队，空闲时需用 prompt() 触发执行
+          console.log(`[session.followUp] isStreaming=${session.isStreaming} step=${step} text=%.20s`, text.slice(0, 20));
+          if (session.isStreaming) {
+            console.log(`[session.followUp] → followUp() (queue during streaming)`);
+            session.followUp(text);
+          } else {
+            console.log(`[session.followUp] → prompt() (idle, start new run)`);
+            try {
+              await session.prompt(text);
+              console.log(`[session.followUp] prompt() completed successfully`);
+            } catch (err) {
+              console.error(`[session.followUp] prompt() FAILED:`, err);
+            }
+          }
           ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
           break;
         }
@@ -475,68 +565,31 @@ wss.on("connection", (ws: WebSocket) => {
           break;
         }
 
-        // ── 文件系统快照保存 ────────────────
-        // 使用纯 rsync 复制，不依赖 git commit，避免在用户 git 历史中留下痕迹
-        case "fs.snapshotSave": {
-          const { taskId, label } = msg.params as {
-            taskId: string;
-            label: string;
-          };
-          const wsDir = workspace.getDir(taskId);
-          const snapshotsDir = path.join(wsDir, ".snapshots");
-          const snapshotPath = path.join(snapshotsDir, label);
-          let path_: string | null = null;
-          try {
-            fs.mkdirSync(snapshotsDir, { recursive: true });
-            // 如果快照已存在，先删除再重新创建（确保是最新状态）
-            if (fs.existsSync(snapshotPath)) {
-              fs.rmSync(snapshotPath, { recursive: true, force: true });
-            }
-            fs.mkdirSync(snapshotPath, { recursive: true });
-            // 用 rsync 将 workspace 内容复制到快照目录
-            // --delete 确保快照中多余的文件被删除（首次创建时无意义，但保持一致性）
-            // -a 保持权限、符号链接等
-            // --exclude=.git 和 --exclude=.snapshots 避免复制 git 目录和其他快照
-            execSync(
-              `rsync -a --delete --exclude=.git --exclude=.snapshots "${wsDir}/" "${snapshotPath}/" || test $? -eq 24`,
-              { stdio: "pipe", shell: true },
-            );
-            path_ = snapshotPath;
-            console.log(`[ws] snapshotSave: ${taskId}:${label} -> ${snapshotPath}`);
-          } catch (e) {
-            console.error(`[ws] snapshotSave error for ${taskId}:${label}:`, e);
-          }
-          ws.send(
-            JSON.stringify({ type: "response", id: msg.id, result: { path: path_ } }),
-          );
+        // ── 会话记录 ──────────────────────
+        case "session.saveRecord": {
+          const record = msg.params as Record<string, unknown>;
+          sessionStore.save(record as import("./SessionStore").SessionRecord);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
           break;
         }
 
-        // ── 文件系统快照恢复 ────────────────
-        case "fs.snapshotRestore": {
-          const { taskId, snapshotPath } = msg.params as {
-            taskId: string;
-            snapshotPath: string;
-          };
-          const wsDir = workspace.getDir(taskId);
-          let success = false;
-          try {
-            console.log(`[ws] snapshotRestore: ${taskId} <- ${snapshotPath}`);
-            // 用 rsync 将快照内容同步回 workspace 目录
-            // --delete 确保 workspace 中多余的文件被删除
-            // -a 保持权限、符号链接等
-            // --exclude=.git 和 --exclude=.snapshots 避免覆盖 workspace 的 git 目录和其他快照
-            execSync(
-              `rsync -a --delete --exclude=.git --exclude=.snapshots "${snapshotPath}/" "${wsDir}/" || test $? -eq 24`,
-              { stdio: "pipe", shell: true },
-            );
-            success = true;
-          } catch (e) {
-            console.error(`[ws] snapshotRestore error for ${taskId}:`, e);
-          }
-          ws.send(
-            JSON.stringify({ type: "response", id: msg.id, result: { success } }),
-          );
+        case "session.loadRecord": {
+          const { taskId } = msg.params as { taskId: string };
+          const record = sessionStore.load(taskId);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: { record } }));
+          break;
+        }
+
+        case "session.listRecords": {
+          const records = sessionStore.list();
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: { records } }));
+          break;
+        }
+
+        case "session.deleteRecord": {
+          const { taskId } = msg.params as { taskId: string };
+          sessionStore.delete(taskId);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
           break;
         }
 

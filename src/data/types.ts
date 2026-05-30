@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 
 // ── 视图状态 ────────────────────────────────
 export type View = "home" | "workspace";
-export type HomeTab = "tasks" | "build";
+export type HomeTab = "tasks" | "build" | "history";
 
 // ── 任务卡片 ────────────────────────────────
 export type ScopeChoice = "mvp" | "governed" | "full";
@@ -103,8 +103,28 @@ export type AppState = {
   todoAnswers: Record<number, string | string[]>;
   /** 各步骤的初始提示词（用于重试时复用 user prompt） */
   initialPrompts: Record<string, string>;
-  /** 各步骤的文件系统快照路径（用于重试时回滚代码） */
-  snapshotPaths: Record<string, string>;
+  /** 从历史记录恢复的会话快照（stepId → 会话数据），用于继续执行时恢复上下文 */
+  restoredSessions: Record<string, {
+    messages: Array<{ role: "user" | "assistant"; content: string }>;
+    turns: Array<{
+      id: string;
+      index: number;
+      status: "running" | "done";
+      textContent: string;
+      thinking: string;
+      userInput?: string;
+      toolCalls: Array<{
+        id: string;
+        name: string;
+        status: "running" | "done" | "error";
+        category: string;
+        input: string;
+        result?: string;
+      }>;
+    }>;
+    summary: string;
+    summarizationResult?: AgentSummary | null;
+  }>;
 };
 
 // ── 抽屉预览 ────────────────────────────────

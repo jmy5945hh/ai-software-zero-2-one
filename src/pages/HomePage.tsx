@@ -1,8 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStoredState } from "../hooks/useStoredState";
 import { createDefaultState } from "../data";
 import type { AppState, DrawerContent, HomeTab } from "../data/types";
+import { useSessionRecords } from "../hooks/useSessionRecords";
+import type { SessionRecord } from "../hooks/useSessionRecords";
 
 import {
   Sparkles,
@@ -10,11 +12,13 @@ import {
   ListTodo,
   UserCircle,
   FileText,
+  History,
 } from "lucide-react";
 
 import { HomeTaskBoard } from "../components/HomeTaskBoard";
 import { TypewriterText } from "../components/TypewriterText";
 import { WorkspaceSelector } from "../components/WorkspaceSelector";
+import { SessionHistoryPanel } from "../components/SessionHistoryPanel";
 import { useAgent } from "../agent";
 
 /**
@@ -27,6 +31,11 @@ export function HomePage() {
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
   // docs 读取状态与错误提示
   const [docsError, setDocsError] = useState<string | null>(null);
+  // 会话历史
+  const sessionRecords = useSessionRecords();
+
+  // 从历史记录恢复时，需要等待 Agent 连接就绪
+  const [pendingRecord, setPendingRecord] = useState<SessionRecord | null>(null);
 
   // Agent 连接用于文件浏览
   const taskIdForPicker = showWorkspacePicker && state.createdAt
@@ -108,6 +117,36 @@ export function HomePage() {
   const updateHomeTab = (tab: HomeTab) =>
     patchState({ homeTab: tab, previewTaskId: null });
 
+  // ── 从历史记录继续执行 ──
+  const handleContinueFromHistory = useCallback(
+    (record: SessionRecord, followUpPrompt?: string) => {
+      // 将历史记录恢复到 AppState
+      setState((previous) => ({
+        ...previous,
+        intent: followUpPrompt
+          ? `${record.intent}\n\n--- 补充需求 ---\n${followUpPrompt}`
+          : record.intent,
+        workspacePath: record.workspacePath,
+        stepIndex: record.stepIndex,
+        activeStage: record.activeStage as AppState["activeStage"],
+        scope: record.scope as AppState["scope"],
+        selectedModules: record.selectedModules,
+        notes: record.notes,
+        todoAnswers: record.todoAnswers,
+        initialPrompts: record.initialPrompts,
+        codeConfirmed: record.codeConfirmed,
+        fixApproved: record.fixApproved,
+        releaseApproved: record.releaseApproved,
+        qualityPassed: record.qualityPassed,
+        createdAt: record.createdAt,
+        restoredSessions: record.stepSessions || {},
+        view: "workspace",
+      }));
+      navigate("/workspace");
+    },
+    [setState, navigate],
+  );
+
   const startTaskFromIntent = () => {
     if (!state.intent.trim()) return;
     requestStartTask(state.intent.trim(), state.notes, null);
@@ -166,11 +205,19 @@ export function HomePage() {
               <Sparkles size={18} />
               想法实现
             </button>
+            <button
+              className={`home-tab ${state.homeTab === "history" ? "active" : ""}`}
+              type="button"
+              onClick={() => updateHomeTab("history")}
+            >
+              <History size={18} />
+              历史会话
+            </button>
           </div>
 
           {state.homeTab === "tasks" ? (
             <HomeTaskBoard state={state} setState={setState} onPatch={patchState} onRequestStartTask={requestStartTask} onBrowseDir={agentAvailable ? agent.browseDir : undefined} />
-          ) : (
+          ) : state.homeTab === "build" ? (
             <div className="launch-panel">
               <label htmlFor="intent">Hi, 今天想创造点什么？</label>
               <textarea
@@ -191,6 +238,14 @@ export function HomePage() {
                 <span>状态会自动保存到浏览器 storage</span>
               </div>
             </div>
+          ) : (
+            <SessionHistoryPanel
+              records={sessionRecords.records}
+              loading={sessionRecords.loading}
+              onContinue={handleContinueFromHistory}
+              onDelete={sessionRecords.deleteRecord}
+              onRefresh={sessionRecords.refreshRecords}
+            />
           )}
         </section>
       </main>

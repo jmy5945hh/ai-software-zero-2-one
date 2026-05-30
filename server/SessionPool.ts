@@ -35,6 +35,15 @@ export class SessionPool {
     if (entry) entry.unsub = unsub;
   }
 
+  /** 清除事件订阅（取消旧订阅，保留 session） */
+  clearUnsub(taskId: string, step: string): void {
+    const entry = this.pool.get(this.key(taskId, step));
+    if (entry) {
+      entry.unsub?.();
+      entry.unsub = null;
+    }
+  }
+
   /** 销毁指定 session */
   dispose(taskId: string, step: string): void {
     const k = this.key(taskId, step);

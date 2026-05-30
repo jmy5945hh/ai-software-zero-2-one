@@ -16,8 +16,11 @@ export type AgentMethod =
   | "workspace.tree"
   | "workspace.readFile"
   | "workspace.browse"
-  | "fs.snapshotSave"
-  | "fs.snapshotRestore";
+  // ── 会话记录 ──
+  | "session.saveRecord"
+  | "session.loadRecord"
+  | "session.listRecords"
+  | "session.deleteRecord";
 
 /** 所有 WebSocket 消息统一格式 */
 export type WsMessage =

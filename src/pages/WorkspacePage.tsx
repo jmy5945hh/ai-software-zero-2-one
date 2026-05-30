@@ -5,7 +5,7 @@ import { useAgent } from "../agent";
 import { titleFromIntent, workflow } from "../data";
 import type { DrawerContent } from "../data/types";
 import type { ConnectionStatus } from "../agent/types";
-import { snapshotSave } from "../utils/snapshot";
+import { useSessionRecords } from "../hooks/useSessionRecords";
 
 import {
   Wifi,
@@ -45,9 +45,97 @@ export function WorkspacePage() {
   }, [state.createdAt]);
 
   const agent = useAgent(taskId);
+
+  // ── 会话记录自动保存 ──
+  const sessionRecords = useSessionRecords();
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 记录每个 step 上次保存时的 completed 状态，用于检测轮次完成
+  const lastCompletedRef = useRef<Record<string, boolean>>({});
+
+  // 收集各步骤的 Agent 总结摘要
+  const stepSummaries = useMemo(() => {
+    const summaries: Record<string, string> = {};
+    for (const [stepId, session] of Object.entries(agent.sessions)) {
+      if (session.summarizationResult?.brief) {
+        summaries[stepId] = session.summarizationResult.brief;
+      } else if (session.summary) {
+        summaries[stepId] = session.summary.slice(0, 100);
+      }
+    }
+    return summaries;
+  }, [agent.sessions]);
+
+  const handleSessionComplete = useCallback((step: string, sessionsSnapshot: Record<string, any>) => {
+    // 轮次完成时立即保存，确保每轮数据不遗漏
+    // 使用回调传入的 sessionsSnapshot（最新的 state，不受 React 批处理影响）
+    console.log("[WorkspacePage] handleSessionComplete, step:", step, "turns:", sessionsSnapshot[step]?.turns?.length, "messages:", sessionsSnapshot[step]?.messages?.length);
+    if (taskId && state.intent) {
+      sessionRecords.saveRecord(state, taskId, stepSummaries, sessionsSnapshot, state.restoredSessions);
+    }
+  }, [taskId, state, stepSummaries, sessionRecords]);
+
+  // 注册轮次完成回调
+  useEffect(() => {
+    agent.setOnSessionComplete(handleSessionComplete);
+    return () => agent.setOnSessionComplete(null);
+  }, [agent, handleSessionComplete]);
+
   const isAgentConnected = agent.connectionStatus === "connected";
   const connectionStatus = agent.connectionStatus;
   const connectionQuality = agent.connectionQuality;
+
+  // 轮次完成时立即保存（agent_end 触发后 sessions 更新），确保每轮数据不遗漏
+  useEffect(() => {
+    if (!taskId || !state.intent) return;
+
+    for (const [stepId, session] of Object.entries(agent.sessions)) {
+      const wasCompleted = lastCompletedRef.current[stepId];
+      const nowCompleted = session.completed;
+      // 检测到从 false → true（轮次刚完成），立即保存
+      if (!wasCompleted && nowCompleted) {
+        lastCompletedRef.current[stepId] = true;
+        sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
+      }
+      if (!nowCompleted) {
+        lastCompletedRef.current[stepId] = false;
+      }
+    }
+  }, [agent.sessions, taskId, state, stepSummaries, sessionRecords]);
+
+  // 关键状态变化时自动保存会话记录（防抖 2s，作为兜底）
+  // 包含 agent.sessions 以捕获对话消息和总结
+  useEffect(() => {
+    if (!taskId || !state.intent) return;
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = setTimeout(() => {
+      sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
+    }, 2000);
+
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [
+    state.stepIndex,
+    state.activeStage,
+    state.scope,
+    state.selectedModules,
+    state.notes,
+    state.todoAnswers,
+    state.codeConfirmed,
+    state.fixApproved,
+    state.releaseApproved,
+    state.qualityPassed,
+    state.workspacePath,
+    taskId,
+    stepSummaries,
+    agent.sessions,
+  ]);
 
   const taskTitle = useMemo(
     () => titleFromIntent(state.intent),
@@ -78,12 +166,15 @@ export function WorkspacePage() {
 
   // ── Agent session 生命周期 ──
   const sessionInitRef = useRef(false);
+
+  // 正常首次启动（非恢复）
   useEffect(() => {
     if (
       isAgentConnected &&
       state.stepIndex === 0 &&
       !sessionInitRef.current &&
-      state.intent
+      state.intent &&
+      Object.keys(state.restoredSessions).length === 0
     ) {
       sessionInitRef.current = true;
 
@@ -92,20 +183,9 @@ export function WorkspacePage() {
         initialPrompts: { ...state.initialPrompts, intent: intentPrompt },
       });
 
-      // 在 intent step 的 agent 开始工作前，先保存当前代码状态的文件系统快照
+      // 在 intent step 的 agent 开始工作前，先创建 session
       const startIntent = async () => {
-        // 先创建 session（确保 workspace 已初始化）
         await agent.createSession("intent", state.intent, state.workspacePath);
-        // workspace 就绪后保存文件系统快照
-        const ws = agent.getWs();
-        if (ws && taskId) {
-          const snapshotPath = await snapshotSave(ws, taskId, "intent");
-          if (snapshotPath) {
-            patchState({
-              snapshotPaths: { ...state.snapshotPaths, intent: snapshotPath },
-            });
-          }
-        }
         await agent.prompt("intent", intentPrompt);
         agent.getFileTree();
       };
@@ -126,17 +206,6 @@ export function WorkspacePage() {
         state.selectedModules,
       );
 
-      // 在下一个 step 的 agent 开始工作前，保存当前代码状态的文件系统快照
-      const ws = agent.getWs();
-      if (ws) {
-        const snapshotPath = await snapshotSave(ws, taskId, nextStep.id);
-        if (snapshotPath) {
-          patchState({
-            snapshotPaths: { ...state.snapshotPaths, [nextStep.id]: snapshotPath },
-          });
-        }
-      }
-
       // 保存初始提示词，供重试时复用
       patchState({
         initialPrompts: { ...state.initialPrompts, [nextStep.id]: promptText },
@@ -153,7 +222,7 @@ export function WorkspacePage() {
       codeConfirmed: state.codeConfirmed || state.stepIndex >= 2,
     });
     window.scrollTo({ top: 0 });
-  }, [state.stepIndex, state.intent, state.scope, state.selectedModules, state.initialPrompts, state.snapshotPaths, isAgentConnected, taskId, agent, patchState, state.codeConfirmed]);
+  }, [state.stepIndex, state.intent, state.scope, state.selectedModules, state.initialPrompts, isAgentConnected, taskId, agent, patchState, state.codeConfirmed]);
 
   const handleStepClick = (index: number) => {
     patchState({
@@ -255,6 +324,7 @@ export function WorkspacePage() {
               onContinue={continueTask}
               onPreview={openDrawer}
               agentSessions={agent.sessions}
+              restoredSessions={state.restoredSessions}
               agentSteer={agent.steer}
               agentPrompt={agent.prompt}
               agentAnswerQuestion={agent.answerQuestion}

@@ -61,6 +61,8 @@ export type Turn = {
   /** 思考过程片段 */
   thinking: string;
   toolCalls: ToolCallRecord[];
+  /** 触发该轮的 user 输入（steer/followUp 时记录） */
+  userInput?: string;
 };
 
 /** 单个 Session 的状态快照（前端维护） */
