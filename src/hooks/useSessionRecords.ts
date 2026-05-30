@@ -17,6 +17,8 @@ export type StepSessionSnapshot = {
     thinking: string;
     /** 触发该轮的 user 输入 */
     userInput?: string;
+    /** 消息角色：user 表示用户输入，assistant 表示 agent 回复 */
+    role?: "user" | "assistant";
     toolCalls: Array<{
       id: string;
       name: string;
@@ -159,29 +161,6 @@ export function useSessionRecords() {
       if (agentSessions) {
         for (const [stepId, session] of Object.entries(agentSessions)) {
           console.log("[saveRecord] step:", stepId, "messages:", session.messages?.length, "turns:", session.turns?.length);
-          // 补充 messages：如果 messages 中 user 消息数量少于 turns 数量，
-          // 说明部分 user 消息未正确累积（React 批处理导致），从 turns 的 userInput 中提取
-          const turnCount = (session.turns || []).length;
-          const userMsgCount = (session.messages || []).filter((m) => m.role === "user").length;
-          // 需要的 user 消息数 = turns.length（第 0 个 turn 前无 user，但初始 prompt 算一条 user）
-          // 实际：初始 prompt(1) + 后续 user 消息(turns.length - 1) = turns.length
-          const expectedUserCount = turnCount;
-          let messages = session.messages || [];
-          if (userMsgCount < expectedUserCount) {
-            const missing = expectedUserCount - userMsgCount;
-            console.log("[saveRecord] step:", stepId, "补充 user 消息, missing:", missing);
-            const filled: Array<{ role: "user" | "assistant"; content: string }> = [...messages];
-            const turns = session.turns || [];
-            for (let i = 0; i < missing; i++) {
-              const turnIdx = userMsgCount + i;
-              const turn = turns[turnIdx];
-              const userContent = (turn as any)?.userInput;
-              if (userContent) {
-                filled.push({ role: "user", content: userContent });
-              }
-            }
-            messages = filled;
-          }
           // agentSessions 已包含该 step 的最新数据，但 turns 可能只有新轮次（继续执行后）。
           // 合并 restoredSessions 中的历史 turns 和 messages
           const restoredStep = restoredSessions?.[stepId];
@@ -199,7 +178,7 @@ export function useSessionRecords() {
           // messages 也合并去重
           const mergedMessages = [
             ...(restoredStep?.messages || []),
-            ...messages,
+            ...(session.messages || []),
           ];
           const seenMsgKeys = new Set<string>();
           const uniqueMessages = mergedMessages.filter((m) => {
@@ -217,6 +196,7 @@ export function useSessionRecords() {
               textContent: t.textContent,
               thinking: t.thinking,
               userInput: (t as any).userInput,
+              role: (t as any).role,
               toolCalls: (t.toolCalls || []).map((tc) => ({
                 id: tc.id,
                 name: tc.name,

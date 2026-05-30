@@ -188,6 +188,8 @@ export function useAgent(taskId: string | null) {
   const onSessionCompleteRef = useRef<((step: string, sessions: Record<string, SessionState>) => void) | null>(null);
   /** 记录每个 step 的 steer 输入（ref 方式，不受 React 批处理影响） */
   const steerInputsRef = useRef<Record<string, string[]>>({});
+  /** 记录每个 step 的 steer 输入及对应的 turn 索引 */
+  const steerInputPairsRef = useRef<Record<string, Array<{ turnIndex: number; text: string }>>>({});
 
   // ── 创建 session ──
   const createSession = useCallback(
@@ -240,20 +242,26 @@ export function useAgent(taskId: string | null) {
     (step: string, text: string, intent?: string) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
-      // 记录到 ref（不受 React 批处理影响）
+      // 记录到 ref（不受 React 批处理影响），同时记录当前 turn 数量
       const inputs = steerInputsRef.current[step] || [];
+      const turnIndex = (sessions[step]?.turns?.length || 0);
       inputs.push(text);
       steerInputsRef.current[step] = inputs;
+      // 记录 (turnIndex, text) 对
+      const inputPairs = steerInputPairsRef.current[step] || [];
+      inputPairs.push({ turnIndex, text });
+      steerInputPairsRef.current[step] = inputPairs;
       setSessions((prev) => {
         const existing = prev[step] || defaultSession();
-        // 在最后一个 turn 上记录 user 输入（如果没有 turn，创建一个占位）
-        const turns = existing.turns.length > 0
-          ? existing.turns.map((t, i) =>
-              i === existing.turns.length - 1
-                ? { ...t, userInput: text }
-                : t,
-            )
-          : existing.turns;
+        // 在 turns 中插入一条 user 消息（在最后一个 turn 之前）
+        const userTurn = {
+          id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          index: existing.turns.length,
+          status: "done" as const,
+          textContent: text,
+          role: "user" as const,
+        };
+        const turns = [...existing.turns, userTurn];
         return {
           ...prev,
           [step]: {
@@ -531,25 +539,46 @@ export function useAgent(taskId: string | null) {
               lastTurn.textContent = finalText;
             }
             console.log("[useAgent] agent_end building newState, step:", step, "s.messages.length:", s.messages?.length, "s.turns.length:", s.turns?.length, "finalText.length:", finalText?.length);
-            // 补充 messages：如果 messages 中 user 消息数量少于 turns 数量，
-            // 说明 steer 添加的 user 消息未被正确累积，从 steerInputsRef 中提取
-            const turnCount = updatedTurns.length;
-            const userMsgCount = s.messages.filter((m) => m.role === "user").length;
-            const expectedUserCount = turnCount;
-            let messages = s.messages;
-            if (userMsgCount < expectedUserCount) {
-              const missing = expectedUserCount - userMsgCount;
-              console.log("[useAgent] agent_end 补充 user 消息, missing:", missing);
-              const filled = [...s.messages];
-              const steerInputs = steerInputsRef.current[step] || [];
-              for (let i = 0; i < missing; i++) {
-                const userContent = steerInputs[i];
-                if (userContent) {
-                  filled.push({ role: "user" as const, content: userContent });
-                }
+            // 确保 turns 中包含 user 输入条目（可能因 React 批处理丢失）
+            const inputPairs = steerInputPairsRef.current[step] || [];
+            console.log("[useAgent] agent_end inputPairs:", JSON.stringify(inputPairs), "turns:", updatedTurns.length, "s.messages:", s.messages?.length);
+            // 检查 updatedTurns 中是否已有 user 条目
+            const existingUserContents = new Set(
+              updatedTurns.filter((t: any) => t.role === "user").map((t: any) => t.textContent),
+            );
+            const sortedPairs = [...inputPairs].sort((a, b) => a.turnIndex - b.turnIndex);
+            for (const pair of sortedPairs) {
+              if (!existingUserContents.has(pair.text)) {
+                // 补充缺失的 user turn
+                updatedTurns.push({
+                  id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                  index: updatedTurns.length,
+                  status: "done" as const,
+                  textContent: pair.text,
+                  role: "user" as const,
+                });
+                existingUserContents.add(pair.text);
               }
-              messages = filled;
             }
+            // 重新排序：user turn 按 index 插入到对应位置
+            updatedTurns.sort((a: any, b: any) => a.index - b.index);
+            // 从 steerInputPairsRef 构建完整的 user 消息列表（按 turnIndex 排序）
+            const userMessages = sortedPairs.map((p) => ({ role: "user" as const, content: p.text }));
+            // 去重（相邻相同内容只保留一个）
+            const dedupedUserMessages: Array<{ role: "user"; content: string }> = [];
+            for (const msg of userMessages) {
+              const last = dedupedUserMessages[dedupedUserMessages.length - 1];
+              if (!last || last.content !== msg.content) {
+                dedupedUserMessages.push(msg);
+              }
+            }
+            console.log("[useAgent] agent_end dedupedUserMessages:", dedupedUserMessages.length, "contents:", dedupedUserMessages.map(m => m.content));
+            const messages = [
+              ...dedupedUserMessages,
+              ...(finalText
+                ? [{ role: "assistant" as const, content: finalText }]
+                : []),
+            ];
             const newState = {
               ...prev,
               [step]: {
@@ -557,12 +586,7 @@ export function useAgent(taskId: string | null) {
                 isStreaming: false,
                 completed: true,
                 summary,
-                messages: [
-                  ...messages,
-                  ...(finalText
-                    ? [{ role: "assistant" as const, content: finalText }]
-                    : []),
-                ],
+                messages,
                 streamingText: "",
                 turns: updatedTurns,
                 // 标记待触发独立总结
@@ -629,7 +653,7 @@ export function useAgent(taskId: string | null) {
                     ? {
                         ...t,
                         toolCalls: [
-                          ...t.toolCalls,
+                          ...(t.toolCalls || []),
                           {
                             id: event.toolCallId,
                             name: event.toolName,
@@ -652,7 +676,7 @@ export function useAgent(taskId: string | null) {
                 ...s,
                 turns: s.turns.map((t) => ({
                   ...t,
-                  toolCalls: t.toolCalls.map((tc) =>
+                  toolCalls: (t.toolCalls || []).map((tc) =>
                     tc.id === event.toolCallId
                       ? { ...tc, outputFragments: [...tc.outputFragments, event.output] }
                       : tc,
@@ -668,7 +692,7 @@ export function useAgent(taskId: string | null) {
                 ...s,
                 turns: s.turns.map((t) => ({
                   ...t,
-                  toolCalls: t.toolCalls.map((tc) =>
+                  toolCalls: (t.toolCalls || []).map((tc) =>
                     tc.id === event.toolCallId
                       ? {
                           ...tc,

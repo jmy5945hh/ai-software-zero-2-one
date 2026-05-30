@@ -187,7 +187,7 @@ export function DecisionBoard({
 function hasPendingQuestion(session: SessionState | undefined): boolean {
   if (!session) return false;
   for (const turn of session.turns) {
-    for (const tc of turn.toolCalls) {
+    for (const tc of turn.toolCalls || []) {
       if (tc.name === "ask_user_question" && tc.status === "running") {
         return true;
       }
@@ -202,7 +202,7 @@ function findLatestQuestionRound(session: SessionState | undefined): number | nu
   // 从后往前遍历，找到第一个 ask_user_question 所在的轮次
   for (let ti = session.turns.length - 1; ti >= 0; ti--) {
     const turn = session.turns[ti];
-    for (const tc of turn.toolCalls) {
+    for (const tc of turn.toolCalls || []) {
       if (tc.name === "ask_user_question") {
         return ti + 1; // round index 从 1 开始
       }
@@ -1322,65 +1322,62 @@ function useTimeline(
     const restoredMsgs = restoredSession.messages || [];
 
     if (restoredTurns.length > 0) {
-      // 从 turns 构建 timeline，不再依赖 messages（messages 可能不完整）。
-      // 每个 turn 前插入对应的 user 消息（从 messages 中按顺序取，跳过第 0 条初始 prompt）。
-      // 如果 messages 中 user 消息不足，用占位文本。
-      const userMsgs = restoredMsgs.filter((m) => m.role === "user").slice(1);
-
+      console.log("[DecisionBoard] restoredSession turns:", restoredTurns.length, "messages:", restoredMsgs.length);
+      console.log("[DecisionBoard] turns with role=user:", restoredTurns.filter((t: any) => t.role === "user").map((t: any) => `[${t.index}] ${t.textContent}`));
+      // 从 turns 构建 timeline。
+      // turns 中可能包含 role="user" 的条目（用户输入），
+      // 以及 role="assistant" 的条目（agent 回复）。
+      // 按顺序遍历，遇到 user 条目就展示用户消息，遇到 assistant 条目就展示 agent 回复。
       for (let ti = 0; ti < restoredTurns.length; ti++) {
-        const turn = restoredTurns[ti];
-        // 第一个 turn 前没有 user 消息（初始 prompt 已在"任务描述"中展示）
-        if (ti > 0) {
-          // 优先从 messages 中取，其次从 turn.userInput 中取
-          const userContent = ti - 1 < userMsgs.length
-            ? userMsgs[ti - 1].content
-            : (turn as any).userInput || "";
-          if (userContent) {
-            events.push({
-              type: "user",
-              id: `restored-user-${ti}`,
-              content: userContent,
-            });
-          }
-        }
-        events.push({
-          type: "round-divider",
-          id: `restored-div-${turn.id}`,
-          roundIndex: ti + 1,
-          status: "done",
-        });
-        if (turn.thinking) {
+        const turn = restoredTurns[ti] as any;
+        if (turn.role === "user") {
+          // 用户输入消息
           events.push({
-            type: "thought",
-            id: `restored-thought-${turn.id}`,
-            content: turn.thinking,
-            status: "done",
-          });
-        }
-        for (const tc of turn.toolCalls) {
-          events.push({
-            type: "tool",
-            id: `restored-tool-${tc.id}`,
-            toolCall: tc,
-          });
-        }
-        // 历史轮次中的 ask_user_question 回答
-        for (const tc of turn.toolCalls) {
-          if (tc.name === "ask_user_question" && tc.status === "done" && tc.result) {
-            events.push({
-              type: "user",
-              id: `restored-answer-${tc.id}`,
-              content: tc.result,
-            });
-          }
-        }
-        if (turn.textContent) {
-          events.push({
-            type: "message",
-            id: `restored-msg-${turn.id}`,
+            type: "user",
+            id: `restored-user-${ti}`,
             content: turn.textContent,
+          });
+        } else {
+          // assistant 回复
+          events.push({
+            type: "round-divider",
+            id: `restored-div-${turn.id}`,
+            roundIndex: ti + 1,
             status: "done",
           });
+          if (turn.thinking) {
+            events.push({
+              type: "thought",
+              id: `restored-thought-${turn.id}`,
+              content: turn.thinking,
+              status: "done",
+            });
+          }
+          for (const tc of turn.toolCalls || []) {
+            events.push({
+              type: "tool",
+              id: `restored-tool-${tc.id}`,
+              toolCall: tc,
+            });
+          }
+          // 历史轮次中的 ask_user_question 回答
+          for (const tc of turn.toolCalls || []) {
+            if (tc.name === "ask_user_question" && tc.status === "done" && tc.result) {
+              events.push({
+                type: "user",
+                id: `restored-answer-${tc.id}`,
+                content: tc.result,
+              });
+            }
+          }
+          if (turn.textContent) {
+            events.push({
+              type: "message",
+              id: `restored-msg-${turn.id}`,
+              content: turn.textContent,
+              status: "done",
+            });
+          }
         }
       }
     } else if (restoredTurns.length === 0) {
@@ -1430,6 +1427,11 @@ function useTimeline(
   for (let ri = 0; ri < turns.length; ri++) {
     const turn = turns[ri];
 
+    // 跳过 role="user" 的条目（用户输入已通过 allUserMessagesSliced 展示）
+    if ((turn as any).role === "user") {
+      continue;
+    }
+
     // 在每个轮次前插入用户消息（按 messages 原始顺序匹配）
     if (userMsgIdx < allUserMessagesSliced.length) {
       const msg = allUserMessagesSliced[userMsgIdx];
@@ -1462,7 +1464,7 @@ function useTimeline(
     }
 
     // 工具调用（扁平每个调用为独立事件）
-    for (const tc of turn.toolCalls) {
+    for (const tc of turn.toolCalls || []) {
       const output = tc.outputFragments.join("");
       if (isDiffContent(output) && tc.status === "done") {
         const summary = parseDiffSummary(output);
@@ -1497,7 +1499,7 @@ function useTimeline(
     }
 
     // ask_user_question 的回答 → 作为用户输入事件，与轮次同级
-    for (const tc of turn.toolCalls) {
+    for (const tc of turn.toolCalls || []) {
       if (tc.name === "ask_user_question" && tc.status === "done" && tc.result) {
         events.push({
           type: "user",
