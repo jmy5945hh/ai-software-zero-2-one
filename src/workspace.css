@@ -214,8 +214,8 @@
 
 /* ── 左侧面板 ────────────────────────────── */
 .left-panel {
-  display: grid;
-  grid-template-rows: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 0;
   border-right: 1px solid var(--line);
   background: var(--bg-soft);
@@ -228,6 +228,15 @@
   border-bottom: 1px solid var(--line);
   overflow-y: auto;
   min-height: 0;
+  flex-shrink: 0;
+}
+
+/* 工作空间树占满剩余空间 */
+.left-card.workspace-tree {
+  flex: 1;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
 }
 
 .left-card-header {
@@ -314,6 +323,9 @@
 .file-tree {
   display: grid;
   gap: 2px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .tree-folder {
@@ -1754,6 +1766,89 @@
   color: var(--primary);
 }
 
+/* ── 交付Spec 目录树 ──────────────────────── */
+.specs-section .specs-loading,
+.specs-section .specs-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 16px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  justify-content: center;
+}
+
+.specs-section .specs-empty {
+  flex-direction: column;
+  gap: 8px;
+}
+
+.specs-tree {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  overflow: hidden;
+  padding: 6px 0;
+}
+
+.specs-tree-folder {
+  display: flex;
+  flex-direction: column;
+}
+
+.specs-tree-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--text);
+  transition: background var(--duration-fast) var(--ease-gentle);
+  width: 100%;
+  text-align: left;
+}
+
+.specs-tree-toggle:hover {
+  background: var(--primary-light);
+}
+
+.specs-tree-toggle svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.specs-tree-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--text);
+  transition: background var(--duration-fast) var(--ease-gentle);
+  width: 100%;
+  text-align: left;
+}
+
+.specs-tree-file:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.specs-tree-file svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.specs-tree-file:hover svg {
+  color: var(--primary);
+}
+
 /* 待决策事项 */
 .todo-list {
   display: grid;
@@ -2359,4 +2454,596 @@
   .filechange-chevron {
     display: none;
   }
+}
+
+/* ── 故事卡驻留内的任务来源 + 任务详情 + 历史任务 ──── */
+.story-resident .story-resident-source,
+.story-resident .story-resident-detail {
+  margin-bottom: 8px;
+}
+
+.story-resident .story-resident-source-label,
+.story-resident .story-resident-detail-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.story-resident .story-resident-source-value {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.story-resident .story-resident-detail-value {
+  font-size: 0.72rem;
+  color: var(--text);
+  line-height: 1.45;
+  margin: 0;
+  padding: 4px 6px;
+  background: var(--bg, #fff);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 4px);
+  cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.story-resident .story-resident-detail-value:hover {
+  border-color: var(--primary-light, #b8d4f0);
+  background: var(--primary-bg, #f0f7ff);
+}
+
+.story-resident .history-tasks-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.story-resident .history-tasks-header {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+}
+
+.story-resident .history-tasks-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.story-resident .history-task-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  cursor: default;
+  transition: background 0.15s;
+}
+
+.story-resident .history-task-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.story-resident .history-task-item.active .history-task-step-label {
+  color: var(--primary);
+}
+
+.story-resident .history-task-step-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+}
+
+.story-resident .history-task-item .history-task-brief {
+  font-size: 0.7rem;
+  color: var(--muted-warm);
+  line-height: 1.4;
+  margin: 0;
+  word-break: break-word;
+}
+
+/* ============================================
+   WorkspaceExplorer — 两个按钮 + 覆盖式展开
+   ============================================ */
+
+.workspace-explorer-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 80px;
+}
+
+.workspace-explorer-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+}
+
+.workspace-explorer-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+  text-align: left;
+}
+
+.workspace-explorer-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.workspace-explorer-btn svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* ── 覆盖式展开页面 ──────────────────────── */
+
+.workspace-explorer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: var(--bg);
+  animation: overlaySlideIn 0.3s var(--ease-out);
+}
+
+@keyframes overlaySlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.workspace-explorer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+
+.workspace-explorer-header .eyebrow {
+  flex-shrink: 0;
+}
+
+.workspace-explorer-header strong {
+  flex: 1;
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted-warm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-explorer-body {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ============================================
+   SpecsExplorer — 左侧文件树 + 右侧编辑器
+   ============================================ */
+
+.specs-explorer {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.specs-explorer-tree {
+  overflow-y: auto;
+  padding: 12px 8px;
+  background: var(--bg-soft);
+  flex-shrink: 0;
+}
+
+.specs-explorer-loading,
+.specs-explorer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  color: var(--muted-warm);
+  font-size: 0.85rem;
+}
+
+.specs-tree-folder {
+  display: grid;
+  gap: 1px;
+}
+
+.specs-tree-toggle,
+.specs-tree-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.specs-tree-toggle:hover,
+.specs-tree-file:hover {
+  background: var(--primary-light);
+}
+
+.specs-tree-file.active {
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.specs-tree-toggle svg,
+.specs-tree-file svg {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.specs-tree-file svg {
+  color: var(--muted-warm);
+}
+
+/* ── 编辑器 ──────────────────────────────── */
+
+.specs-explorer-editor {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+}
+
+.specs-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+
+.specs-editor-filename {
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.specs-editor-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.specs-editor-textarea {
+  width: 100%;
+  height: 100%;
+  padding: 16px 20px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: var(--bg-soft);
+  color: var(--text);
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+.specs-editor-textarea:focus {
+  background: var(--panel);
+}
+
+.specs-editor-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  color: var(--muted-warm);
+  font-size: 0.85rem;
+}
+
+.specs-editor-placeholder svg {
+  opacity: 0.4;
+}
+
+/* ============================================
+   RepoExplorer — Tab 切换 + 目录树/Diff
+   ============================================ */
+
+.repo-explorer {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+
+.repo-explorer-tabs {
+  display: flex;
+  gap: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+
+.repo-explorer-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.repo-explorer-tab:hover {
+  color: var(--text);
+  background: var(--primary-light);
+}
+
+.repo-explorer-tab.active {
+  border-color: var(--primary);
+  color: var(--text);
+  background: var(--primary-light);
+  font-weight: 600;
+}
+
+.repo-explorer-tab svg {
+  flex-shrink: 0;
+}
+
+.repo-explorer-content {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.repo-explorer-loading,
+.repo-explorer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  color: var(--muted-warm);
+  font-size: 0.85rem;
+}
+
+/* ── 目录树 + 预览（左右分栏） ────────────── */
+
+.repo-explorer-split {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.repo-split-handle {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  transition: background 0.15s;
+}
+
+.repo-split-handle:hover,
+.repo-split-handle:active {
+  background: var(--primary);
+}
+
+.repo-explorer-tree {
+  overflow-y: auto;
+  padding: 8px;
+  background: var(--bg-soft);
+  flex-shrink: 0;
+}
+
+.repo-tree-folder {
+  display: grid;
+  gap: 1px;
+}
+
+.repo-tree-toggle,
+.repo-tree-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.repo-tree-toggle:hover,
+.repo-tree-file:hover {
+  background: var(--primary-light);
+}
+
+.repo-tree-file.active {
+  background: var(--primary-light);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.repo-tree-toggle svg,
+.repo-tree-file svg {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+.repo-tree-file svg {
+  color: var(--muted-warm);
+}
+
+/* ── 文件预览 ────────────────────────────── */
+
+.repo-explorer-preview {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+}
+
+.repo-preview-header {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+
+.repo-preview-filename {
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-warm);
+}
+
+.repo-preview-code {
+  margin: 0;
+  padding: 16px 20px;
+  overflow: auto;
+  background: var(--bg-soft);
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre;
+  tab-size: 2;
+}
+
+.repo-preview-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 100%;
+  color: var(--muted-warm);
+  font-size: 0.85rem;
+}
+
+.repo-preview-placeholder svg {
+  opacity: 0.4;
+}
+
+/* ── Diff 视图 ───────────────────────────── */
+
+.repo-diff-viewer {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+
+.repo-diff-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+
+.repo-diff-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.repo-diff-content {
+  margin: 0;
+  padding: 16px 20px;
+  overflow: auto;
+  background: var(--bg-soft);
+  font-family: "SF Mono", "Cascadia Code", monospace;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre;
+  tab-size: 2;
+}
+
+/* ── 通用小号 primary-action ─────────────── */
+.primary-action.small {
+  min-height: 32px;
+  padding: 0 14px;
+  font-size: 0.7rem;
 }

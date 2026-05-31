@@ -23,6 +23,9 @@ import {
   HelpCircle,
   Play,
   X,
+  Info,
+  File,
+  Folder,
 } from "lucide-react";
 import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
 import { useStepKey } from "../hooks";
@@ -65,6 +68,8 @@ type DecisionBoardProps = {
     summary: string;
     summarizationResult?: import("../data/types").AgentSummary | null;
   }>;
+  /** 各步骤的 Agent 总结摘要（stepId → brief） */
+  stepSummaries: Record<string, string>;
   agentSteer: (step: string, text: string, intent?: string) => void;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
@@ -79,6 +84,7 @@ export function DecisionBoard({
   onPreview,
   agentSessions,
   restoredSessions,
+  stepSummaries,
   agentSteer,
   agentPrompt,
   agentAnswerQuestion,
@@ -176,6 +182,7 @@ export function DecisionBoard({
             onConsumeScrollToRound={() => setScrollToRound(null)}
             intent={state.intent}
             initialPrompts={state.initialPrompts}
+            stepSummaries={stepSummaries}
           />
         )}
       </div>
@@ -281,6 +288,33 @@ function DeliveryCollabTab({
     [],
   );
 
+  // 点击 Spec 文件 → 从 server 读取文件内容并弹窗展示
+  const handleSpecFileClick = useCallback(
+    (path: string, name: string) => {
+      const isMarkdown = /\.md$/i.test(name);
+      fetch(`/specs-file?path=${encodeURIComponent(state.workspacePath)}&file=${encodeURIComponent(path)}`)
+        .then((res) => res.json())
+        .then((data: { content: string; isMarkdown: boolean }) => {
+          setModalContent({
+            type: data.isMarkdown ? "markdown" : "code",
+            title: name,
+            content: data.content,
+            language: data.isMarkdown ? undefined : getLanguageFromPath(path),
+            filePath: path,
+            workspacePath: state.workspacePath,
+          });
+        })
+        .catch(() => {
+          setModalContent({
+            type: "code",
+            title: name,
+            content: "// 文件内容加载失败",
+          });
+        });
+    },
+    [state.workspacePath],
+  );
+
   const currentStep = workflow.find(s => s.id === stepId);
 
   return (
@@ -368,7 +402,11 @@ function DeliveryCollabTab({
             <>
               <SummaryBrief brief={summaryResult.brief} />
               <KeyPointsGrid keyPoints={summaryResult.key_points} />
-              <FileChangesList files={fileChanges} onFileClick={handleFileClick} />
+              {/* intent / plan 阶段展示交付Spec 目录，其他阶段展示文件变更 */}
+              {(stepId === "intent" || stepId === "plan")
+                ? <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
+                : <FileChangesList files={fileChanges} onFileClick={handleFileClick} />
+              }
               <TodoSection
                 todos={summaryResult.todos ?? []}
                 todoAnswers={state.todoAnswers}
@@ -391,18 +429,26 @@ function DeliveryCollabTab({
         </>
       )}
       {!isAgentConnected && (
-        <div className="delivery-empty">
-          <Bot size={24} />
-          <p>连接 Agent 后将在此展示交付产出</p>
-        </div>
+        (stepId === "intent" || stepId === "plan") ? (
+          <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
+        ) : (
+          <div className="delivery-empty">
+            <Bot size={24} />
+            <p>连接 Agent 后将在此展示交付产出</p>
+          </div>
+        )
       )}
 
       {/* 已连接但无当前步骤 session */}
       {isAgentConnected && !agentSession && !agentWorking && (
-        <div className="delivery-empty">
-          <Bot size={24} />
-          <p>请通过任务轨迹创建 Agent 会话来开始本阶段工作</p>
-        </div>
+        (stepId === "intent" || stepId === "plan") ? (
+          <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
+        ) : (
+          <div className="delivery-empty">
+            <Bot size={24} />
+            <p>请通过任务轨迹创建 Agent 会话来开始本阶段工作</p>
+          </div>
+        )
       )}
 
       {/* 文件变更全屏弹窗 */}
@@ -529,6 +575,162 @@ function FileChangesList({ files, onFileClick }: { files: FileChange[]; onFileCl
       </div>
     </div>
   );
+}
+
+// ── Specs 目录树 ──────────────────────────────
+
+type SpecNode = {
+  name: string;
+  type: "file" | "folder";
+  children?: SpecNode[];
+};
+
+function SpecsDirectory({
+  workspacePath,
+  onFileClick,
+}: {
+  workspacePath: string;
+  onFileClick: (path: string, name: string) => void;
+}) {
+  const [nodes, setNodes] = useState<SpecNode[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!workspacePath) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetch(`/specs-tree?path=${encodeURIComponent(workspacePath)}`)
+      .then((res) => res.json())
+      .then((data: SpecNode[]) => {
+        setNodes(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        setNodes([]);
+        setLoading(false);
+      });
+  }, [workspacePath]);
+
+  if (loading) {
+    return (
+      <div className="summary-section specs-section">
+        <div className="summary-section-header">
+          <FolderOpen size={15} />
+          <span>交付Spec</span>
+        </div>
+        <div className="specs-empty">
+          <Loader2 size={20} className="spin-icon" />
+          <p>正在加载 specs 目录...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (nodes.length === 0) {
+    return (
+      <div className="summary-section specs-section">
+        <div className="summary-section-header">
+          <FolderOpen size={15} />
+          <span>交付Spec</span>
+          <em className="summary-section-count">0 项</em>
+        </div>
+        <div className="specs-empty">
+          <FileText size={20} />
+          <p>specs/ 目录为空，暂无交付Spec</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="summary-section specs-section">
+      <div className="summary-section-header">
+        <FolderOpen size={15} />
+        <span>交付Spec</span>
+        <em className="summary-section-count">{countFiles(nodes)} 项</em>
+      </div>
+      <div className="specs-tree">
+        {nodes.map((node) => (
+          <SpecTreeNode
+            key={node.name}
+            node={node}
+            depth={0}
+            path={node.name}
+            onFileClick={onFileClick}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SpecTreeNode({
+  node,
+  depth,
+  path,
+  onFileClick,
+}: {
+  node: SpecNode;
+  depth: number;
+  path: string;
+  onFileClick: (path: string, name: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+
+  if (node.type === "folder") {
+    return (
+      <div className="specs-tree-folder">
+        <button
+          className="specs-tree-toggle"
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          style={{ paddingLeft: depth * 16 }}
+        >
+          <ChevronRight
+            size={14}
+            style={{
+              transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+              transition: "transform 0.2s",
+            }}
+          />
+          <Folder size={14} />
+          <span>{node.name}</span>
+        </button>
+        {expanded && node.children?.map((child) => (
+          <SpecTreeNode
+            key={child.name}
+            node={child}
+            depth={depth + 1}
+            path={`${path}/${child.name}`}
+            onFileClick={onFileClick}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      className="specs-tree-file"
+      type="button"
+      style={{ paddingLeft: depth * 16 + 20 }}
+      onClick={() => onFileClick(path, node.name)}
+    >
+      <FileText size={14} />
+      <span>{node.name}</span>
+    </button>
+  );
+}
+
+function countFiles(nodes: SpecNode[]): number {
+  let count = 0;
+  for (const node of nodes) {
+    if (node.type === "file") count++;
+    if (node.children) count += countFiles(node.children);
+  }
+  return count;
 }
 
 // ── 待决策事项 ───────────────────────────────
@@ -861,6 +1063,7 @@ function TrajectoryChatTab({
   onConsumeScrollToRound,
   intent,
   initialPrompts,
+  stepSummaries,
 }: {
   trajectory: TrajectoryTurn[];
   stepIndex: number;
@@ -898,6 +1101,7 @@ function TrajectoryChatTab({
   onConsumeScrollToRound?: () => void;
   intent: string;
   initialPrompts: Record<string, string>;
+  stepSummaries: Record<string, string>;
 }) {
   const [input, setInput] = useState("");
   const [expandedRoundIds, setExpandedRoundIds] = useState<Set<string>>(new Set());
@@ -1016,6 +1220,40 @@ function TrajectoryChatTab({
                 <span>任务描述</span>
               </div>
               <p className="task-desc-text">{intent}</p>
+            </div>
+          )}
+
+          {/* 当前任务信息 */}
+          {agentSession && agentSession.turns.length > 0 && (
+            <div className="trajectory-current-task">
+              <div className="current-task-header">
+                <Loader2 size={14} className="spin-icon" />
+                <span>当前任务进行中</span>
+              </div>
+              <div className="current-task-body">
+                <span className="current-task-rounds">{agentSession.turns.length} 轮对话</span>
+                {agentSession.summary && (
+                  <p className="current-task-summary">{agentSession.summary.slice(0, 200)}</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 历史任务列表 */}
+          {Object.keys(stepSummaries).length > 0 && (
+            <div className="trajectory-history-tasks">
+              <div className="history-tasks-header">
+                <FileText size={14} />
+                <span>历史任务</span>
+              </div>
+              <div className="history-tasks-list">
+                {Object.entries(stepSummaries).map(([sid, brief]) => (
+                  <div key={sid} className={`history-task-item ${sid === stepId ? "active" : ""}`}>
+                    <div className="history-task-step">{sid.toUpperCase()}</div>
+                    <p className="history-task-brief">{brief}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -1322,8 +1560,6 @@ function useTimeline(
     const restoredMsgs = restoredSession.messages || [];
 
     if (restoredTurns.length > 0) {
-      console.log("[DecisionBoard] restoredSession turns:", restoredTurns.length, "messages:", restoredMsgs.length);
-      console.log("[DecisionBoard] turns with role=user:", restoredTurns.filter((t: any) => t.role === "user").map((t: any) => `[${t.index}] ${t.textContent}`));
       // 从 turns 构建 timeline。
       // turns 中可能包含 role="user" 的条目（用户输入），
       // 以及 role="assistant" 的条目（agent 回复）。

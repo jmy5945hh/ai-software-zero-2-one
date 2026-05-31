@@ -24,18 +24,18 @@ export type StageContent = {
 export function getIntentContent(): StageContent {
   return {
     summary:
-      "我已从你的描述中抽取出核心业务对象（客户、跟进记录、提醒规则、周报），并梳理了关键角色（销售、主管）和核心场景（线索跟踪、到期提醒、团队汇总）。建议先以 MVP 模式跑通主流程。",
+      "我已从你的描述中抽取出核心业务对象（客户、跟进记录、提醒规则、周报），并梳理了关键角色（销售、主管）和核心场景（线索跟踪、到期提醒、团队汇总）。交付Spec 已沉淀至项目 specs/ 目录，你可随时查看和评审。",
     deliverables: [
       {
         id: "intent-d1",
-        title: "核心对象识别",
-        detail: "客户、跟进记录、周报 — 建议先以客户为根实体展开",
-        tag: "分析",
+        title: "交付Spec 已就绪",
+        detail: "需求分析阶段的 Spec 文档已生成至 specs/ 目录，包含业务对象定义、角色梳理和交付模式建议",
+        tag: "Spec",
       },
       {
         id: "intent-d2",
-        title: "角色梳理",
-        detail: "销售（日常操作）、主管（团队汇总）",
+        title: "核心对象识别",
+        detail: "客户、跟进记录、周报 — 建议先以客户为根实体展开",
         tag: "分析",
       },
       {
@@ -63,8 +63,8 @@ export function getIntentContent(): StageContent {
       {
         id: "t3",
         agent: "Product Agent",
-        action: "生成交付模式建议",
-        output: "MVP 模式：聚焦销售日常最核心场景",
+        action: "生成交付Spec 并写入 specs/ 目录",
+        output: "spec.md + checklists/requirements.md 已就绪",
         duration: "1s",
       },
     ],
@@ -74,16 +74,22 @@ export function getIntentContent(): StageContent {
 export function getScopeContent(): StageContent {
   return {
     summary:
-      "基于意图分析，我建议本轮聚焦销售日常最核心的 4 个模块。未选模块将进入后续迭代建议池。「主管看板」依赖前面所有模块的数据，建议放入下一迭代。",
+      "基于意图分析，我建议本轮聚焦销售日常最核心的 4 个模块。技术设计 Spec 已沉淀至 specs/ 目录，包含模块依赖分析、数据模型和 API 契约。",
     deliverables: [
       {
         id: "scope-d1",
+        title: "交付Spec 已就绪",
+        detail: "技术设计阶段的 Spec 文档已生成至 specs/ 目录，包含模块依赖分析、数据模型定义和 API 契约",
+        tag: "Spec",
+      },
+      {
+        id: "scope-d2",
         title: "模块依赖分析",
         detail: "线索池→客户详情→跟进提醒→沟通记录→团队周报→主管看板",
         tag: "分析",
       },
       {
-        id: "scope-d2",
+        id: "scope-d3",
         title: "风险提示",
         detail: "「主管看板」依赖前面所有模块的数据，建议放入下一迭代",
         tag: "风险",
@@ -107,9 +113,9 @@ export function getScopeContent(): StageContent {
       {
         id: "t3",
         agent: "Architect Agent",
-        action: "标记风险模块",
-        output: "主管看板跨模块依赖，建议延后",
-        duration: "1s",
+        action: "生成技术设计 Spec 并写入 specs/ 目录",
+        output: "data-model.md + api-spec.md + 架构图已就绪",
+        duration: "3s",
       },
     ],
   };

@@ -35,7 +35,7 @@ export function extractFileChanges(turns: Turn[]): FileChange[] {
   const changes: FileChange[] = [];
 
   for (const turn of turns) {
-    for (const tc of turn.toolCalls) {
+    for (const tc of turn.toolCalls || []) {
       if (tc.status === "error") continue;
 
       let parsed: Record<string, unknown>;

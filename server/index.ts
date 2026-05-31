@@ -26,10 +26,213 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ status: "ok", timestamp: Date.now() }));
     return;
   }
+
+  // 读取指定项目路径下的 specs 目录内容
+  if (req.method === "GET" && req.url?.startsWith("/specs-tree")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const projectPath = url.searchParams.get("path");
+    if (!projectPath) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'path' query parameter" }));
+      return;
+    }
+    const specsDir = path.join(projectPath, "specs");
+    try {
+      const result = readSpecsTree(specsDir);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(result));
+    } catch {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify([]));
+    }
+    return;
+  }
+
+  // 读取 specs 目录下某个文件的内容
+  if (req.method === "GET" && req.url?.startsWith("/specs-file")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const projectPath = url.searchParams.get("path");
+    const filePath = url.searchParams.get("file");
+    if (!projectPath || !filePath) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'path' or 'file' query parameter" }));
+      return;
+    }
+    // 安全校验：防止路径穿越
+    const fullPath = path.resolve(projectPath, "specs", filePath);
+    if (!fullPath.startsWith(path.resolve(projectPath, "specs"))) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Forbidden" }));
+      return;
+    }
+    try {
+      const content = fs.readFileSync(fullPath, "utf-8");
+      const isMarkdown = /\.md$/i.test(filePath);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ content, isMarkdown }));
+    } catch {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "File not found" }));
+    }
+    return;
+  }
+
+  // 保存 specs 目录下某个文件的内容（支持 Markdown 编辑）
+  if (req.method === "POST" && req.url === "/specs-save") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const { path: projectPath, file: filePath, content } = JSON.parse(body);
+        if (!projectPath || !filePath || content === undefined) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Missing 'path', 'file', or 'content'" }));
+          return;
+        }
+        // 安全校验：防止路径穿越
+        const fullPath = path.resolve(projectPath, "specs", filePath);
+        if (!fullPath.startsWith(path.resolve(projectPath, "specs"))) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Forbidden" }));
+          return;
+        }
+        // 确保父目录存在
+        const dir = path.dirname(fullPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(fullPath, content, "utf-8");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true }));
+      } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Save failed" }));
+      }
+    });
+    return;
+  }
+
+  // 读取项目仓库目录树（排除 specs 目录）
+  if (req.method === "GET" && req.url?.startsWith("/repo-tree")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const projectPath = url.searchParams.get("path");
+    if (!projectPath) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'path' query parameter" }));
+      return;
+    }
+    try {
+      if (!fs.existsSync(projectPath)) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify([]));
+        return;
+      }
+      const result = readRepoTree(projectPath);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      console.error("repo-tree error:", err);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify([]));
+    }
+    return;
+  }
+
+  // 读取仓库中某个文件的内容
+  if (req.method === "GET" && req.url?.startsWith("/repo-file")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const projectPath = url.searchParams.get("path");
+    const filePath = url.searchParams.get("file");
+    if (!projectPath || !filePath) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'path' or 'file' query parameter" }));
+      return;
+    }
+    // 安全校验：防止路径穿越
+    const fullPath = path.resolve(projectPath, filePath);
+    if (!fullPath.startsWith(path.resolve(projectPath))) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Forbidden" }));
+      return;
+    }
+    try {
+      const content = fs.readFileSync(fullPath, "utf-8");
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ content }));
+    } catch {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "File not found" }));
+    }
+    return;
+  }
+
+  // 获取仓库 git diff（当前工作区变更）
+  if (req.method === "GET" && req.url?.startsWith("/repo-diff")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const projectPath = url.searchParams.get("path");
+    if (!projectPath) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'path' query parameter" }));
+      return;
+    }
+    try {
+      const { execSync } = require("child_process");
+      const diffOutput = execSync("git diff HEAD", { cwd: projectPath, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
+      const stagedOutput = execSync("git diff --cached", { cwd: projectPath, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
+      const combined = [diffOutput, stagedOutput].filter(Boolean).join("\n");
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ diff: combined || "No changes" }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Git diff failed" }));
+    }
+    return;
+  }
+
   // 其他 HTTP 请求返回 404
   res.writeHead(404);
   res.end();
 });
+
+/** 递归读取目录结构，返回 { name, type, children? }[] */
+function readSpecsTree(dir: string): Array<{ name: string; type: "file" | "folder"; children?: any[] }> {
+  if (!fs.existsSync(dir)) return [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const result: Array<{ name: string; type: "file" | "folder"; children?: any[] }> = [];
+  for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue; // 忽略隐藏文件
+    if (entry.isDirectory()) {
+      const children = readSpecsTree(path.join(dir, entry.name));
+      result.push({ name: entry.name, type: "folder", children });
+    } else if (entry.isFile()) {
+      result.push({ name: entry.name, type: "file" });
+    }
+  }
+  return result;
+}
+
+/** 递归读取项目仓库目录树（排除 specs 目录、.git、node_modules、隐藏文件） */
+function readRepoTree(dir: string): Array<{ name: string; type: "file" | "folder"; children?: any[] }> {
+  try {
+    if (!fs.existsSync(dir)) return [];
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    const result: Array<{ name: string; type: "file" | "folder"; children?: any[] }> = [];
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue; // 忽略隐藏文件
+      if (entry.name === "node_modules") continue;
+      if (entry.name === "specs") continue; // 排除 specs 目录
+      if (entry.isDirectory()) {
+        const children = readRepoTree(path.join(dir, entry.name));
+        result.push({ name: entry.name, type: "folder", children });
+      } else if (entry.isFile()) {
+        result.push({ name: entry.name, type: "file" });
+      }
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
 const wss = new WebSocketServer({ server, path: "/agent" });
 
 console.log("Agent Server starting...");

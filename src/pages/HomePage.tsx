@@ -97,9 +97,21 @@ export function HomePage() {
         }));
       }
       setShowWorkspacePicker(false);
+      // 确保 navigate 前 localStorage 已同步（useStoredState 的 useEffect 可能尚未执行）
+      try {
+        localStorage.setItem("zero-one-software.prototype.v4", JSON.stringify({
+          ...createDefaultState(),
+          intent: state.intent,
+          notes: state.notes,
+          activeTaskCard: state.activeTaskCard,
+          createdAt: state.createdAt,
+          workspacePath: path,
+          view: "workspace",
+        }));
+      } catch { /* ignore */ }
       navigate("/workspace");
     },
-    [setState, navigate, state.activeTaskCard, agentAvailable, agent],
+    [setState, navigate, state, agentAvailable, agent],
   );
 
   const cancelWorkspacePicker = useCallback(() => {

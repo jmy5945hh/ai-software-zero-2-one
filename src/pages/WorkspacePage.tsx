@@ -62,8 +62,18 @@ export function WorkspacePage() {
         summaries[stepId] = session.summary.slice(0, 100);
       }
     }
+    // 从 restoredSessions 补充（历史恢复场景）
+    for (const [stepId, session] of Object.entries(state.restoredSessions)) {
+      if (!summaries[stepId]) {
+        if (session.summarizationResult?.brief) {
+          summaries[stepId] = session.summarizationResult.brief;
+        } else if (session.summary) {
+          summaries[stepId] = session.summary.slice(0, 100);
+        }
+      }
+    }
     return summaries;
-  }, [agent.sessions]);
+  }, [agent.sessions, state.restoredSessions]);
 
   const handleSessionComplete = useCallback((step: string, sessionsSnapshot: Record<string, any>) => {
     // 轮次完成时立即保存，确保每轮数据不遗漏
@@ -317,6 +327,10 @@ export function WorkspacePage() {
               onBackToTasks={goHome}
               agentFileTree={agent.fileTree}
               isAgentConnected={isAgentConnected}
+              stepSummaries={stepSummaries}
+              agentSessions={agent.sessions}
+              intent={state.intent}
+              workspacePath={state.workspacePath}
             />
             <DecisionBoard
               state={state}
@@ -325,6 +339,7 @@ export function WorkspacePage() {
               onPreview={openDrawer}
               agentSessions={agent.sessions}
               restoredSessions={state.restoredSessions}
+              stepSummaries={stepSummaries}
               agentSteer={agent.steer}
               agentPrompt={agent.prompt}
               agentAnswerQuestion={agent.answerQuestion}

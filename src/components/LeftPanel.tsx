@@ -1,76 +1,109 @@
-import { useState } from "react";
-import {
-  Sparkles,
-  TriangleAlert,
-  ShieldCheck,
-  FolderOpen,
-  FileText,
-  ChevronRight,
-  Folder,
-  File,
-  GitBranch,
-} from "lucide-react";
-import type { TaskCard, FileNode } from "../data/types";
+import { Sparkles, GitBranch } from "lucide-react";
+import type { TaskCard } from "../data/types";
 import { categoryMeta, priorityLabel } from "../data";
-import type { FileNode as AgentFileNode } from "../agent/types";
+import type { SessionState } from "../agent/types";
+import { WorkspaceExplorer } from "./WorkspaceExplorer";
 
 type LeftPanelProps = {
   activeTaskCard: TaskCard | null;
   stepIndex: number;
   onFileClick: (path: string, name: string) => void;
   onBackToTasks: () => void;
-  agentFileTree?: AgentFileNode[] | null;
+  agentFileTree?: any[] | null;
   isAgentConnected: boolean;
+  stepSummaries?: Record<string, string>;
+  agentSessions?: Record<string, SessionState>;
+  intent?: string;
+  workspacePath?: string;
 };
 
 /**
- * 左侧面板 —— 故事卡驻留 + 工作空间目录。
- * 让研发人员随时看到当前任务上下文和 Agent 工作空间状态。
+ * 左侧面板 —— 故事卡驻留 + 当前任务 + 历史任务 + 工作空间模块。
+ * 让研发人员随时看到当前任务上下文和 workspace 操作入口。
  */
 export function LeftPanel({
   activeTaskCard,
-  stepIndex,
-  onFileClick,
   onBackToTasks,
-  agentFileTree,
   isAgentConnected,
+  stepSummaries,
+  agentSessions,
+  intent,
+  workspacePath,
 }: LeftPanelProps) {
   return (
     <aside className="left-panel">
-      {/* 故事卡驻留 */}
+      {/* 故事卡驻留 + 当前任务 + 历史任务 */}
       <TaskCardResident
         taskCard={activeTaskCard}
         onBackToTasks={onBackToTasks}
+        stepSummaries={stepSummaries}
+        intent={intent}
       />
 
-      {/* 工作空间目录 */}
-      <WorkspaceTree
-        stepIndex={stepIndex}
-        onFileClick={onFileClick}
-        agentFileTree={agentFileTree}
-        isAgentConnected={isAgentConnected}
-      />
+      {/* 工作空间模块：两个按钮 */}
+      {workspacePath && (
+        <section className="left-card workspace-explorer-card">
+          <div className="left-card-header">
+            <span>Workspace</span>
+          </div>
+          <WorkspaceExplorer workspacePath={workspacePath} />
+        </section>
+      )}
     </aside>
   );
 }
 
 /**
- * 故事卡驻留组件 —— 始终显示当前研发任务的上下文。
+ * 故事卡驻留组件 —— 始终显示当前研发任务的上下文，
+ * 以及需求分析和历史任务列表。
  */
 function TaskCardResident({
   taskCard,
   onBackToTasks,
+  stepSummaries,
+  intent,
 }: {
   taskCard: TaskCard | null;
   onBackToTasks: () => void;
+  stepSummaries?: Record<string, string>;
+  intent?: string;
 }) {
-  if (!taskCard) {
-    return (
-      <section className="left-card story-resident">
-        <div className="left-card-header">
-          <Sparkles size={16} />
-          <span>当前任务</span>
+  return (
+    <section className="left-card story-resident">
+      {/* 头部 */}
+      <div className="left-card-header">
+        <Sparkles size={16} />
+        <span>当前任务</span>
+      </div>
+
+      {/* 故事卡信息 */}
+      {taskCard ? (
+        <div className="story-resident-body">
+          <div className="story-resident-source">
+            <span className="story-resident-source-label">任务来源</span>
+            <span className="story-resident-source-value">{categoryMeta[taskCard.category]?.label || taskCard.category}</span>
+          </div>
+          <div className="story-resident-detail">
+            <span className="story-resident-detail-label">任务详情</span>
+            <p className="story-resident-detail-value" title={intent || taskCard.summary}>
+              {(intent || taskCard.summary).length > 20 ? (intent || taskCard.summary).slice(0, 20) + "…" : (intent || taskCard.summary)}
+            </p>
+          </div>
+          <div className="story-resident-meta">
+            <span className={`priority-tag ${taskCard.priority}`}>
+              {priorityLabel(taskCard.priority)}
+            </span>
+            <button
+              className="ghost-button small"
+              type="button"
+              onClick={onBackToTasks}
+            >
+              <GitBranch size={12} />
+              切换任务
+            </button>
+          </div>
         </div>
+      ) : (
         <div className="story-resident-empty">
           <p>还未选择任务卡片</p>
           <button
@@ -81,177 +114,26 @@ function TaskCardResident({
             返回任务列表
           </button>
         </div>
-      </section>
-    );
-  }
+      )}
 
-  const meta = categoryMeta[taskCard.category];
-  const Icon = meta.icon;
-
-  return (
-    <section className={`left-card story-resident ${meta.accent}`}>
-      <div className="left-card-header">
-        <Icon size={16} />
-        <span>{meta.label} · {taskCard.source}</span>
-      </div>
-
-      <div className="story-resident-body">
-        <h3>{taskCard.title}</h3>
-        <p>{taskCard.summary}</p>
-      </div>
-
-      <div className="story-resident-meta">
-        <span className={`priority-tag ${taskCard.priority}`}>
-          {priorityLabel(taskCard.priority)}
-        </span>
-        <button
-          className="ghost-button small"
-          type="button"
-          onClick={onBackToTasks}
-        >
-          <GitBranch size={12} />
-          切换任务
-        </button>
-      </div>
-    </section>
-  );
-}
-
-/**
- * 工作空间文件树 —— 根据当前 SOP 阶段动态展示文件结构。
- * 在研发执行阶段（stepIndex >= 3）默认折叠，减少视觉干扰。
- */
-function WorkspaceTree({
-  stepIndex,
-  onFileClick,
-  agentFileTree,
-  isAgentConnected,
-}: {
-  stepIndex: number;
-  onFileClick: (path: string, name: string) => void;
-  agentFileTree?: AgentFileNode[] | null;
-  isAgentConnected: boolean;
-}) {
-  // 研发执行阶段（build 及之后）默认折叠
-  const [collapsed, setCollapsed] = useState(stepIndex >= 3);
-
-  // 仅在 Agent 连接且有文件树时展示
-  const files: FileNode[] = agentFileTree?.length
-    ? agentFileTree.map(convertAgentNode)
-    : [];
-
-  return (
-    <section className="left-card workspace-tree">
-      <button
-        className="left-card-header workspace-tree-toggle"
-        type="button"
-        onClick={() => setCollapsed(!collapsed)}
-      >
-        <FolderOpen size={16} />
-        <span>Workspace</span>
-        <em>cs-2026-0518</em>
-        <ChevronRight
-          size={14}
-          style={{
-            transform: collapsed ? "rotate(0deg)" : "rotate(90deg)",
-            transition: "transform 0.2s",
-            color: "var(--muted)",
-          }}
-        />
-      </button>
-
-      {!collapsed && (
-        <div className="file-tree">
-          {files.length > 0 ? (
-            files.map((node) => (
-              <FileTreeNode
-                key={node.name}
-                node={node}
-                depth={0}
-                path={node.name}
-                onFileClick={onFileClick}
-              />
-            ))
-          ) : (
-            <div className="file-tree-empty">
-              {isAgentConnected ? "等待 Agent 生成文件..." : "Agent 未连接"}
-            </div>
-          )}
+      {/* 历史任务列表 */}
+      {stepSummaries && Object.keys(stepSummaries).length > 0 && (
+        <div className="history-tasks-section">
+          <div className="history-tasks-header">历史任务</div>
+          <div className="history-tasks-body">
+            {Object.entries(stepSummaries).map(([sid, brief]) => (
+              <div key={sid} className="history-task-item">
+                <div className="history-task-step-label">{sid.toUpperCase()}</div>
+                <p className="history-task-brief" title={brief}>
+                  {brief.length > 20 ? brief.slice(0, 20) + "…" : brief}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </section>
   );
 }
 
-/** 将 Agent FileNode 转换为 Data FileNode */
-function convertAgentNode(node: AgentFileNode): FileNode {
-  return {
-    name: node.name,
-    type: node.type,
-    children: node.children?.map(convertAgentNode),
-    highlight: false,
-  };
-}
-
-/**
- * 递归渲染文件树节点
- */
-function FileTreeNode({
-  node,
-  depth,
-  path,
-  onFileClick,
-}: {
-  node: FileNode;
-  depth: number;
-  path: string;
-  onFileClick: (path: string, name: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
-
-  if (node.type === "folder") {
-    return (
-      <div className="tree-folder" style={{ paddingLeft: depth * 16 }}>
-        <button
-          className="tree-folder-toggle"
-          type="button"
-          onClick={() => setExpanded(!expanded)}
-        >
-          <ChevronRight
-            size={14}
-            style={{
-              transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
-              transition: "transform 0.2s",
-            }}
-          />
-          <Folder size={14} className="tree-icon" />
-          <span>{node.name}</span>
-        </button>
-
-        {expanded &&
-          node.children?.map((child: FileNode) => (
-            <FileTreeNode
-              key={child.name}
-              node={child}
-              depth={depth + 1}
-              path={`${path}/${child.name}`}
-              onFileClick={onFileClick}
-            />
-          ))}
-      </div>
-    );
-  }
-
-  return (
-    <button
-      className={`tree-file ${node.highlight ? "highlight" : ""}`}
-      type="button"
-      style={{ paddingLeft: depth * 16 + 12 }}
-      onClick={() => onFileClick(path, node.name)}
-    >
-      <FileText size={14} className="tree-icon" />
-      <span>{node.name}</span>
-      {node.highlight && <span className="tree-new-badge">new</span>}
-    </button>
-  );
-}
+// WorkspaceTree 已迁移至 WorkspaceExplorer 组件
