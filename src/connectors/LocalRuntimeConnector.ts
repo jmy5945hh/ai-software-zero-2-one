@@ -2,12 +2,11 @@
  * LocalRuntimeConnector — 本地运行时连接器。
  *
  * 职责：
- * - 检测本地 Ollama 是否运行
  * - 管理 localStorage 中的项目持久化
- * - 周期性探测本地资源状态
  * - 通过 File System Access API 管理本地工作目录
  *
- * 演示场景下即使没有 Ollama 也能正常展示 UI。
+ * LLM 连接使用 DeepSeek（通过服务端 DEEPSEEK_API_KEY 环境变量配置），
+ * 不在前端探测本地 Ollama。
  */
 import type {
   IRuntimeConnector,
@@ -21,7 +20,6 @@ import type {
 } from "../types/runtime";
 
 const STORAGE_KEY = "zero-one-local-projects";
-const OLLAMA_BASE = "http://localhost:11434";
 
 function generateId(): string {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -39,18 +37,6 @@ function loadProjects(): AgentProject[] {
 
 function saveProjects(projects: AgentProject[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-}
-
-/** 探测 Ollama 是否在线 */
-async function checkOllama(): Promise<boolean> {
-  try {
-    const resp = await fetch(`${OLLAMA_BASE}/api/tags`, {
-      signal: AbortSignal.timeout(2000),
-    });
-    return resp.ok;
-  } catch {
-    return false;
-  }
 }
 
 /** 估算本机资源 */
@@ -78,11 +64,9 @@ export class LocalRuntimeConnector implements IRuntimeConnector {
   private statusHandlers: StatusHandler[] = [];
   private resourceHandlers: ResourceHandler[] = [];
   private pollTimer: ReturnType<typeof setInterval> | null = null;
-  private _modelReady = false;
 
   async connect(): Promise<void> {
     this.projects = loadProjects();
-    this._modelReady = await checkOllama();
     this.notifyStatus();
     this.startPolling();
   }
@@ -95,7 +79,7 @@ export class LocalRuntimeConnector implements IRuntimeConnector {
     return {
       mode: "local",
       connected: "connected",
-      modelReady: this._modelReady,
+      modelReady: true,
       activeProjects: this.projects.filter((p) => p.phase === "running").length,
     };
   }
@@ -172,7 +156,7 @@ export class LocalRuntimeConnector implements IRuntimeConnector {
     const status: RuntimeStatus = {
       mode: "local",
       connected: "connected",
-      modelReady: this._modelReady,
+      modelReady: true,
       activeProjects: this.projects.filter((p) => p.phase === "running").length,
     };
     for (const h of this.statusHandlers) h(status);
@@ -181,10 +165,6 @@ export class LocalRuntimeConnector implements IRuntimeConnector {
   private startPolling(): void {
     this.stopPolling();
     this.pollTimer = setInterval(async () => {
-      // 重新检测 Ollama
-      this._modelReady = await checkOllama();
-      this.notifyStatus();
-      // 推送资源更新
       const metrics = estimateResources();
       for (const h of this.resourceHandlers) h(metrics);
     }, 3000);
