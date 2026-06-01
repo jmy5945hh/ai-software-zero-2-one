@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Sparkles,
@@ -25,6 +26,7 @@ import { TypewriterText } from "../components/TypewriterText";
  */
 export function LandingPage() {
   const navigate = useNavigate();
+  const [selectedRuntime, setSelectedRuntime] = useState<"local" | "cloud">("cloud");
 
   return (
     <>
@@ -68,87 +70,93 @@ export function LandingPage() {
         {/* ── SECTION 2: 运行时模式选择 ──────── */}
         <section className="intro-runtime">
 
-          <div className="intro-runtime-cards">
-            {/* 本地运行时 */}
-            <button
-              className="intro-runtime-card local"
-              type="button"
-              onClick={() => {
-                localStorage.setItem("zero-one-runtime-mode", "local");
-                navigate("/dashboard");
-              }}
-            >
-              <div className="intro-runtime-card-header">
-                <div className="intro-runtime-icon local-icon">
-                  <Monitor size={28} />
-                </div>
-                <Check size={16} className="intro-runtime-check" />
-              </div>
-              <h3>本地 CLI Agent</h3>
-              <ul className="intro-runtime-features">
-                <li>
-                  <Shield size={13} />
-                  快速响应
-                </li>
-                <li>
-                  <FolderOpen size={13} />
-                  文件系统
-                </li>
-                <li>
-                  <Cpu size={13} />
-                  本地工具
-                </li>
-                <li>
-                  <Zap size={13} />
-                  低延迟
-                </li>
-              </ul>
-              <span className="intro-runtime-cta">
-                启动本地 DevAgent CLI，马上开始！
-                <ArrowRight size={14} />
-              </span>
-            </button>
+          <div className="intro-runtime-cards" onClick={(e) => {
+              // 单击卡片切换选中
+              const card = (e.target as HTMLElement).closest('[data-runtime]');
+              if (!card) return;
+              const mode = card.getAttribute('data-runtime') as 'local' | 'cloud';
+              setSelectedRuntime(mode);
 
-            {/* 云端运行时 */}
-            <button
-              className="intro-runtime-card cloud"
-              type="button"
-              onClick={() => {
-                localStorage.setItem("zero-one-runtime-mode", "cloud");
+              // 单击 CTA 按钮区进入
+              const cta = (e.target as HTMLElement).closest('.intro-runtime-cta');
+              if (cta) {
+                localStorage.setItem("zero-one-runtime-mode", mode);
                 navigate("/dashboard");
-              }}
-            >
-              <div className="intro-runtime-card-header">
-                <div className="intro-runtime-icon cloud-icon">
-                  <Cloud size={28} />
+              }
+            }}
+          >
+            {/* Overlap wrapper for visual stacking */}
+
+            <div className={`intro-runtime-overlap-card ${selectedRuntime === "cloud" ? "selected" : "deselected"}`} data-runtime="cloud">
+              {/* 云端运行时 */}
+              <div className="intro-runtime-card cloud">
+                <div className="intro-runtime-card-header">
+                  <div className="intro-runtime-icon cloud-icon">
+                    <Cloud size={28} />
+                  </div>
+                  <Check size={16} className={`intro-runtime-check ${selectedRuntime === "cloud" ? "checked" : ""}`} />
                 </div>
-                <Check size={16} className="intro-runtime-check" />
+                <h3>云端 Agent 运行时</h3>
+                
+                <ul className="intro-runtime-features">
+                  <li>
+                    <Globe size={13} />
+                    7×24 在线
+                  </li>
+                  <li>
+                    <Layers size={13} />
+                    定时任务
+                  </li>
+                  <li>
+                    <Clock size={13} />
+                    远程执行
+                  </li>
+                  <li>
+                    <Users size={13} />
+                    协作共享
+                  </li>
+                </ul>
+                <span className="intro-runtime-cta">
+                  云端Agent，马上开始！
+                  <ArrowRight size={14} />
+                </span>
               </div>
-              <h3>云端 Agent 运行时</h3>
-              
-              <ul className="intro-runtime-features">
-                <li>
-                  <Globe size={13} />
-                  7×24 在线
-                </li>
-                <li>
-                  <Layers size={13} />
-                  定时任务
-                </li>
-                <li>
-                  <Clock size={13} />
-                  远程执行
-                </li>
-                <li>
-                  <Users size={13} />
-                  协作共享
-                </li>
-              </ul>
-              <span className="intro-runtime-cta">
-                连接云端沙盒 DevAgent，马上开始！
-                <ArrowRight size={14} />
-              </span>
-            </button>
+            </div>
+            <div className={`intro-runtime-overlap-card ${selectedRuntime === "local" ? "selected" : "deselected"}`} data-runtime="local">
+              {/* 本地运行时 */}
+              <div className="intro-runtime-card local">
+                <div className="intro-runtime-card-header">
+                  <div className="intro-runtime-icon local-icon">
+                    <Monitor size={28} />
+                  </div>
+                  <Check size={16} className={`intro-runtime-check ${selectedRuntime === "local" ? "checked" : ""}`} />
+                </div>
+                <h3>本地 CLI Agent</h3>
+                <ul className="intro-runtime-features">
+                  <li>
+                    <Shield size={13} />
+                    快速响应
+                  </li>
+                  <li>
+                    <FolderOpen size={13} />
+                    文件系统
+                  </li>
+                  <li>
+                    <Cpu size={13} />
+                    本地工具
+                  </li>
+                  <li>
+                    <Zap size={13} />
+                    低延迟
+                  </li>
+                </ul>
+                <span className="intro-runtime-cta">
+                  本地CLI底座模式
+                  <ArrowRight size={14} />
+                </span>
+              </div>
+            </div>
+
           </div>
         </section>
 
