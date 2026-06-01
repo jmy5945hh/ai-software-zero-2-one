@@ -72,6 +72,45 @@ export class AgentRunner {
     return session;
   }
 
+  /** 为编译分析 Agent 创建独立 AgentSession */
+  async createBuildSession(
+    workspaceDir: string,
+  ): Promise<AgentSession> {
+    const provider = getDefaultProvider();
+    const key = process.env.DEEPSEEK_API_KEY;
+    if (!key) throw new Error("DEEPSEEK_API_KEY not found in environment");
+    this.authStorage.setRuntimeApiKey("deepseek", key);
+
+    const model = this.modelRegistry.find(provider, "deepseek-v4-flash");
+    if (!model) throw new Error(`Model not found: ${provider}/deepseek-v4-flash`);
+
+    const loader = new DefaultResourceLoader({
+      cwd: workspaceDir,
+      agentDir: workspaceDir,
+      systemPrompt: `你是一个项目编译分析专家。你的唯一职责是分析编译输出结果，生成结构化的编译报告。
+
+规则：
+1. 只输出 JSON，不输出任何其他内容（不要加 markdown 代码块、不要解释）
+2. 严格遵守用户提供的 JSON schema
+3. 忠于原文，不添加原文中没有的内容`,
+    });
+    await loader.reload();
+
+    const { session } = await createAgentSession({
+      model,
+      thinkingLevel: "low",
+      authStorage: this.authStorage,
+      modelRegistry: this.modelRegistry,
+      settingsManager: this.settingsManager,
+      tools: [],
+      customTools: [],
+      cwd: workspaceDir,
+      resourceLoader: loader,
+    });
+
+    return session;
+  }
+
   /** 为指定步骤创建 AgentSession */
   async createSession(
     taskId: string,

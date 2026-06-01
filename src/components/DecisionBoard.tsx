@@ -22,7 +22,6 @@ import {
   Edit3,
   HelpCircle,
   Play,
-  X,
   Info,
   File,
   Folder,
@@ -74,11 +73,10 @@ type DecisionBoardProps = {
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion: (step: string) => Promise<void>;
+  agentResumeQuestion?: (step: string, answer: string) => Promise<void>;
   isAgentConnected: boolean;
   /** 项目编译 */
   triggerBuild: (workspacePath: string) => Promise<{ success: boolean; output: string; command: string }>;
-  saveBuildResult: (sessionId: string, stepId: string, buildResult: Record<string, unknown>) => Promise<void>;
-  triggerBuildFix: (taskId: string, step: string, sessionId: string, buildOutput: string, workspacePath?: string) => Promise<void>;
   taskId: string | null;
 };
 
@@ -94,10 +92,9 @@ export function DecisionBoard({
   agentPrompt,
   agentAnswerQuestion,
   agentContinueQuestion,
+  agentResumeQuestion,
   isAgentConnected,
   triggerBuild,
-  saveBuildResult,
-  triggerBuildFix,
   taskId,
 }: DecisionBoardProps) {
   const step = workflow[state.stepIndex];
@@ -169,12 +166,11 @@ export function DecisionBoard({
             stepId={step.id}
             agentAnswerQuestion={agentAnswerQuestion}
             agentContinueQuestion={agentContinueQuestion}
+            agentResumeQuestion={agentResumeQuestion}
             agentPrompt={agentPrompt}
             agentSteer={agentSteer}
             triggerBuild={triggerBuild}
-            saveBuildResult={saveBuildResult}
-            triggerBuildFix={triggerBuildFix}
-            taskId={taskId}
+            restoredSession={restoredSessions[step.id]}
           />
         )}
         {activeTab === "trajectory" && (
@@ -186,6 +182,7 @@ export function DecisionBoard({
             agentPrompt={agentPrompt}
             agentAnswerQuestion={agentAnswerQuestion}
             agentContinueQuestion={agentContinueQuestion}
+            agentResumeQuestion={agentResumeQuestion}
             agentSession={agentSessions[step.id]}
             restoredSession={restoredSessions[step.id]}
             isAgentConnected={isAgentConnected}
@@ -243,12 +240,11 @@ function DeliveryCollabTab({
   stepId,
   agentAnswerQuestion,
   agentContinueQuestion,
+  agentResumeQuestion,
   agentPrompt,
   agentSteer,
   triggerBuild,
-  saveBuildResult,
-  triggerBuildFix,
-  taskId,
+  restoredSession,
 }: {
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
@@ -260,27 +256,65 @@ function DeliveryCollabTab({
   stepId: string;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion: (step: string) => Promise<void>;
+  agentResumeQuestion?: (step: string, answer: string) => Promise<void>;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentSteer: (step: string, text: string, intent?: string) => void;
   triggerBuild: (workspacePath: string) => Promise<{ success: boolean; output: string; command: string }>;
-  saveBuildResult: (sessionId: string, stepId: string, buildResult: Record<string, unknown>) => Promise<void>;
-  triggerBuildFix: (taskId: string, step: string, sessionId: string, buildOutput: string, workspacePath?: string) => Promise<void>;
-  taskId: string | null;
+  /** 从历史记录恢复的当前步骤会话快照 */
+  restoredSession?: {
+    messages: Array<{ role: "user" | "assistant"; content: string }>;
+    turns: Array<{
+      id: string;
+      index: number;
+      status: "running" | "done";
+      textContent: string;
+      thinking: string;
+      userInput?: string;
+      toolCalls: Array<{
+        id: string;
+        name: string;
+        status: "running" | "done" | "error";
+        category: string;
+        input: string;
+        result?: string;
+      }>;
+    }>;
+    summary: string;
+    summarizationResult?: import("../data/types").AgentSummary | null;
+    buildResult?: import("../data/types").BuildResult | null;
+  } | null;
 }) {
   const agentCompleted = isAgentConnected && agentSession?.completed && !agentSession?.isStreaming;
   const agentWorking = isAgentConnected && agentSession && !agentCompleted;
   const pendingQuestion = hasPendingQuestion(agentSession);
 
-  // 结构化总结状态
-  const summaryResult = agentSession?.summarizationResult;
+  // 结构化总结状态（优先 live session，fallback 到 restored session）
+  const summaryResult = agentSession?.summarizationResult ?? restoredSession?.summarizationResult ?? undefined;
   const summaryLoading = agentSession?.summarizationStatus === "loading";
   const summaryError = agentSession?.summarizationStatus === "error";
-  const hasSummary = agentSession?.summarizationStatus === "done" && summaryResult;
+  const hasSummary = (agentSession?.summarizationStatus === "done" || !!restoredSession?.summarizationResult) && !!summaryResult;
 
-  // 文件变更（从 session turns 中统计）
+  // 从历史恢复且无 live session 时的状态判断
+  // 只要有 restoredSession 数据且 agentSession 尚未产生新 turn，就视为历史恢复场景
+  const hasRestoredData = !!restoredSession && (restoredSession?.turns?.length ?? 0) > 0;
+  const hasLiveProgress = !!agentSession && agentSession.turns.length > 0;
+  const restoredCompleted = hasRestoredData && !hasLiveProgress && !!restoredSession?.summarizationResult;
+  const restoredIncomplete = hasRestoredData && !hasLiveProgress && !restoredSession?.summarizationResult;
+
+  // agent 已连接但尚未产生新 turn（刚 resume 或刚进入历史会话页面）
+  // 此时应显示"未完成"提示让用户点击继续执行
+  const restoredPendingResume = isAgentConnected
+    && !!restoredSession
+    && !restoredSession?.summarizationResult
+    && (restoredSession?.turns?.length ?? 0) > 0
+    && (!agentSession || agentSession.turns.length === 0);
+
+  // 文件变更（优先 live session，fallback 到 restored session）
   const fileChanges: FileChange[] = agentSession?.turns
     ? extractFileChanges(agentSession.turns)
-    : [];
+    : restoredSession?.turns
+      ? extractFileChanges(restoredSession.turns)
+      : [];
 
   // 点击文件变更 → 全屏弹窗查看详情
   const [modalContent, setModalContent] = useState<ModalContent | null>(null);
@@ -335,6 +369,33 @@ function DeliveryCollabTab({
     },
     [state.workspacePath],
   );
+
+  // 从历史恢复的 ask_user_question 中提取已存储的回答
+  const restoredAnswer = useMemo(() => {
+    if (!restoredSession?.turns) return null;
+    for (let i = restoredSession.turns.length - 1; i >= 0; i--) {
+      for (const tc of restoredSession.turns[i].toolCalls || []) {
+        if (tc.name === "ask_user_question" && tc.result) {
+          return tc.result;
+        }
+      }
+    }
+    return null;
+  }, [restoredSession]);
+
+  // 自动 resume：点击"继续执行"时重建 session 并发送已存储的回答
+  const [isResuming, setIsResuming] = useState(false);
+  const handleAutoResume = useCallback(async () => {
+    if (!stepId || !agentResumeQuestion || !restoredAnswer) return;
+    setIsResuming(true);
+    try {
+      await agentResumeQuestion(stepId, restoredAnswer);
+    } catch {
+      // 错误由 ws 层处理
+    } finally {
+      setIsResuming(false);
+    }
+  }, [stepId, agentResumeQuestion, restoredAnswer]);
 
   const currentStep = workflow.find(s => s.id === stepId);
 
@@ -422,7 +483,7 @@ function DeliveryCollabTab({
           {hasSummary && summaryResult && (
             <>
               <SummaryBrief brief={summaryResult.brief} />
-              <KeyPointsGrid keyPoints={summaryResult.key_points} />
+              <KeyPointsGrid keyPoints={summaryResult.key_points ?? []} />
               {/* intent / plan 阶段展示交付Spec 目录，其他阶段展示文件变更 */}
               {(stepId === "intent" || stepId === "plan")
                 ? <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
@@ -433,10 +494,8 @@ function DeliveryCollabTab({
                 <BuildSection
                   workspacePath={state.workspacePath}
                   sessionId={state.sessionId}
-                  taskId={taskId}
                   triggerBuild={triggerBuild}
-                  saveBuildResult={saveBuildResult}
-                  triggerBuildFix={triggerBuildFix}
+                  agentSession={agentSession}
                 />
               )}
               <TodoSection
@@ -460,7 +519,77 @@ function DeliveryCollabTab({
           )}
         </>
       )}
-      {!isAgentConnected && (
+      {/* 从历史恢复且已完成：展示总结信息 */}
+      {restoredCompleted && (
+        <>
+          {summaryResult && (
+            <>
+              <SummaryBrief brief={summaryResult.brief} />
+              <KeyPointsGrid keyPoints={summaryResult.key_points ?? []} />
+              {(stepId === "intent" || stepId === "plan")
+                ? <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
+                : <FileChangesList files={fileChanges} onFileClick={handleFileClick} />
+              }
+              {stepId === "coding" && (
+                <BuildSection
+                  workspacePath={state.workspacePath}
+                  sessionId={state.sessionId}
+                  triggerBuild={triggerBuild}
+                  agentSession={undefined}
+                  restoredBuildResult={restoredSession?.buildResult ?? null}
+                />
+              )}
+              <TodoSection
+                todos={summaryResult.todos ?? []}
+                todoAnswers={state.todoAnswers}
+                onPatch={onPatch}
+                stepId={stepId}
+                agentPrompt={agentPrompt}
+                agentSteer={agentSteer}
+                onContinue={onContinue}
+                stepIndex={state.stepIndex}
+              />
+            </>
+          )}
+          {!summaryResult && restoredSession?.summary && (
+            <div className="delivery-summary">
+              <MarkdownRenderer>{restoredSession.summary}</MarkdownRenderer>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* 从历史恢复但未完成：提示继续执行 */}
+      {(restoredIncomplete || restoredPendingResume) && (
+        <div className="delivery-incomplete-notice">
+          <div className="incomplete-notice-icon">
+            <HelpCircle size={28} />
+          </div>
+          <div className="incomplete-notice-body">
+            <strong>当前阶段任务尚未完成</strong>
+            <p>该会话在历史记录中处于未完成状态，请前往任务轨迹查看进度并继续执行。</p>
+            <button
+              className="working-notice-link"
+              type="button"
+              onClick={() => {
+                handleAutoResume();
+                onSwitchToTrajectory();
+              }}
+              disabled={isResuming}
+            >
+              {isResuming ? (
+                <Loader2 size={14} className="spin-icon" />
+              ) : (
+                <Play size={14} />
+              )}
+              <span>{isResuming ? "恢复执行中..." : "前往任务轨迹继续执行"}</span>
+              <ArrowRight size={12} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isAgentConnected && !restoredCompleted && !restoredIncomplete && !restoredPendingResume && (
         (stepId === "intent" || stepId === "plan") ? (
           <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
         ) : (
@@ -471,8 +600,8 @@ function DeliveryCollabTab({
         )
       )}
 
-      {/* 已连接但无当前步骤 session */}
-      {isAgentConnected && !agentSession && !agentWorking && (
+      {/* 已连接但无当前步骤 session（排除历史恢复已完成场景） */}
+      {isAgentConnected && !agentSession && !agentWorking && !restoredCompleted && (
         (stepId === "intent" || stepId === "plan") ? (
           <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
         ) : (
@@ -532,73 +661,28 @@ function KeyPointsGrid({ keyPoints }: { keyPoints: KeyPoint[] }) {
 function BuildSection({
   workspacePath,
   sessionId,
-  taskId,
   triggerBuild,
-  saveBuildResult,
-  triggerBuildFix,
+  agentSession,
+  restoredBuildResult,
 }: {
   workspacePath: string;
   sessionId: string;
-  taskId: string | null;
   triggerBuild: (workspacePath: string) => Promise<{ success: boolean; output: string; command: string }>;
-  saveBuildResult: (sessionId: string, stepId: string, buildResult: Record<string, unknown>) => Promise<void>;
-  triggerBuildFix: (taskId: string, step: string, sessionId: string, buildOutput: string, workspacePath?: string) => Promise<void>;
+  agentSession?: import("../agent/types").SessionState;
+  restoredBuildResult?: import("../data/types").BuildResult | null;
 }) {
-  const [buildResult, setBuildResult] = useState<{
-    command: string;
-    success: boolean;
-    output: string;
-    timestamp: string;
-    building: boolean;
-    fixing: boolean;
-    retryCount: number;
-  } | null>(null);
   const [showFullOutput, setShowFullOutput] = useState(false);
-  const [fixing, setFixing] = useState(false);
-  const [fixCount, setFixCount] = useState(0);
+
+  const buildResult = agentSession?.buildResult ?? restoredBuildResult ?? null;
+  const buildStatus = agentSession?.buildStatus ?? (restoredBuildResult ? "done" : "idle");
+  const isBuilding = buildStatus === "loading" || buildStatus === "pending";
+  const isDone = buildStatus === "done";
+  const isError = buildStatus === "error";
 
   const doBuild = useCallback(async () => {
     if (!workspacePath) return;
-    setBuildResult((prev) => prev ? { ...prev, building: true } : {
-      command: "", success: false, output: "", timestamp: "", building: true, fixing: false, retryCount: 0,
-    });
-    try {
-      const result = await triggerBuild(workspacePath);
-      const newResult = {
-        command: result.command,
-        success: result.success,
-        output: result.output,
-        timestamp: new Date().toISOString(),
-        building: false,
-        fixing: false,
-        retryCount: fixCount,
-      };
-      setBuildResult(newResult);
-
-      // 保存编译结果到 step 文件
-      if (sessionId) {
-        saveBuildResult(sessionId, "coding", newResult);
-      }
-
-      // 编译失败且未超过 3 次 → 自动修复
-      if (!result.success && fixCount < 3 && taskId) {
-        setFixing(true);
-        setBuildResult((prev) => prev ? { ...prev, fixing: true } : null);
-        await triggerBuildFix(taskId, "coding", sessionId, result.output, workspacePath);
-        setFixCount((c) => c + 1);
-        // 修复后自动重新编译
-        setTimeout(() => doBuild(), 3000);
-      } else if (!result.success && fixCount >= 3) {
-        // 超过 3 次，提示用户
-        setFixing(false);
-      } else {
-        setFixing(false);
-      }
-    } catch {
-      setBuildResult((prev) => prev ? { ...prev, building: false, fixing: false } : null);
-      setFixing(false);
-    }
-  }, [workspacePath, sessionId, taskId, triggerBuild, saveBuildResult, triggerBuildFix, fixCount]);
+    await triggerBuild(workspacePath);
+  }, [workspacePath, triggerBuild]);
 
   // 截取缩略内容：前 50 行 + 后 20 行
   const truncatedOutput = useMemo(() => {
@@ -615,8 +699,7 @@ function BuildSection({
       <div className="summary-section-header">
         <Terminal size={15} />
         <span>项目编译</span>
-        {buildResult?.building && <Loader2 size={14} className="spin-icon" style={{ marginLeft: 8 }} />}
-        {fixing && <span style={{ marginLeft: 8, fontSize: 12, color: "#f59e0b" }}>自动修复中 ({fixCount}/3)...</span>}
+        {isBuilding && <Loader2 size={14} className="spin-icon" style={{ marginLeft: 8 }} />}
       </div>
 
       {/* 编译命令 */}
@@ -628,13 +711,20 @@ function BuildSection({
       )}
 
       {/* 编译状态 */}
-      {buildResult && !buildResult.building && (
+      {isDone && buildResult && (
         <div className={`build-status ${buildResult.success ? "build-success" : "build-failure"}`}>
           {buildResult.success ? (
             <>✅ 编译成功 ({new Date(buildResult.timestamp).toLocaleTimeString()})</>
           ) : (
             <>❌ 编译失败 ({new Date(buildResult.timestamp).toLocaleTimeString()})</>
           )}
+        </div>
+      )}
+
+      {/* 编译错误 */}
+      {isError && (
+        <div className="build-status build-failure">
+          ❌ 编译分析异常
         </div>
       )}
 
@@ -662,23 +752,15 @@ function BuildSection({
           className="ghost-button"
           type="button"
           onClick={doBuild}
-          disabled={buildResult?.building || fixing}
+          disabled={isBuilding}
         >
-          {buildResult?.building ? (
+          {isBuilding ? (
             <><Loader2 size={14} className="spin-icon" /> 编译中...</>
           ) : (
             <><Play size={14} /> 重新编译</>
           )}
         </button>
       </div>
-
-      {/* 修复失败提示 */}
-      {!buildResult?.success && fixCount >= 3 && !fixing && (
-        <div className="build-fix-exhausted">
-          <Info size={14} />
-          <span>已自动修复 3 次仍未通过编译，请手动检查代码</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -1241,6 +1323,7 @@ function TrajectoryChatTab({
   agentPrompt,
   agentAnswerQuestion,
   agentContinueQuestion,
+  agentResumeQuestion,
   agentSession,
   restoredSession,
   isAgentConnected,
@@ -1259,6 +1342,7 @@ function TrajectoryChatTab({
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion: (step: string) => Promise<void>;
+  agentResumeQuestion?: (step: string, answer: string) => Promise<void>;
   agentSession?: SessionState;
   restoredSession?: {
     messages: Array<{ role: "user" | "assistant"; content: string }>;
@@ -1503,6 +1587,7 @@ function TrajectoryChatTab({
                     stepId={stepId}
                     agentAnswerQuestion={agentAnswerQuestion}
                     agentContinueQuestion={agentContinueQuestion}
+                    agentResumeQuestion={agentResumeQuestion}
                     isExpanded={false}
                     onToggleExpand={() => {}}
                     onOpenModal={openModal}
@@ -1561,6 +1646,7 @@ function TrajectoryChatTab({
                             stepId={stepId}
                             agentAnswerQuestion={agentAnswerQuestion}
                             agentContinueQuestion={agentContinueQuestion}
+                            agentResumeQuestion={agentResumeQuestion}
                             isExpanded={event.type === "tool" || event.type === "diff"}
                             onToggleExpand={() => {}}
                             onOpenModal={openModal}
@@ -1587,7 +1673,10 @@ function TrajectoryChatTab({
                   <TimelineEventV2
                     key={event.id}
                     event={event}
+                    stepId={stepId}
+                    agentAnswerQuestion={agentAnswerQuestion}
                     agentContinueQuestion={agentContinueQuestion}
+                    agentResumeQuestion={agentResumeQuestion}
                     isExpanded={expandedPostId === event.id}
                     onToggleExpand={() =>
                       setExpandedPostId((prev) =>
@@ -2042,6 +2131,7 @@ function AskUserQuestionCard({
   stepId,
   agentAnswerQuestion,
   agentContinueQuestion,
+  agentResumeQuestion,
   isExpanded,
   onToggleExpand,
   onOpenModal,
@@ -2050,6 +2140,7 @@ function AskUserQuestionCard({
   stepId?: string;
   agentAnswerQuestion?: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion?: (step: string) => Promise<void>;
+  agentResumeQuestion?: (step: string, answer: string) => Promise<void>;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onOpenModal: (mc: ModalContent) => void;
@@ -2058,6 +2149,7 @@ function AskUserQuestionCard({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [continuing, setContinuing] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const [showCustomInput, setShowCustomInput] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -2074,6 +2166,15 @@ function AskUserQuestionCard({
 
   // 如果已有 result（已回答过），显示结果
   const alreadyAnswered = tc.status === "done" && tc.result;
+
+  // 自动 resume：从历史恢复后，自动重建 session 并让 agent 继续执行
+  const autoResumeRef = useRef(false);
+  useEffect(() => {
+    if (alreadyAnswered && agentResumeQuestion && stepId && tc.result && !autoResumeRef.current) {
+      autoResumeRef.current = true;
+      agentResumeQuestion(stepId, tc.result).catch(() => {});
+    }
+  }, [alreadyAnswered, agentResumeQuestion, stepId, tc.result]);
 
   const handleSelectOption = async (opt: string) => {
     if (!stepId || !agentAnswerQuestion) return;
@@ -2119,6 +2220,19 @@ function AskUserQuestionCard({
       // 错误由 ws 层处理
     } finally {
       setContinuing(false);
+    }
+  };
+
+  /** 从历史恢复后继续问答（重建 session 并发送已存储的回答） */
+  const handleResume = async () => {
+    if (!stepId || !agentResumeQuestion || !tc.result) return;
+    setResuming(true);
+    try {
+      await agentResumeQuestion(stepId, tc.result);
+    } catch {
+      // 错误由 ws 层处理
+    } finally {
+      setResuming(false);
     }
   };
 
@@ -2171,6 +2285,20 @@ function AskUserQuestionCard({
               <div className="ask-question-answered">
                 <div className="ask-question-answer-label">您的回答：</div>
                 <div className="ask-question-answer-value">{tc.result}</div>
+                {/* 从历史恢复的场景：显示"继续执行"按钮 */}
+                <button
+                  className="ask-question-resume-btn"
+                  type="button"
+                  onClick={handleResume}
+                  disabled={resuming}
+                >
+                  {resuming ? (
+                    <Loader2 size={14} className="spin-icon" />
+                  ) : (
+                    <Play size={14} />
+                  )}
+                  <span>继续执行</span>
+                </button>
               </div>
             ) : submitted ? (
               <div className="ask-question-answered">
@@ -2254,6 +2382,7 @@ function TimelineEventV2({
   stepId,
   agentAnswerQuestion,
   agentContinueQuestion,
+  agentResumeQuestion,
   isExpanded,
   onToggleExpand,
   onOpenModal,
@@ -2262,6 +2391,7 @@ function TimelineEventV2({
   stepId?: string;
   agentAnswerQuestion?: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion?: (step: string) => Promise<void>;
+  agentResumeQuestion?: (step: string, answer: string) => Promise<void>;
   isExpanded: boolean;
   onToggleExpand: () => void;
   onOpenModal: (mc: ModalContent) => void;
@@ -2478,6 +2608,7 @@ function TimelineEventV2({
           stepId={stepId}
           agentAnswerQuestion={agentAnswerQuestion}
           agentContinueQuestion={agentContinueQuestion}
+          agentResumeQuestion={agentResumeQuestion}
           isExpanded={isExpanded}
           onToggleExpand={onToggleExpand}
           onOpenModal={onOpenModal}

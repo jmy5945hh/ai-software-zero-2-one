@@ -33,6 +33,8 @@ export type StepSessionSnapshot = {
   summary: string;
   /** 结构化总结结果 */
   summarizationResult?: import("../data/types").AgentSummary | null;
+  /** 项目编译结果（仅 coding 步骤有值） */
+  buildResult?: import("../data/types").BuildResult | null;
 };
 
 /** 任务元信息（不含对话数据，与服务端 SessionMeta 对齐） */
@@ -269,6 +271,8 @@ export function useSessionRecords() {
             })),
             summary: session.summary || "",
             summarizationResult: session.summarizationResult || null,
+            // 保留编译结果（agent session 不携带，从 restored 继承）
+            buildResult: restoredStep?.buildResult || null,
           };
         }
       }

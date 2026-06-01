@@ -1567,6 +1567,41 @@
   font-size: 0.85rem;
 }
 
+/* 历史恢复未完成提示 */
+.delivery-incomplete-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 32px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin: 24px;
+}
+
+.delivery-incomplete-notice .incomplete-notice-icon {
+  flex-shrink: 0;
+  color: var(--warning, #f59e0b);
+  margin-top: 2px;
+}
+
+.delivery-incomplete-notice .incomplete-notice-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.delivery-incomplete-notice .incomplete-notice-body strong {
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.delivery-incomplete-notice .incomplete-notice-body p {
+  font-size: 0.85rem;
+  color: var(--muted-warm);
+  margin: 0;
+}
+
 /* 板块通用头部 */
 .summary-section {
   margin-bottom: 18px;

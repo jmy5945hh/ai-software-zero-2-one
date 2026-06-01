@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useCallback, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useStoredState } from "../hooks/useStoredState";
 import { useAgent } from "../agent";
 import { titleFromIntent, workflow } from "../data";
-import type { DrawerContent } from "../data/types";
+
+import type { DrawerContent, AppState } from "../data/types";
+import type { ConnectionStatus } from "../agent/types";
 import { useSessionRecords } from "../hooks/useSessionRecords";
 
 import { WifiOff } from "lucide-react";
@@ -20,14 +22,61 @@ import { AgentStatusBadge } from "../components/AgentStatusBadge";
  */
 export function TaskPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [state, setState] = useStoredState();
   const [drawerContent, setDrawerContent] = useState<DrawerContent>(null);
 
+  // ── URL sessionId 恢复 ──
+  // 如果 URL 携带 sessionId 且与 localStorage 中的不一致，说明是刷新后首次加载，
+  // 需要从服务端加载会话记录并恢复到 AppState
+  const urlSessionId = searchParams.get("sessionId");
+  const restoreAttemptedRef = useRef(false);
+
   useEffect(() => {
-    if (!state.workspacePath) {
-      navigate("/dashboard");
+    // 仅执行一次：URL 有 sessionId，且尚未尝试恢复
+    if (!urlSessionId || restoreAttemptedRef.current) return;
+    restoreAttemptedRef.current = true;
+
+    // 如果 localStorage 中的 sessionId 与 URL 一致，说明状态已就绪，无需恢复
+    if (state.sessionId === urlSessionId && state.workspacePath) {
+      return;
     }
-  }, [state.workspacePath, navigate]);
+
+    // 从服务端加载会话记录
+    sessionRecords.loadRecord(urlSessionId).then((record) => {
+      if (!record) return;
+
+      setState((previous) => ({
+        ...previous,
+        intent: record.intent,
+        workspacePath: record.workspacePath,
+        stepIndex: record.stepIndex,
+        activeStage: record.activeStage as AppState["activeStage"],
+        scope: record.scope as AppState["scope"],
+        selectedModules: record.selectedModules,
+        notes: record.notes,
+        todoAnswers: record.todoAnswers,
+        initialPrompts: record.initialPrompts,
+        codeConfirmed: record.codeConfirmed,
+        fixApproved: record.fixApproved,
+        releaseApproved: record.releaseApproved,
+        qualityPassed: record.qualityPassed,
+        createdAt: record.createdAt,
+        sessionId: record.sessionId,
+        restoredSessions: record.stepSessions || {},
+        view: "workspace",
+      }));
+    });
+  }, [urlSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 如果状态中没有 workspacePath 或者不在 workspace 状态，跳回首页
+  useEffect(() => {
+    // 如果没有 workspacePath 且没有待恢复的 URL sessionId，跳回首页
+    if (!state.workspacePath && !urlSessionId) {
+      navigate("/");
+>>>>>>> 1e001fd (feat:支持session 存储总结信息):src/pages/WorkspacePage.tsx
+    }
+  }, [state.workspacePath, navigate, urlSessionId]);
 
   const taskId = useMemo(() => {
     if (state.createdAt) {
@@ -36,7 +85,7 @@ export function TaskPage() {
     return null;
   }, [state.createdAt]);
 
-  const agent = useAgent(taskId);
+  const agent = useAgent(taskId, state.workspacePath);
 
   // ── 会话记录自动保存 ──
   const sessionRecords = useSessionRecords();
@@ -69,12 +118,7 @@ export function TaskPage() {
     if (taskId && state.intent) {
       sessionRecords.saveRecord(state, taskId, stepSummaries, sessionsSnapshot, state.restoredSessions);
     }
-    if (step === "coding" && state.workspacePath) {
-      agent.triggerBuild(state.workspacePath).then((result) => {
-        console.log("[TaskPage] auto-build result:", result.success, result.command);
-      });
-    }
-  }, [taskId, state, stepSummaries, sessionRecords, agent]);
+  }, [taskId, state, stepSummaries, sessionRecords]);
 
   useEffect(() => {
     agent.setOnSessionComplete(handleSessionComplete);
@@ -324,10 +368,9 @@ export function TaskPage() {
               agentPrompt={agent.prompt}
               agentAnswerQuestion={agent.answerQuestion}
               agentContinueQuestion={agent.continueQuestion}
+              agentResumeQuestion={agent.resumeQuestion}
               isAgentConnected={isAgentConnected}
               triggerBuild={agent.triggerBuild}
-              saveBuildResult={agent.saveBuildResult}
-              triggerBuildFix={agent.triggerBuildFix}
               taskId={taskId}
             />
           </div>

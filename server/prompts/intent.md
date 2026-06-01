@@ -30,6 +30,7 @@ Given that feature description, do this:
    Specs live under the default `specs/` directory.
    Construct the directory name: `<prefix>-<short-name>` (e.g., `20260319-143022-user-auth`)
    prefix is `YYYYMMDD-HHMMSS` (current timestamp)
+   short-name is summary of user input (1-5 words)
    Set `SPECIFY_FEATURE_DIRECTORY` to `specs/<directory-name>`
 
    **Create the directory and spec file**:

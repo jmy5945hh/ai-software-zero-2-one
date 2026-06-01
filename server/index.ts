@@ -1,6 +1,7 @@
 import http from "http";
 import path from "path";
 import fs from "fs";
+import { execSync } from "child_process";
 import { WebSocketServer, type WebSocket } from "ws";
 import { AgentRunner } from "./AgentRunner";
 import { SessionPool } from "./SessionPool";
@@ -176,10 +177,6 @@ const server = http.createServer((req, res) => {
       return;
     }
     try {
-      const { execSync } = require("child_process");
-      const fs = require("fs");
-      const path = require("path");
-
       // 检查目录是否存在
       if (!fs.existsSync(projectPath)) {
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -226,10 +223,6 @@ const server = http.createServer((req, res) => {
       return;
     }
     try {
-      const { execSync } = require("child_process");
-      const fs = require("fs");
-      const path = require("path");
-
       // 检查目录是否存在
       if (!fs.existsSync(projectPath)) {
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -380,6 +373,45 @@ function extractTextFromContent(result: Record<string, unknown> | undefined): st
     .filter((c) => c.type === "text")
     .map((c) => c.text || "")
     .join("");
+}
+
+/** 构建编译分析 prompt */
+function buildBuildPrompt(buildResult: {
+  command: string;
+  success: boolean;
+  output: string;
+  timestamp: string;
+}): string {
+  return `你是一个项目编译分析专家。请严格基于下面的编译输出，生成结构化的编译报告。
+
+要求：
+1. 忠于原文，不添加原文中没有的内容，不自由发挥
+2. 仅输出 JSON，不要有任何额外说明文字（不要加 markdown 代码块）
+
+输出 JSON schema：
+{
+  "command": "编译命令",
+  "success": true/false,
+  "output": "编译输出（完整保留原始输出，不要截断）",
+  "timestamp": "编译时间戳",
+  "retryCount": 0,
+  "building": false,
+  "fixing": false
+}
+
+注意：
+- success 字段必须严格根据编译结果判断
+- output 字段必须完整保留原始编译输出，不要做任何修改或截断
+- command 字段保留原始编译命令
+
+以下是编译输出：
+---
+命令: ${buildResult.command}
+时间: ${buildResult.timestamp}
+状态: ${buildResult.success ? "成功" : "失败"}
+输出:
+${buildResult.output}
+---`;
 }
 
 /** 从 AgentMessage[] 中提取最后一条 assistant 消息的文本 */
@@ -773,6 +805,48 @@ wss.on("connection", (ws: WebSocket) => {
           break;
         }
 
+        // ── 从历史恢复后继续问答（无 pending promise，需重建 session）──
+        case "session.resumeQuestion": {
+          const { taskId, step, answer, intent, workspacePath } = msg.params as {
+            taskId: string;
+            step: string;
+            answer: string;
+            intent?: string;
+            workspacePath?: string;
+          };
+          // 1. 创建新的 agent session（同 steer 的自动创建逻辑）
+          let workspaceDir: string;
+          if (workspacePath) {
+            workspaceDir = workspace.setExternalWorkspace(taskId, workspacePath);
+          } else {
+            workspaceDir = workspace.initWorkspace(taskId, intent || "");
+          }
+          const session = await runner.createSession(taskId, step, workspaceDir);
+          pool.set(taskId, step, session);
+
+          // 2. 订阅事件
+          const unsub = session.subscribe((sdkEvent) => {
+            const event = mapSdkEvent(sdkEvent);
+            if (!event) return;
+            ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
+          });
+          pool.setUnsub(taskId, step, unsub);
+
+          // 3. 先发响应（前端准备接收事件）
+          ws.send(
+            JSON.stringify({
+              type: "response",
+              id: msg.id,
+              result: { sessionId: session.sessionId },
+            }),
+          );
+
+          // 4. 发送 prompt：告知 agent 用户已回答了问题，请继续
+          const resumePrompt = `用户已回答了你的问题。回答是：${answer}\n\n请基于此回答继续执行任务。`;
+          await session.prompt(resumePrompt);
+          break;
+        }
+
         // ── 总结独立链路 ──────────────────
         case "summarization.save": {
           const { taskId, step, summary } = msg.params as {
@@ -827,12 +901,55 @@ wss.on("connection", (ws: WebSocket) => {
           break;
         }
 
+        // ── 项目编译（独立 LLM 分析） ──────
+        case "build.trigger": {
+          const { taskId, step, buildResult } = msg.params as {
+            taskId: string;
+            step: string;
+            buildResult: {
+              command: string;
+              success: boolean;
+              output: string;
+              timestamp: string;
+            };
+          };
+          const workspaceDir = workspace.getDir(taskId);
+          const session = await runner.createBuildSession(workspaceDir);
+
+          // 监听 agent_end，完成后自动清理
+          const unsub = session.subscribe((sdkEvent) => {
+            const event = mapSdkEvent(sdkEvent);
+            if (!event) return;
+            ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
+
+            if (event.type === "agent_end") {
+              unsub();
+              session.dispose();
+            }
+          });
+
+          // 先发响应（前端准备接收事件）
+          ws.send(
+            JSON.stringify({
+              type: "response",
+              id: msg.id,
+              result: { sessionId: session.sessionId },
+            }),
+          );
+
+          // 发送编译分析 prompt
+          const promptText = buildBuildPrompt(buildResult);
+          console.log("[build.trigger] userPrompt=%.20s", promptText.slice(0, 20));
+          await session.prompt(promptText);
+          break;
+        }
+
         // ── 项目编译 ──────────────────────
         case "build.save": {
           const { sessionId, stepId, buildResult } = msg.params as {
             sessionId: string;
             stepId: string;
-            buildResult: Record<string, unknown>;
+            buildResult: import("../server/SessionStore").StepSessionSnapshot["buildResult"];
           };
           // 将编译结果保存到 step 文件中
           const existing = sessionStore.loadStep(sessionId, stepId) || {
@@ -840,7 +957,7 @@ wss.on("connection", (ws: WebSocket) => {
             turns: [],
             summary: "",
           };
-          (existing as any).buildResult = buildResult;
+          existing.buildResult = buildResult;
           sessionStore.saveStep(sessionId, stepId, existing);
           ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
           break;

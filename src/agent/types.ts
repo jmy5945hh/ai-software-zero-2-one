@@ -85,6 +85,12 @@ export type SessionState = {
   summarizationResult?: import("../data/types").AgentSummary;
   /** 总结 Agent 原始返回文本（调试 / 兜底用） */
   summarizationRaw?: string;
+  /** 项目编译状态 */
+  buildStatus: "idle" | "pending" | "loading" | "done" | "error";
+  /** 编译结果 */
+  buildResult?: import("../data/types").BuildResult;
+  /** 编译 Agent 原始返回文本 */
+  buildRaw?: string;
 };
 
 /** WebSocket 连接状态 */

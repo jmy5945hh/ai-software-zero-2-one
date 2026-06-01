@@ -28,7 +28,8 @@ export type AgentMethod =
   | "session.loadMeta"
   // ── 项目编译 ──
   | "build.save"
-  | "build.fix";
+  | "build.fix"
+  | "build.trigger";
 
 /** 所有 WebSocket 消息统一格式 */
 export type WsMessage =

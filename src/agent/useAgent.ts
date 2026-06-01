@@ -159,6 +159,7 @@ function defaultSession(): SessionState {
     isRetrying: false,
     queue: { steering: [], followUp: [] },
     summarizationStatus: "idle",
+    buildStatus: "idle",
   };
 }
 
@@ -168,7 +169,7 @@ function defaultSession(): SessionState {
  * useAgent — 前端 Agent 核心 Hook。
  * 管理 WebSocket 连接、多 session 状态、文件树、消息流。
  */
-export function useAgent(taskId: string | null) {
+export function useAgent(taskId: string | null, workspacePath?: string) {
   const [sessions, setSessions] = useState<Record<string, SessionState>>({});
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [connectionStatus, setConnectionStatus] =
@@ -184,6 +185,10 @@ export function useAgent(taskId: string | null) {
   const summarizingRef = useRef<Set<string>>(new Set());
   /** 当前正在总结的 step（用于分流总结事件到对应 session） */
   const summarizingStepRef = useRef<string | null>(null);
+  /** 记录哪些 step 的编译已被触发，确保只触发一次 */
+  const buildRef = useRef<Set<string>>(new Set());
+  /** 当前正在编译的 step（用于分流编译事件到对应 session） */
+  const buildStepRef = useRef<string | null>(null);
   /** 外部注册的轮次完成回调（接收 step 和最新的 sessions 快照） */
   const onSessionCompleteRef = useRef<((step: string, sessions: Record<string, SessionState>) => void) | null>(null);
   /** 记录每个 step 的 steer 输入（ref 方式，不受 React 批处理影响） */
@@ -294,6 +299,32 @@ export function useAgent(taskId: string | null) {
     async (step: string) => {
       if (!taskId || !wsRef.current) return;
       await wsRef.current.request("session.continueQuestion", { taskId, step });
+    },
+    [taskId],
+  );
+
+  // ── 从历史恢复后继续问答（重建 session 并发送已存储的回答）──
+  const resumeQuestion = useCallback(
+    async (step: string, answer: string, intent?: string, workspacePath?: string) => {
+      if (!taskId || !wsRef.current) return;
+      activeStepRef.current = step;
+
+      // 重置 session 状态，准备接收新事件
+      setSessions((prev) => ({
+        ...prev,
+        [step]: {
+          ...defaultSession(),
+          id: prev[step]?.id || "",
+        },
+      }));
+
+      await wsRef.current.request("session.resumeQuestion", {
+        taskId,
+        step,
+        answer,
+        intent,
+        workspacePath,
+      });
     },
     [taskId],
   );
@@ -467,6 +498,69 @@ export function useAgent(taskId: string | null) {
         return;
       }
 
+      // ── 编译事件分流（独立 session，不影响正常流程）──
+      const buildStep = buildStepRef.current;
+      if (buildStep) {
+        setSessions((prev) => {
+          const s = prev[buildStep] || defaultSession();
+
+          switch (event.type) {
+            case "agent_start":
+              return { ...prev, [buildStep]: { ...s, buildRaw: "" } };
+
+            case "text_delta":
+              return {
+                ...prev,
+                [buildStep]: {
+                  ...s,
+                  buildRaw: (s.buildRaw || "") + event.delta,
+                },
+              };
+
+            case "agent_end": {
+              const raw = extractJsonFromMarkdown(
+                (event as { summary: string }).summary || "",
+              );
+              let result: import("../data/types").BuildResult | undefined;
+              try {
+                result = JSON.parse(raw);
+              } catch {
+                result = undefined;
+              }
+
+              buildStepRef.current = null;
+              if (!result || typeof result.success !== "boolean") {
+                // 解析失败 → 重置状态触发重试
+                buildRef.current.delete(buildStep);
+                return {
+                  ...prev,
+                  [buildStep]: {
+                    ...s,
+                    buildStatus: "pending",
+                    buildResult: undefined,
+                    buildRaw: raw,
+                  },
+                };
+              }
+              buildRef.current.delete(buildStep);
+              return {
+                ...prev,
+                [buildStep]: {
+                  ...s,
+                  buildStatus: "done",
+                  buildResult: result,
+                  buildRaw: raw,
+                },
+              };
+            }
+
+            default:
+              return prev;
+          }
+        });
+        return;
+      }
+
       // ── 正常流程 ──
       const step = activeStepRef.current;
       if (!step) return;
@@ -591,6 +685,8 @@ export function useAgent(taskId: string | null) {
                 turns: updatedTurns,
                 // 标记待触发独立总结
                 summarizationStatus: "pending",
+                // coding 步骤标记待触发编译
+                buildStatus: step === "coding" ? "pending" : "idle",
               },
             };
             // 在 setSessions 完成后通知外部保存
@@ -830,31 +926,54 @@ export function useAgent(taskId: string | null) {
     [],
   );
 
-  /** 保存编译结果到 step 文件 */
-  const saveBuildResult = useCallback(
-    async (sessionId: string, stepId: string, buildResult: Record<string, unknown>) => {
-      if (!wsRef.current) return;
-      try {
-        await wsRef.current.request("build.save", { sessionId, stepId, buildResult });
-      } catch {
-        // 静默失败
-      }
-    },
-    [],
-  );
+  // ── 自动触发独立编译 ──
+  useEffect(() => {
+    if (!wsRef.current || !taskId) return;
 
-  /** 触发编译修复（创建修复 session） */
-  const triggerBuildFix = useCallback(
-    async (taskId: string, step: string, sessionId: string, buildOutput: string, workspacePath?: string) => {
-      if (!wsRef.current) return;
-      try {
-        await wsRef.current.request("build.fix", { taskId, step, sessionId, buildOutput, workspacePath });
-      } catch {
-        // 静默失败
+    for (const [step, session] of Object.entries(sessions)) {
+      if (
+        step === "coding" &&
+        session.buildStatus === "pending" &&
+        !buildRef.current.has(step)
+      ) {
+        buildRef.current.add(step);
+
+        // Step 1: 执行编译
+        triggerBuild(workspacePath || "")
+          .then((buildResult) => {
+            // Step 2: 触发独立编译 session（让 LLM 分析编译结果）
+            setSessions((prev) => ({
+              ...prev,
+              [step]: {
+                ...prev[step],
+                buildStatus: "loading",
+              },
+            }));
+
+            // 设置分流标记，让后续事件路由到编译分支
+            buildStepRef.current = step;
+
+            return wsRef.current!.request("build.trigger", {
+              taskId,
+              step,
+              buildResult,
+              workspacePath,
+            });
+          })
+          .catch(() => {
+            buildStepRef.current = null;
+            buildRef.current.delete(step);
+            setSessions((prev) => ({
+              ...prev,
+              [step]: {
+                ...prev[step],
+                buildStatus: "error",
+              },
+            }));
+          });
       }
-    },
-    [],
-  );
+    }
+  }, [sessions, taskId, triggerBuild]);
 
   return {
     sessions,
@@ -866,13 +985,12 @@ export function useAgent(taskId: string | null) {
     steer,
     answerQuestion,
     continueQuestion,
+    resumeQuestion,
     retrySession,
     getFileTree,
     readFile,
     browseDir,
     triggerBuild,
-    saveBuildResult,
-    triggerBuildFix,
     /** 获取底层 WebSocket 实例，用于直接发送请求（如 git 操作） */
     getWs: () => wsRef.current,
     /** 注册轮次完成回调（接收 step 和最新的 sessions 快照） */

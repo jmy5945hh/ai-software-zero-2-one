@@ -4586,6 +4586,33 @@ p {
   cursor: not-allowed;
 }
 
+/* ── 从历史恢复后继续问答按钮 ──────────── */
+.ask-question-resume-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  align-self: flex-start;
+  margin-top: 8px;
+  transition: opacity 0.15s;
+}
+
+.ask-question-resume-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.ask-question-resume-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ── ask_user_question 选项按钮 ──────────── */
 .ask-question-options-area {
   display: flex;

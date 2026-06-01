@@ -114,7 +114,7 @@ export function DashboardPage() {
           view: "workspace",
         }));
       } catch { /* ignore */ }
-      navigate("/task");
+      navigate(`/workspace?sessionId=${state.sessionId}`);
     },
     [setState, navigate, state, agentAvailable, agent],
   );
@@ -164,7 +164,7 @@ export function DashboardPage() {
         restoredSessions: fullRecord.stepSessions || {},
         view: "workspace",
       }));
-      navigate("/task");
+      navigate("/workspace");
     },
     [setState, navigate, sessionRecords],
   );

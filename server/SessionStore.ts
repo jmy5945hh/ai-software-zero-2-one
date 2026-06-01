@@ -33,6 +33,16 @@ export type StepSessionSnapshot = {
   }>;
   summary: string;
   summarizationResult?: Record<string, unknown> | null;
+  /** 项目编译结果（仅 coding 步骤有值） */
+  buildResult?: {
+    command: string;
+    success: boolean;
+    output: string;
+    timestamp: string;
+    retryCount: number;
+    building: boolean;
+    fixing: boolean;
+  } | null;
 };
 
 /** 任务元信息（不含对话数据） */
