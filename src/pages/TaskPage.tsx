@@ -74,7 +74,6 @@ export function TaskPage() {
     // 如果没有 workspacePath 且没有待恢复的 URL sessionId，跳回首页
     if (!state.workspacePath && !urlSessionId) {
       navigate("/");
->>>>>>> 1e001fd (feat:支持session 存储总结信息):src/pages/WorkspacePage.tsx
     }
   }, [state.workspacePath, navigate, urlSessionId]);
 
