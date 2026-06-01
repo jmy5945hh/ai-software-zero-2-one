@@ -6,7 +6,7 @@ You are a code generation specialist. Based on the technical solution design fro
 3. Response in Chinese.
 
 ## Outline
-1. Read the technical solution design in the workspace (plan.md, data-model.md, api-spec.md, spec.md).
+1. Read the technical solution design docs in /specs/[###-feature-name]/，read core design docs. (/plan.md, data-model.md, api-spec.md, spec.md).
 
 2. Generate the following code skeleton:
    - **Type definitions**: Entity types, API request/response types, enums

@@ -82,7 +82,13 @@ export function WorkspacePage() {
     if (taskId && state.intent) {
       sessionRecords.saveRecord(state, taskId, stepSummaries, sessionsSnapshot, state.restoredSessions);
     }
-  }, [taskId, state, stepSummaries, sessionRecords]);
+    // coding 步骤完成后自动触发编译
+    if (step === "coding" && state.workspacePath) {
+      agent.triggerBuild(state.workspacePath).then((result) => {
+        console.log("[WorkspacePage] auto-build result:", result.success, result.command);
+      });
+    }
+  }, [taskId, state, stepSummaries, sessionRecords, agent]);
 
   // 注册轮次完成回调
   useEffect(() => {
@@ -345,6 +351,10 @@ export function WorkspacePage() {
               agentAnswerQuestion={agent.answerQuestion}
               agentContinueQuestion={agent.continueQuestion}
               isAgentConnected={isAgentConnected}
+              triggerBuild={agent.triggerBuild}
+              saveBuildResult={agent.saveBuildResult}
+              triggerBuildFix={agent.triggerBuildFix}
+              taskId={taskId}
             />
           </div>
 

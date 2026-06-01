@@ -4,7 +4,7 @@ import { useStoredState } from "../hooks/useStoredState";
 import { createDefaultState } from "../data";
 import type { AppState, DrawerContent, HomeTab } from "../data/types";
 import { useSessionRecords } from "../hooks/useSessionRecords";
-import type { SessionRecord } from "../hooks/useSessionRecords";
+import type { SessionMeta, SessionRecord } from "../hooks/useSessionRecords";
 
 import {
   Sparkles,
@@ -53,12 +53,17 @@ export function HomePage() {
   const requestStartTask = useCallback(
     (intent: string, notes: string, activeTaskCard: AppState["activeTaskCard"]) => {
       setDocsError(null);
+      // 生成 32 位 sessionId
+      const sessionId = Array.from({ length: 32 }, () =>
+        Math.floor(Math.random() * 16).toString(16)
+      ).join("");
       setState((previous) => ({
         ...createDefaultState(),
         intent,
         notes,
         activeTaskCard,
         createdAt: new Date().toISOString(),
+        sessionId,
       }));
       setShowWorkspacePicker(true);
     },
@@ -99,12 +104,11 @@ export function HomePage() {
       setShowWorkspacePicker(false);
       // 确保 navigate 前 localStorage 已同步（useStoredState 的 useEffect 可能尚未执行）
       try {
+        const currentState = JSON.parse(
+          localStorage.getItem("zero-one-software.prototype.v4") || "{}"
+        );
         localStorage.setItem("zero-one-software.prototype.v4", JSON.stringify({
-          ...createDefaultState(),
-          intent: state.intent,
-          notes: state.notes,
-          activeTaskCard: state.activeTaskCard,
-          createdAt: state.createdAt,
+          ...currentState,
           workspacePath: path,
           view: "workspace",
         }));
@@ -131,32 +135,40 @@ export function HomePage() {
 
   // ── 从历史记录继续执行 ──
   const handleContinueFromHistory = useCallback(
-    (record: SessionRecord, followUpPrompt?: string) => {
+    async (record: SessionMeta, followUpPrompt?: string) => {
+      // 加载完整记录（包含 stepSessions 对话数据）
+      const loaded = await sessionRecords.loadRecord(record.sessionId);
+      const fullRecord: SessionRecord = loaded || {
+        ...record,
+        stepSessions: {},
+      };
+
       // 将历史记录恢复到 AppState
       setState((previous) => ({
         ...previous,
         intent: followUpPrompt
-          ? `${record.intent}\n\n--- 补充需求 ---\n${followUpPrompt}`
-          : record.intent,
-        workspacePath: record.workspacePath,
-        stepIndex: record.stepIndex,
-        activeStage: record.activeStage as AppState["activeStage"],
-        scope: record.scope as AppState["scope"],
-        selectedModules: record.selectedModules,
-        notes: record.notes,
-        todoAnswers: record.todoAnswers,
-        initialPrompts: record.initialPrompts,
-        codeConfirmed: record.codeConfirmed,
-        fixApproved: record.fixApproved,
-        releaseApproved: record.releaseApproved,
-        qualityPassed: record.qualityPassed,
-        createdAt: record.createdAt,
-        restoredSessions: record.stepSessions || {},
+          ? `${fullRecord.intent}\n\n--- 补充需求 ---\n${followUpPrompt}`
+          : fullRecord.intent,
+        workspacePath: fullRecord.workspacePath,
+        stepIndex: fullRecord.stepIndex,
+        activeStage: fullRecord.activeStage as AppState["activeStage"],
+        scope: fullRecord.scope as AppState["scope"],
+        selectedModules: fullRecord.selectedModules,
+        notes: fullRecord.notes,
+        todoAnswers: fullRecord.todoAnswers,
+        initialPrompts: fullRecord.initialPrompts,
+        codeConfirmed: fullRecord.codeConfirmed,
+        fixApproved: fullRecord.fixApproved,
+        releaseApproved: fullRecord.releaseApproved,
+        qualityPassed: fullRecord.qualityPassed,
+        createdAt: fullRecord.createdAt,
+        sessionId: fullRecord.sessionId,
+        restoredSessions: fullRecord.stepSessions || {},
         view: "workspace",
       }));
       navigate("/workspace");
     },
-    [setState, navigate],
+    [setState, navigate, sessionRecords],
   );
 
   const startTaskFromIntent = () => {

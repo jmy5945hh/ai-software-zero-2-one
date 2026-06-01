@@ -226,6 +226,7 @@ export function createDefaultState(): AppState {
     releaseApproved: false,
     qualityPassed: false,
     createdAt: new Date().toISOString(),
+    sessionId: "",
     previewTaskId: null,
     activeTaskCard: null,
     todoAnswers: {},

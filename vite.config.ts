@@ -27,6 +27,9 @@ export default defineConfig({
       "/repo-diff": {
         target: "http://localhost:3100",
       },
+      "/project-build": {
+        target: "http://localhost:3100",
+      },
     },
   },
 });

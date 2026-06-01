@@ -75,6 +75,11 @@ type DecisionBoardProps = {
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion: (step: string) => Promise<void>;
   isAgentConnected: boolean;
+  /** 项目编译 */
+  triggerBuild: (workspacePath: string) => Promise<{ success: boolean; output: string; command: string }>;
+  saveBuildResult: (sessionId: string, stepId: string, buildResult: Record<string, unknown>) => Promise<void>;
+  triggerBuildFix: (taskId: string, step: string, sessionId: string, buildOutput: string, workspacePath?: string) => Promise<void>;
+  taskId: string | null;
 };
 
 export function DecisionBoard({
@@ -90,6 +95,10 @@ export function DecisionBoard({
   agentAnswerQuestion,
   agentContinueQuestion,
   isAgentConnected,
+  triggerBuild,
+  saveBuildResult,
+  triggerBuildFix,
+  taskId,
 }: DecisionBoardProps) {
   const step = workflow[state.stepIndex];
   const stepKey = useStepKey(state.stepIndex);
@@ -162,6 +171,10 @@ export function DecisionBoard({
             agentContinueQuestion={agentContinueQuestion}
             agentPrompt={agentPrompt}
             agentSteer={agentSteer}
+            triggerBuild={triggerBuild}
+            saveBuildResult={saveBuildResult}
+            triggerBuildFix={triggerBuildFix}
+            taskId={taskId}
           />
         )}
         {activeTab === "trajectory" && (
@@ -232,6 +245,10 @@ function DeliveryCollabTab({
   agentContinueQuestion,
   agentPrompt,
   agentSteer,
+  triggerBuild,
+  saveBuildResult,
+  triggerBuildFix,
+  taskId,
 }: {
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
@@ -245,6 +262,10 @@ function DeliveryCollabTab({
   agentContinueQuestion: (step: string) => Promise<void>;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentSteer: (step: string, text: string, intent?: string) => void;
+  triggerBuild: (workspacePath: string) => Promise<{ success: boolean; output: string; command: string }>;
+  saveBuildResult: (sessionId: string, stepId: string, buildResult: Record<string, unknown>) => Promise<void>;
+  triggerBuildFix: (taskId: string, step: string, sessionId: string, buildOutput: string, workspacePath?: string) => Promise<void>;
+  taskId: string | null;
 }) {
   const agentCompleted = isAgentConnected && agentSession?.completed && !agentSession?.isStreaming;
   const agentWorking = isAgentConnected && agentSession && !agentCompleted;
@@ -407,6 +428,17 @@ function DeliveryCollabTab({
                 ? <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
                 : <FileChangesList files={fileChanges} onFileClick={handleFileClick} />
               }
+              {/* coding 步骤展示项目编译 */}
+              {stepId === "coding" && (
+                <BuildSection
+                  workspacePath={state.workspacePath}
+                  sessionId={state.sessionId}
+                  taskId={taskId}
+                  triggerBuild={triggerBuild}
+                  saveBuildResult={saveBuildResult}
+                  triggerBuildFix={triggerBuildFix}
+                />
+              )}
               <TodoSection
                 todos={summaryResult.todos ?? []}
                 todoAnswers={state.todoAnswers}
@@ -492,6 +524,161 @@ function KeyPointsGrid({ keyPoints }: { keyPoints: KeyPoint[] }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── 项目编译 ────────────────────────────────
+function BuildSection({
+  workspacePath,
+  sessionId,
+  taskId,
+  triggerBuild,
+  saveBuildResult,
+  triggerBuildFix,
+}: {
+  workspacePath: string;
+  sessionId: string;
+  taskId: string | null;
+  triggerBuild: (workspacePath: string) => Promise<{ success: boolean; output: string; command: string }>;
+  saveBuildResult: (sessionId: string, stepId: string, buildResult: Record<string, unknown>) => Promise<void>;
+  triggerBuildFix: (taskId: string, step: string, sessionId: string, buildOutput: string, workspacePath?: string) => Promise<void>;
+}) {
+  const [buildResult, setBuildResult] = useState<{
+    command: string;
+    success: boolean;
+    output: string;
+    timestamp: string;
+    building: boolean;
+    fixing: boolean;
+    retryCount: number;
+  } | null>(null);
+  const [showFullOutput, setShowFullOutput] = useState(false);
+  const [fixing, setFixing] = useState(false);
+  const [fixCount, setFixCount] = useState(0);
+
+  const doBuild = useCallback(async () => {
+    if (!workspacePath) return;
+    setBuildResult((prev) => prev ? { ...prev, building: true } : {
+      command: "", success: false, output: "", timestamp: "", building: true, fixing: false, retryCount: 0,
+    });
+    try {
+      const result = await triggerBuild(workspacePath);
+      const newResult = {
+        command: result.command,
+        success: result.success,
+        output: result.output,
+        timestamp: new Date().toISOString(),
+        building: false,
+        fixing: false,
+        retryCount: fixCount,
+      };
+      setBuildResult(newResult);
+
+      // 保存编译结果到 step 文件
+      if (sessionId) {
+        saveBuildResult(sessionId, "coding", newResult);
+      }
+
+      // 编译失败且未超过 3 次 → 自动修复
+      if (!result.success && fixCount < 3 && taskId) {
+        setFixing(true);
+        setBuildResult((prev) => prev ? { ...prev, fixing: true } : null);
+        await triggerBuildFix(taskId, "coding", sessionId, result.output, workspacePath);
+        setFixCount((c) => c + 1);
+        // 修复后自动重新编译
+        setTimeout(() => doBuild(), 3000);
+      } else if (!result.success && fixCount >= 3) {
+        // 超过 3 次，提示用户
+        setFixing(false);
+      } else {
+        setFixing(false);
+      }
+    } catch {
+      setBuildResult((prev) => prev ? { ...prev, building: false, fixing: false } : null);
+      setFixing(false);
+    }
+  }, [workspacePath, sessionId, taskId, triggerBuild, saveBuildResult, triggerBuildFix, fixCount]);
+
+  // 截取缩略内容：前 50 行 + 后 20 行
+  const truncatedOutput = useMemo(() => {
+    if (!buildResult?.output) return "";
+    const lines = buildResult.output.split("\n");
+    if (lines.length <= 100) return buildResult.output;
+    const head = lines.slice(0, 50).join("\n");
+    const tail = lines.slice(-20).join("\n");
+    return `${head}\n\n... (中间 ${lines.length - 70} 行已折叠) ...\n\n${tail}`;
+  }, [buildResult?.output]);
+
+  return (
+    <div className="summary-section build-section">
+      <div className="summary-section-header">
+        <Terminal size={15} />
+        <span>项目编译</span>
+        {buildResult?.building && <Loader2 size={14} className="spin-icon" style={{ marginLeft: 8 }} />}
+        {fixing && <span style={{ marginLeft: 8, fontSize: 12, color: "#f59e0b" }}>自动修复中 ({fixCount}/3)...</span>}
+      </div>
+
+      {/* 编译命令 */}
+      {buildResult?.command && (
+        <div className="build-command">
+          <span className="build-command-label">编译命令：</span>
+          <code>{buildResult.command}</code>
+        </div>
+      )}
+
+      {/* 编译状态 */}
+      {buildResult && !buildResult.building && (
+        <div className={`build-status ${buildResult.success ? "build-success" : "build-failure"}`}>
+          {buildResult.success ? (
+            <>✅ 编译成功 ({new Date(buildResult.timestamp).toLocaleTimeString()})</>
+          ) : (
+            <>❌ 编译失败 ({new Date(buildResult.timestamp).toLocaleTimeString()})</>
+          )}
+        </div>
+      )}
+
+      {/* 编译输出 */}
+      {buildResult?.output && (
+        <div className="build-output">
+          <pre className="build-output-pre">
+            <code>{showFullOutput ? buildResult.output : truncatedOutput}</code>
+          </pre>
+          {buildResult.output.split("\n").length > 100 && (
+            <button
+              className="ghost-button small"
+              type="button"
+              onClick={() => setShowFullOutput(!showFullOutput)}
+            >
+              {showFullOutput ? "收起" : "查看完整输出"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 操作按钮 */}
+      <div className="build-actions">
+        <button
+          className="ghost-button"
+          type="button"
+          onClick={doBuild}
+          disabled={buildResult?.building || fixing}
+        >
+          {buildResult?.building ? (
+            <><Loader2 size={14} className="spin-icon" /> 编译中...</>
+          ) : (
+            <><Play size={14} /> 重新编译</>
+          )}
+        </button>
+      </div>
+
+      {/* 修复失败提示 */}
+      {!buildResult?.success && fixCount >= 3 && !fixing && (
+        <div className="build-fix-exhausted">
+          <Info size={14} />
+          <span>已自动修复 3 次仍未通过编译，请手动检查代码</span>
+        </div>
+      )}
     </div>
   );
 }

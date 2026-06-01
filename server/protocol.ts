@@ -20,7 +20,15 @@ export type AgentMethod =
   | "session.saveRecord"
   | "session.loadRecord"
   | "session.listRecords"
-  | "session.deleteRecord";
+  | "session.deleteRecord"
+  // ── 按步骤独立存储 ──
+  | "session.saveStep"
+  | "session.loadStep"
+  | "session.saveMeta"
+  | "session.loadMeta"
+  // ── 项目编译 ──
+  | "build.save"
+  | "build.fix";
 
 /** 所有 WebSocket 消息统一格式 */
 export type WsMessage =

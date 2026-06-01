@@ -817,6 +817,45 @@ export function useAgent(taskId: string | null) {
     }
   }, [sessions, taskId]);
 
+  // ── 项目编译 ──
+  const triggerBuild = useCallback(
+    async (workspacePath: string): Promise<{ success: boolean; output: string; command: string }> => {
+      try {
+        const res = await fetch(`/project-build?path=${encodeURIComponent(workspacePath)}`);
+        return await res.json();
+      } catch {
+        return { success: false, output: "// 编译请求失败", command: "" };
+      }
+    },
+    [],
+  );
+
+  /** 保存编译结果到 step 文件 */
+  const saveBuildResult = useCallback(
+    async (sessionId: string, stepId: string, buildResult: Record<string, unknown>) => {
+      if (!wsRef.current) return;
+      try {
+        await wsRef.current.request("build.save", { sessionId, stepId, buildResult });
+      } catch {
+        // 静默失败
+      }
+    },
+    [],
+  );
+
+  /** 触发编译修复（创建修复 session） */
+  const triggerBuildFix = useCallback(
+    async (taskId: string, step: string, sessionId: string, buildOutput: string, workspacePath?: string) => {
+      if (!wsRef.current) return;
+      try {
+        await wsRef.current.request("build.fix", { taskId, step, sessionId, buildOutput, workspacePath });
+      } catch {
+        // 静默失败
+      }
+    },
+    [],
+  );
+
   return {
     sessions,
     fileTree,
@@ -831,6 +870,9 @@ export function useAgent(taskId: string | null) {
     getFileTree,
     readFile,
     browseDir,
+    triggerBuild,
+    saveBuildResult,
+    triggerBuildFix,
     /** 获取底层 WebSocket 实例，用于直接发送请求（如 git 操作） */
     getWs: () => wsRef.current,
     /** 注册轮次完成回调（接收 step 和最新的 sessions 快照） */

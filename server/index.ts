@@ -177,6 +177,33 @@ const server = http.createServer((req, res) => {
     }
     try {
       const { execSync } = require("child_process");
+      const fs = require("fs");
+      const path = require("path");
+
+      // 检查目录是否存在
+      if (!fs.existsSync(projectPath)) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ diff: "// 目录不存在" }));
+        return;
+      }
+
+      // 检查是否为 git 仓库
+      const gitDir = path.join(projectPath, ".git");
+      if (!fs.existsSync(gitDir)) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ diff: "// 当前目录不是 Git 仓库，无法显示 Diff" }));
+        return;
+      }
+
+      // 检查是否有提交记录（git diff HEAD 需要至少一个 commit）
+      try {
+        execSync("git rev-parse HEAD", { cwd: projectPath, encoding: "utf-8", stdio: "pipe" });
+      } catch {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ diff: "// Git 仓库暂无提交记录" }));
+        return;
+      }
+
       const diffOutput = execSync("git diff HEAD", { cwd: projectPath, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
       const stagedOutput = execSync("git diff --cached", { cwd: projectPath, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
       const combined = [diffOutput, stagedOutput].filter(Boolean).join("\n");
@@ -185,6 +212,69 @@ const server = http.createServer((req, res) => {
     } catch (err) {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Git diff failed" }));
+    }
+    return;
+  }
+
+  // 项目编译（自动检测 build 命令并执行）
+  if (req.method === "GET" && req.url?.startsWith("/project-build")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const projectPath = url.searchParams.get("path");
+    if (!projectPath) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'path' query parameter" }));
+      return;
+    }
+    try {
+      const { execSync } = require("child_process");
+      const fs = require("fs");
+      const path = require("path");
+
+      // 检查目录是否存在
+      if (!fs.existsSync(projectPath)) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: false, output: "// 目录不存在", command: "" }));
+        return;
+      }
+
+      // 自动检测 build 命令
+      const pkgPath = path.join(projectPath, "package.json");
+      let command = "npm run build";
+      if (fs.existsSync(pkgPath)) {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+          const scripts = pkg.scripts || {};
+          if (scripts.build) {
+            command = `npm run build`;
+          } else if (scripts.compile) {
+            command = `npm run compile`;
+          } else if (scripts.tsc) {
+            command = `npm run tsc`;
+          }
+        } catch {
+          // 使用默认命令
+        }
+      }
+
+      // 执行编译
+      const output = execSync(command, {
+        cwd: projectPath,
+        encoding: "utf-8",
+        maxBuffer: 10 * 1024 * 1024,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true, output, command }));
+    } catch (err: any) {
+      // 编译失败（非零退出码）
+      const output = err.stdout || err.stderr || err.message || "";
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        success: false,
+        output: output,
+        command: err.cmd || "npm run build",
+      }));
     }
     return;
   }
@@ -737,6 +827,63 @@ wss.on("connection", (ws: WebSocket) => {
           break;
         }
 
+        // ── 项目编译 ──────────────────────
+        case "build.save": {
+          const { sessionId, stepId, buildResult } = msg.params as {
+            sessionId: string;
+            stepId: string;
+            buildResult: Record<string, unknown>;
+          };
+          // 将编译结果保存到 step 文件中
+          const existing = sessionStore.loadStep(sessionId, stepId) || {
+            messages: [],
+            turns: [],
+            summary: "",
+          };
+          (existing as any).buildResult = buildResult;
+          sessionStore.saveStep(sessionId, stepId, existing);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
+          break;
+        }
+
+        case "build.fix": {
+          const { taskId, step, sessionId, buildOutput, workspacePath } = msg.params as {
+            taskId: string;
+            step: string;
+            sessionId: string;
+            buildOutput: string;
+            workspacePath?: string;
+          };
+          // 创建修复 session（复用 coding 步骤配置）
+          let workspaceDir: string;
+          if (workspacePath) {
+            workspaceDir = workspace.setExternalWorkspace(taskId, workspacePath);
+          } else {
+            workspaceDir = workspace.getDir(taskId);
+          }
+          const fixSession = await runner.createSession(taskId, step, workspaceDir);
+
+          // 订阅事件转发到前端
+          const unsub = fixSession.subscribe((sdkEvent) => {
+            const event = mapSdkEvent(sdkEvent);
+            if (!event) return;
+            ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
+          });
+
+          ws.send(
+            JSON.stringify({
+              type: "response",
+              id: msg.id,
+              result: { sessionId: fixSession.sessionId },
+            }),
+          );
+
+          // 发送修复 prompt
+          const fixPrompt = `项目编译失败，请修复以下编译错误：\n\n\`\`\`\n${buildOutput.slice(0, 5000)}\n\`\`\`\n\n请分析错误原因并修复代码。修复完成后，项目应该能成功编译。`;
+          await fixSession.prompt(fixPrompt);
+          break;
+        }
+
         // ── Workspace 操作 ──────────────────
         case "workspace.tree": {
           const { taskId } = msg.params as { taskId: string };
@@ -777,8 +924,8 @@ wss.on("connection", (ws: WebSocket) => {
         }
 
         case "session.loadRecord": {
-          const { taskId } = msg.params as { taskId: string };
-          const record = sessionStore.load(taskId);
+          const { sessionId } = msg.params as { sessionId: string };
+          const record = sessionStore.load(sessionId);
           ws.send(JSON.stringify({ type: "response", id: msg.id, result: { record } }));
           break;
         }
@@ -790,9 +937,45 @@ wss.on("connection", (ws: WebSocket) => {
         }
 
         case "session.deleteRecord": {
-          const { taskId } = msg.params as { taskId: string };
-          sessionStore.delete(taskId);
+          const { sessionId } = msg.params as { sessionId: string };
+          sessionStore.delete(sessionId);
           ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
+          break;
+        }
+
+        // ── 按步骤独立存储 ────────────────
+        case "session.saveStep": {
+          const { sessionId, stepId, snapshot } = msg.params as {
+            sessionId: string;
+            stepId: string;
+            snapshot: import("./SessionStore").StepSessionSnapshot;
+          };
+          sessionStore.saveStep(sessionId, stepId, snapshot);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
+          break;
+        }
+
+        case "session.loadStep": {
+          const { sessionId, stepId } = msg.params as {
+            sessionId: string;
+            stepId: string;
+          };
+          const snapshot = sessionStore.loadStep(sessionId, stepId);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: { snapshot } }));
+          break;
+        }
+
+        case "session.saveMeta": {
+          const meta = msg.params as Record<string, unknown>;
+          sessionStore.saveMeta(meta as import("./SessionStore").SessionMeta);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
+          break;
+        }
+
+        case "session.loadMeta": {
+          const { sessionId } = msg.params as { sessionId: string };
+          const meta = sessionStore.loadMeta(sessionId);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: { meta } }));
           break;
         }
 

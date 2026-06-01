@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { AppState } from "../data/types";
 import { AgentWebSocket } from "../agent/ws";
 
-// ── 会话记录类型（与服务端 SessionRecord 对齐） ──
+// ── 会话记录类型（与服务端 SessionStore 对齐） ──
 
 /** 单个步骤的会话快照 */
 export type StepSessionSnapshot = {
@@ -35,7 +35,9 @@ export type StepSessionSnapshot = {
   summarizationResult?: import("../data/types").AgentSummary | null;
 };
 
-export type SessionRecord = {
+/** 任务元信息（不含对话数据，与服务端 SessionMeta 对齐） */
+export type SessionMeta = {
+  sessionId: string;
   taskId: string;
   intent: string;
   workspacePath: string;
@@ -55,6 +57,10 @@ export type SessionRecord = {
   status: "active" | "completed";
   /** 各步骤的 Agent 总结摘要（stepId → brief） */
   stepSummaries: Record<string, string>;
+};
+
+/** 完整的会话记录（元信息 + 各步骤对话数据） */
+export type SessionRecord = SessionMeta & {
   /** 各步骤的完整会话快照（stepId → 会话数据） */
   stepSessions: Record<string, StepSessionSnapshot>;
 };
@@ -64,9 +70,14 @@ export type SessionRecord = {
  *
  * 通过 WebSocket 与服务端 SessionStore 通信，
  * 支持保存、加载、列出、删除会话记录。
+ *
+ * 存储策略：
+ * - 每个会话一个目录，目录名 = 32 位 sessionId
+ * - meta.json 存储任务元信息
+ * - step-{workflowId}.json 存储各步骤的独立会话快照
  */
 export function useSessionRecords() {
-  const [records, setRecords] = useState<SessionRecord[]>([]);
+  const [records, setRecords] = useState<SessionMeta[]>([]);
   const [loading, setLoading] = useState(false);
   const wsRef = useRef<AgentWebSocket | null>(null);
   const connectedRef = useRef(false);
@@ -105,7 +116,7 @@ export function useSessionRecords() {
     setLoading(true);
     try {
       const result = (await wsRef.current.request("session.listRecords", {})) as {
-        records: SessionRecord[];
+        records: SessionMeta[];
       };
       setRecords(result.records || []);
     } catch {
@@ -118,7 +129,50 @@ export function useSessionRecords() {
   /** 保存队列，避免并发保存导致数据覆盖 */
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
-  /** 保存当前 AppState 为会话记录 */
+  /**
+   * 保存某步骤的会话快照（独立存储）。
+   * 每次 agent 轮次完成时调用，确保每轮数据不遗漏。
+   */
+  const saveStep = useCallback(
+    async (sessionId: string, stepId: string, snapshot: StepSessionSnapshot) => {
+      if (!wsRef.current || !connectedRef.current) return;
+      saveQueueRef.current = saveQueueRef.current.then(async () => {
+        try {
+          await wsRef.current!.request("session.saveStep", {
+            sessionId,
+            stepId,
+            snapshot,
+          });
+        } catch {
+          // 静默失败
+        }
+      });
+      await saveQueueRef.current;
+    },
+    [],
+  );
+
+  /**
+   * 保存任务元信息。
+   * 关键状态变化时调用（防抖 2s，作为兜底）。
+   */
+  const saveMeta = useCallback(
+    async (sessionId: string, meta: SessionMeta) => {
+      if (!wsRef.current || !connectedRef.current) return;
+      saveQueueRef.current = saveQueueRef.current.then(async () => {
+        try {
+          await wsRef.current!.request("session.saveMeta", meta as unknown as Record<string, unknown>);
+          await refreshRecords();
+        } catch {
+          // 静默失败
+        }
+      });
+      await saveQueueRef.current;
+    },
+    [refreshRecords],
+  );
+
+  /** 保存当前 AppState 为会话记录（兼容旧接口，内部拆分为 meta + step 文件） */
   const saveRecord = useCallback(
     async (
       state: AppState,
@@ -148,6 +202,12 @@ export function useSessionRecords() {
     ) => {
       if (!wsRef.current || !connectedRef.current) {
         console.log("[saveRecord] skip: ws or not connected");
+        return;
+      }
+
+      const sessionId = state.sessionId;
+      if (!sessionId) {
+        console.log("[saveRecord] skip: no sessionId");
         return;
       }
 
@@ -213,7 +273,9 @@ export function useSessionRecords() {
         }
       }
 
-      const record: SessionRecord = {
+      // 构建元信息
+      const meta: SessionMeta = {
+        sessionId,
         taskId,
         intent: state.intent,
         workspacePath: state.workspacePath,
@@ -232,13 +294,23 @@ export function useSessionRecords() {
         updatedAt: new Date().toISOString(),
         status: "active",
         stepSummaries: stepSummaries || {},
-        stepSessions,
       };
-      console.log("[saveRecord] final stepSessions keys:", Object.keys(stepSessions), "data:", Object.fromEntries(Object.entries(stepSessions).map(([k, v]) => [k, { messages: v.messages?.length, turns: v.turns?.length, firstMsg: v.messages?.[0]?.role, lastMsg: v.messages?.[v.messages?.length-1]?.role }])));
-      // 串行化保存，避免并发覆盖
+
+      console.log("[saveRecord] final stepSessions keys:", Object.keys(stepSessions));
+
+      // 串行化保存：先保存 meta，再逐个保存 step
       saveQueueRef.current = saveQueueRef.current.then(async () => {
         try {
-          await wsRef.current!.request("session.saveRecord", record as unknown as Record<string, unknown>);
+          // 保存元信息
+          await wsRef.current!.request("session.saveMeta", meta as unknown as Record<string, unknown>);
+          // 逐个保存步骤会话快照
+          for (const [stepId, snapshot] of Object.entries(stepSessions)) {
+            await wsRef.current!.request("session.saveStep", {
+              sessionId,
+              stepId,
+              snapshot,
+            });
+          }
           await refreshRecords();
         } catch {
           // 静默失败
@@ -249,13 +321,13 @@ export function useSessionRecords() {
     [refreshRecords],
   );
 
-  /** 按 taskId 加载会话记录 */
+  /** 按 sessionId 加载完整会话记录 */
   const loadRecord = useCallback(
-    async (taskId: string): Promise<SessionRecord | null> => {
+    async (sessionId: string): Promise<SessionRecord | null> => {
       if (!wsRef.current || !connectedRef.current) return null;
       try {
         const result = (await wsRef.current.request("session.loadRecord", {
-          taskId,
+          sessionId,
         })) as { record: SessionRecord | null };
         return result.record;
       } catch {
@@ -265,12 +337,29 @@ export function useSessionRecords() {
     [],
   );
 
+  /** 按 sessionId 加载某步骤的会话快照 */
+  const loadStep = useCallback(
+    async (sessionId: string, stepId: string): Promise<StepSessionSnapshot | null> => {
+      if (!wsRef.current || !connectedRef.current) return null;
+      try {
+        const result = (await wsRef.current.request("session.loadStep", {
+          sessionId,
+          stepId,
+        })) as { snapshot: StepSessionSnapshot | null };
+        return result.snapshot;
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
+
   /** 删除会话记录 */
   const deleteRecord = useCallback(
-    async (taskId: string) => {
+    async (sessionId: string) => {
       if (!wsRef.current || !connectedRef.current) return;
       try {
-        await wsRef.current.request("session.deleteRecord", { taskId });
+        await wsRef.current.request("session.deleteRecord", { sessionId });
         await refreshRecords();
       } catch {
         // 静默失败
@@ -284,7 +373,10 @@ export function useSessionRecords() {
     loading,
     refreshRecords,
     saveRecord,
+    saveStep,
+    saveMeta,
     loadRecord,
+    loadStep,
     deleteRecord,
   } as const;
 }

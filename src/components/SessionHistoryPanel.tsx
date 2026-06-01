@@ -13,13 +13,13 @@ import {
   Sparkles,
   MessageSquare,
 } from "lucide-react";
-import type { SessionRecord } from "../hooks/useSessionRecords";
+import type { SessionMeta, SessionRecord } from "../hooks/useSessionRecords";
 
 type SessionHistoryPanelProps = {
-  records: SessionRecord[];
+  records: SessionMeta[];
   loading: boolean;
-  onContinue: (record: SessionRecord, followUpPrompt?: string) => void;
-  onDelete: (taskId: string) => void;
+  onContinue: (record: SessionMeta, followUpPrompt?: string) => void;
+  onDelete: (sessionId: string) => void;
   onRefresh: () => void;
 };
 
@@ -39,16 +39,16 @@ export function SessionHistoryPanel({
   const [continuingId, setContinuingId] = useState<string | null>(null);
 
   const handleDelete = useCallback(
-    async (taskId: string) => {
-      setDeletingId(taskId);
-      await onDelete(taskId);
+    async (sessionId: string) => {
+      setDeletingId(sessionId);
+      await onDelete(sessionId);
       setDeletingId(null);
     },
     [onDelete],
   );
 
-  const toggleExpand = (taskId: string) => {
-    setExpandedId((prev) => (prev === taskId ? null : taskId));
+  const toggleExpand = (sessionId: string) => {
+    setExpandedId((prev) => (prev === sessionId ? null : sessionId));
   };
 
   if (loading && records.length === 0) {
@@ -100,7 +100,7 @@ export function SessionHistoryPanel({
 
       <div className="session-history-list">
         {records.map((record) => {
-          const isExpanded = expandedId === record.taskId;
+          const isExpanded = expandedId === record.sessionId;
           const stepLabel = getStepLabel(record.activeStage);
           const progress = Math.round(
             ((record.stepIndex + (record.releaseApproved ? 1 : 0)) / 6) * 100,
@@ -109,12 +109,12 @@ export function SessionHistoryPanel({
 
           return (
             <div
-              key={record.taskId}
+              key={record.sessionId}
               className={`session-history-item ${isExpanded ? "expanded" : ""}`}
             >
               <div
                 className="session-history-item-header"
-                onClick={() => toggleExpand(record.taskId)}
+                onClick={() => toggleExpand(record.sessionId)}
               >
                 <div className="session-history-item-icon">
                   {record.status === "completed" ? (
@@ -191,11 +191,11 @@ export function SessionHistoryPanel({
                     </div>
                   )}
 
-                  {/* 各步骤对话历史 */}
-                  {Object.keys(record.stepSessions).length > 0 && (
+                  {/* 各步骤对话历史 — 仅完整记录包含对话数据 */}
+                  {"stepSessions" in record && Object.keys((record as SessionRecord).stepSessions).length > 0 && (
                     <div className="session-history-step-sessions">
                       <span className="detail-label">对话记录</span>
-                      {Object.entries(record.stepSessions).map(
+                      {Object.entries((record as SessionRecord).stepSessions).map(
                         ([stepId, snapshot]) => (
                           <div key={stepId} className="step-session-block">
                             <div className="step-session-header">
@@ -234,12 +234,12 @@ export function SessionHistoryPanel({
                       className="session-history-continue-btn"
                       type="button"
                       onClick={() => {
-                        setContinuingId(record.taskId);
+                        setContinuingId(record.sessionId);
                         onContinue(record, followUpInput || undefined);
                       }}
-                      disabled={continuingId === record.taskId}
+                      disabled={continuingId === record.sessionId}
                     >
-                      {continuingId === record.taskId ? (
+                      {continuingId === record.sessionId ? (
                         <Loader2 size={14} className="spin-icon" />
                       ) : (
                         <Play size={14} />
@@ -249,10 +249,10 @@ export function SessionHistoryPanel({
                     <button
                       className="session-history-delete-btn"
                       type="button"
-                      onClick={() => handleDelete(record.taskId)}
-                      disabled={deletingId === record.taskId}
+                      onClick={() => handleDelete(record.sessionId)}
+                      disabled={deletingId === record.sessionId}
                     >
-                      {deletingId === record.taskId ? (
+                      {deletingId === record.sessionId ? (
                         <Loader2 size={13} className="spin-icon" />
                       ) : (
                         <Trash2 size={13} />

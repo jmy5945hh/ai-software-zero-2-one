@@ -97,6 +97,8 @@ export type AppState = {
   releaseApproved: boolean;
   qualityPassed: boolean;
   createdAt: string;
+  /** 32 位 sessionId，用于关联对应对话任务 */
+  sessionId: string;
   previewTaskId: string | null;
   activeTaskCard: TaskCard | null;
   /** 待决策事项的用户回答（持久化） */
@@ -177,6 +179,24 @@ export type TodoItem = {
 export type Choice = {
   option: string;
   description: string;
+};
+
+/** 项目编译结果 */
+export type BuildResult = {
+  /** 编译命令 */
+  command: string;
+  /** 是否编译成功 */
+  success: boolean;
+  /** 编译输出（完整内容） */
+  output: string;
+  /** 编译时间戳 */
+  timestamp: string;
+  /** 当前修复次数 */
+  retryCount: number;
+  /** 是否正在编译中 */
+  building: boolean;
+  /** 是否正在自动修复中 */
+  fixing: boolean;
 };
 
 /** 从 session toolCalls 统计的文件变更 */
