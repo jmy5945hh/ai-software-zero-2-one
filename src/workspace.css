@@ -1375,6 +1375,16 @@
   animation: spinClockwise 0.8s linear infinite;
 }
 
+/* Agent 模式标签 */
+.agent-mode-label {
+  font-weight: 600;
+}
+
+.agent-mode-sep {
+  opacity: 0.4;
+  margin: 0 2px;
+}
+
 .home-nav-right {
   display: flex;
   align-items: center;

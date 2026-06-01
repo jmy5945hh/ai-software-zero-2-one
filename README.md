@@ -254,6 +254,4 @@ zero-one-software/
 ---
 
 ## 文档
-
-- [平台演进方案](./docs/platform-evolution-plan.md) — 从静态 Demo 到真实平台的详细架构演进计划
 - [AGENTS.md](./AGENTS.md) — AI 开发规范与项目约束

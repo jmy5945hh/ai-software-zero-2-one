@@ -6,5 +6,6 @@ export { HomeTaskBoard } from "./HomeTaskBoard";
 export { TypewriterText } from "./TypewriterText";
 export { ContentModal } from "./ContentModal";
 export { WorkspaceSelector } from "./WorkspaceSelector";
+export { AgentStatusBadge } from "./AgentStatusBadge";
 export type { ModalContent } from "./ContentModal";
 export type { BrowseEntry } from "./WorkspaceSelector";

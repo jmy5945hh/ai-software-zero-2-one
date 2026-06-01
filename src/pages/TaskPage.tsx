@@ -4,36 +4,28 @@ import { useStoredState } from "../hooks/useStoredState";
 import { useAgent } from "../agent";
 import { titleFromIntent, workflow } from "../data";
 import type { DrawerContent } from "../data/types";
-import type { ConnectionStatus } from "../agent/types";
 import { useSessionRecords } from "../hooks/useSessionRecords";
 
-import {
-  Wifi,
-  WifiOff,
-  Loader2,
-  SignalLow,
-  SignalMedium,
-  SignalHigh,
-} from "lucide-react";
+import { WifiOff } from "lucide-react";
 
 import { SopNav } from "../components/SopNav";
 import { LeftPanel } from "../components/LeftPanel";
 import { DecisionBoard } from "../components/DecisionBoard";
 import { Drawer } from "../components/Drawer";
+import { AgentStatusBadge } from "../components/AgentStatusBadge";
 
 /**
- * 工作空间路由页 —— "/workspace"
- * 包含 SOP 导航、左侧面板、决策台、抽屉预览。
+ * 任务执行页 —— "/task"
+ * SOP 导航 / 左侧面板 / 决策台 / 抽屉预览。
  */
-export function WorkspacePage() {
+export function TaskPage() {
   const navigate = useNavigate();
   const [state, setState] = useStoredState();
   const [drawerContent, setDrawerContent] = useState<DrawerContent>(null);
 
-  // 如果状态中没有 workspacePath 或者不在 workspace 状态，跳回首页
   useEffect(() => {
     if (!state.workspacePath) {
-      navigate("/");
+      navigate("/dashboard");
     }
   }, [state.workspacePath, navigate]);
 
@@ -49,10 +41,8 @@ export function WorkspacePage() {
   // ── 会话记录自动保存 ──
   const sessionRecords = useSessionRecords();
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // 记录每个 step 上次保存时的 completed 状态，用于检测轮次完成
   const lastCompletedRef = useRef<Record<string, boolean>>({});
 
-  // 收集各步骤的 Agent 总结摘要
   const stepSummaries = useMemo(() => {
     const summaries: Record<string, string> = {};
     for (const [stepId, session] of Object.entries(agent.sessions)) {
@@ -62,7 +52,6 @@ export function WorkspacePage() {
         summaries[stepId] = session.summary.slice(0, 100);
       }
     }
-    // 从 restoredSessions 补充（历史恢复场景）
     for (const [stepId, session] of Object.entries(state.restoredSessions)) {
       if (!summaries[stepId]) {
         if (session.summarizationResult?.brief) {
@@ -76,21 +65,17 @@ export function WorkspacePage() {
   }, [agent.sessions, state.restoredSessions]);
 
   const handleSessionComplete = useCallback((step: string, sessionsSnapshot: Record<string, any>) => {
-    // 轮次完成时立即保存，确保每轮数据不遗漏
-    // 使用回调传入的 sessionsSnapshot（最新的 state，不受 React 批处理影响）
-    console.log("[WorkspacePage] handleSessionComplete, step:", step, "turns:", sessionsSnapshot[step]?.turns?.length, "messages:", sessionsSnapshot[step]?.messages?.length);
+    console.log("[TaskPage] handleSessionComplete, step:", step, "turns:", sessionsSnapshot[step]?.turns?.length, "messages:", sessionsSnapshot[step]?.messages?.length);
     if (taskId && state.intent) {
       sessionRecords.saveRecord(state, taskId, stepSummaries, sessionsSnapshot, state.restoredSessions);
     }
-    // coding 步骤完成后自动触发编译
     if (step === "coding" && state.workspacePath) {
       agent.triggerBuild(state.workspacePath).then((result) => {
-        console.log("[WorkspacePage] auto-build result:", result.success, result.command);
+        console.log("[TaskPage] auto-build result:", result.success, result.command);
       });
     }
   }, [taskId, state, stepSummaries, sessionRecords, agent]);
 
-  // 注册轮次完成回调
   useEffect(() => {
     agent.setOnSessionComplete(handleSessionComplete);
     return () => agent.setOnSessionComplete(null);
@@ -100,14 +85,12 @@ export function WorkspacePage() {
   const connectionStatus = agent.connectionStatus;
   const connectionQuality = agent.connectionQuality;
 
-  // 轮次完成时立即保存（agent_end 触发后 sessions 更新），确保每轮数据不遗漏
   useEffect(() => {
     if (!taskId || !state.intent) return;
 
     for (const [stepId, session] of Object.entries(agent.sessions)) {
       const wasCompleted = lastCompletedRef.current[stepId];
       const nowCompleted = session.completed;
-      // 检测到从 false → true（轮次刚完成），立即保存
       if (!wasCompleted && nowCompleted) {
         lastCompletedRef.current[stepId] = true;
         sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
@@ -118,8 +101,6 @@ export function WorkspacePage() {
     }
   }, [agent.sessions, taskId, state, stepSummaries, sessionRecords]);
 
-  // 关键状态变化时自动保存会话记录（防抖 2s，作为兜底）
-  // 包含 agent.sessions 以捕获对话消息和总结
   useEffect(() => {
     if (!taskId || !state.intent) return;
 
@@ -183,7 +164,6 @@ export function WorkspacePage() {
   // ── Agent session 生命周期 ──
   const sessionInitRef = useRef(false);
 
-  // 正常首次启动（非恢复）
   useEffect(() => {
     if (
       isAgentConnected &&
@@ -199,7 +179,6 @@ export function WorkspacePage() {
         initialPrompts: { ...state.initialPrompts, intent: intentPrompt },
       });
 
-      // 在 intent step 的 agent 开始工作前，先创建 session
       const startIntent = async () => {
         await agent.createSession("intent", state.intent, state.workspacePath);
         await agent.prompt("intent", intentPrompt);
@@ -211,7 +190,6 @@ export function WorkspacePage() {
 
   const continueTask = useCallback(async () => {
     const nextIndex = Math.min(state.stepIndex + 1, workflow.length - 1);
-    const currentStep = workflow[state.stepIndex];
     const nextStep = workflow[nextIndex];
 
     if (isAgentConnected && taskId) {
@@ -222,7 +200,6 @@ export function WorkspacePage() {
         state.selectedModules,
       );
 
-      // 保存初始提示词，供重试时复用
       patchState({
         initialPrompts: { ...state.initialPrompts, [nextStep.id]: promptText },
       });
@@ -272,12 +249,11 @@ export function WorkspacePage() {
 
   const goHome = useCallback(() => {
     patchState({ view: "home" });
-    navigate("/");
+    navigate("/dashboard");
   }, [patchState, navigate]);
 
   return (
     <main className="workspace-shell">
-      {/* 合并导航条：标题 | 流程节点 + 状态徽章 */}
       <SopNav
         workflow={workflow}
         stepIndex={state.stepIndex}
@@ -289,7 +265,6 @@ export function WorkspacePage() {
         statusBadge={<AgentStatusBadge status={connectionStatus} quality={connectionQuality} />}
       />
 
-      {/* Agent 未连接 / 连接中 / 重连中 */}
       {!isAgentConnected ? (
         <div className="workspace-no-agent">
           <div className="no-agent-card">
@@ -316,7 +291,7 @@ export function WorkspacePage() {
                 <h2>Agent 未连接</h2>
                 <p>请启动 Agent Server 并配置 API Key 后刷新页面</p>
                 <button className="ghost-button" type="button" onClick={goHome}>
-                  ← 返回首页
+                  ← 返回仪表盘
                 </button>
               </>
             )}
@@ -324,7 +299,6 @@ export function WorkspacePage() {
         </div>
       ) : (
         <>
-          {/* 主内容区：左侧面板 + 决策台 */}
           <div className="workspace-grid">
             <LeftPanel
               activeTaskCard={state.activeTaskCard}
@@ -358,68 +332,10 @@ export function WorkspacePage() {
             />
           </div>
 
-          {/* 右侧抽屉 */}
           <Drawer content={drawerContent} onClose={closeDrawer} />
         </>
       )}
     </main>
-  );
-}
-
-// ── Agent 连接状态徽章 ──────────────────────
-
-function AgentStatusBadge({
-  status,
-  quality,
-}: {
-  status: ConnectionStatus;
-  quality: { latency: number; reconnectAttempt: number };
-}) {
-  const latencyMs = quality.latency;
-  const latencyLabel =
-    latencyMs <= 0
-      ? null
-      : latencyMs < 100
-        ? `${latencyMs}ms`
-        : `${Math.round(latencyMs / 100) / 10}s`;
-
-  const LatencyIcon =
-    !latencyMs || latencyMs <= 0
-      ? SignalLow
-      : latencyMs < 150
-        ? SignalHigh
-        : SignalMedium;
-
-  return (
-    <div className={`agent-status-badge ${status}`}>
-      {status === "connected" ? (
-        <>
-          <Wifi size={13} />
-          <span>Agent 已连接</span>
-          {latencyLabel && (
-            <span className="agent-latency">
-              <LatencyIcon size={11} />
-              {latencyLabel}
-            </span>
-          )}
-        </>
-      ) : status === "connecting" ? (
-        <>
-          <Loader2 size={13} className="agent-spin" />
-          <span>连接中...</span>
-        </>
-      ) : status === "reconnecting" ? (
-        <>
-          <Loader2 size={13} className="agent-spin" />
-          <span>重连 {quality.reconnectAttempt}...</span>
-        </>
-      ) : (
-        <>
-          <WifiOff size={13} />
-          <span className="agent-disconnected-text">Agent 未连接</span>
-        </>
-      )}
-    </div>
   );
 }
 

@@ -1,8 +1,8 @@
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStoredState } from "../hooks/useStoredState";
 import { createDefaultState } from "../data";
-import type { AppState, DrawerContent, HomeTab } from "../data/types";
+import type { AppState, HomeTab } from "../data/types";
 import { useSessionRecords } from "../hooks/useSessionRecords";
 import type { SessionMeta, SessionRecord } from "../hooks/useSessionRecords";
 
@@ -13,6 +13,13 @@ import {
   UserCircle,
   FileText,
   History,
+  Wifi,
+  WifiOff,
+  Loader2,
+  Monitor,
+  Cloud,
+  SignalHigh,
+  SignalMedium,
 } from "lucide-react";
 
 import { HomeTaskBoard } from "../components/HomeTaskBoard";
@@ -20,29 +27,27 @@ import { TypewriterText } from "../components/TypewriterText";
 import { WorkspaceSelector } from "../components/WorkspaceSelector";
 import { SessionHistoryPanel } from "../components/SessionHistoryPanel";
 import { useAgent } from "../agent";
+import { useRuntimeState } from "../stores/runtimeStore";
 
 /**
- * 首页路由页 —— "/"
- * 包含 Hero、Tab 切换、任务看板 / 想法输入、工作空间选择弹窗。
+ * 控制台页 —— "/dashboard"
+ * 任务看板 / 想法输入 / 工作空间选择 / 历史会话 + Agent 运行时连接状态。
  */
-export function HomePage() {
+export function DashboardPage() {
   const navigate = useNavigate();
   const [state, setState] = useStoredState();
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
-  // docs 读取状态与错误提示
   const [docsError, setDocsError] = useState<string | null>(null);
-  // 会话历史
   const sessionRecords = useSessionRecords();
 
-  // 从历史记录恢复时，需要等待 Agent 连接就绪
   const [pendingRecord, setPendingRecord] = useState<SessionRecord | null>(null);
 
-  // Agent 连接用于文件浏览
   const taskIdForPicker = showWorkspacePicker && state.createdAt
     ? `task-${new Date(state.createdAt).getTime()}`
     : null;
   const agent = useAgent(taskIdForPicker);
   const agentAvailable = agent.connectionStatus === "connected" || agent.connectionStatus === "reconnecting";
+  const runtimeState = useRuntimeState();
 
   const patchState = useCallback(
     (patch: Partial<AppState>) =>
@@ -53,7 +58,6 @@ export function HomePage() {
   const requestStartTask = useCallback(
     (intent: string, notes: string, activeTaskCard: AppState["activeTaskCard"]) => {
       setDocsError(null);
-      // 生成 32 位 sessionId
       const sessionId = Array.from({ length: 32 }, () =>
         Math.floor(Math.random() * 16).toString(16)
       ).join("");
@@ -72,7 +76,6 @@ export function HomePage() {
 
   const confirmWorkspace = useCallback(
     async (path: string) => {
-      // 如果有 docs 文件，先读取
       setDocsError(null);
       const docsPath = state.activeTaskCard?.docs;
       if (docsPath && agentAvailable) {
@@ -82,7 +85,6 @@ export function HomePage() {
             setDocsError(`文档文件为空: ${docsPath}`);
             return;
           }
-          // 将文档内容追加到 intent
           setState((previous) => ({
             ...previous,
             workspacePath: path,
@@ -102,7 +104,6 @@ export function HomePage() {
         }));
       }
       setShowWorkspacePicker(false);
-      // 确保 navigate 前 localStorage 已同步（useStoredState 的 useEffect 可能尚未执行）
       try {
         const currentState = JSON.parse(
           localStorage.getItem("zero-one-software.prototype.v4") || "{}"
@@ -113,7 +114,7 @@ export function HomePage() {
           view: "workspace",
         }));
       } catch { /* ignore */ }
-      navigate("/workspace");
+      navigate("/task");
     },
     [setState, navigate, state, agentAvailable, agent],
   );
@@ -133,17 +134,14 @@ export function HomePage() {
   const updateHomeTab = (tab: HomeTab) =>
     patchState({ homeTab: tab, previewTaskId: null });
 
-  // ── 从历史记录继续执行 ──
   const handleContinueFromHistory = useCallback(
     async (record: SessionMeta, followUpPrompt?: string) => {
-      // 加载完整记录（包含 stepSessions 对话数据）
       const loaded = await sessionRecords.loadRecord(record.sessionId);
       const fullRecord: SessionRecord = loaded || {
         ...record,
         stepSessions: {},
       };
 
-      // 将历史记录恢复到 AppState
       setState((previous) => ({
         ...previous,
         intent: followUpPrompt
@@ -166,7 +164,7 @@ export function HomePage() {
         restoredSessions: fullRecord.stepSessions || {},
         view: "workspace",
       }));
-      navigate("/workspace");
+      navigate("/task");
     },
     [setState, navigate, sessionRecords],
   );
@@ -180,7 +178,7 @@ export function HomePage() {
     <>
       <main className="home-shell">
         <header className="home-nav">
-          <div className="brand">
+          <div className="brand" style={{ cursor: "pointer" }} onClick={() => navigate("/")}>
             <div className="brand-mark">
               <Sparkles size={18} />
             </div>
@@ -189,6 +187,36 @@ export function HomePage() {
             </div>
           </div>
           <div className="home-nav-right">
+            {/* Agent 运行时状态徽章 */}
+            <div className={`agent-status-badge ${runtimeState.connectionStatus === "connected" ? "connected" : runtimeState.connectionStatus === "connecting" || runtimeState.connectionStatus === "error" ? "connecting" : "disconnected"}`}>
+              {runtimeState.mode === "local" ? <Monitor size={13} /> : <Cloud size={13} />}
+              <span className="agent-mode-label">{runtimeState.mode === "local" ? "本地" : "云端"}</span>
+              <span className="agent-mode-sep">·</span>
+              {runtimeState.connectionStatus === "connected" ? (
+                <>
+                  <Wifi size={11} />
+                  <span>已连接</span>
+                  {agent.connectionQuality.latency > 0 && (
+                    <span className="agent-latency">
+                      {agent.connectionQuality.latency < 150 ? <SignalHigh size={11} /> : <SignalMedium size={11} />}
+                      {agent.connectionQuality.latency < 100
+                        ? `${agent.connectionQuality.latency}ms`
+                        : `${Math.round(agent.connectionQuality.latency / 100) / 10}s`}
+                    </span>
+                  )}
+                </>
+              ) : runtimeState.connectionStatus === "connecting" ? (
+                <>
+                  <Loader2 size={11} className="agent-spin" />
+                  <span>连接中</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff size={11} />
+                  <span className="agent-disconnected-text">未连接</span>
+                </>
+              )}
+            </div>
             <div className="home-user-info">
               <UserCircle size={18} />
               <div>
@@ -200,17 +228,6 @@ export function HomePage() {
         </header>
 
         <section className="home-hero">
-          <div className="home-copy">
-            <h1>
-              <TypewriterText
-                text="创意需求 👉 可运行软件"
-                speed={90}
-                startDelay={500}
-                showCursor
-              />
-            </h1>
-            <p>没关系, 就让我们从"一句话需求"开始</p>
-          </div>
 
           <div className="home-tabs">
             <button
@@ -299,6 +316,7 @@ export function HomePage() {
             onCancel={cancelWorkspacePicker}
             onBrowse={agentAvailable ? agent.browseDir : undefined}
             initialPath={state.workspacePath || "~"}
+            mode={runtimeState.mode}
           />
         </>
       )}

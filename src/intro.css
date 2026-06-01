@@ -1,0 +1,874 @@
+/* ============================================
+   Intro Page — 宣传介绍页样式
+   设计体系: 泥土色系 · 手工温度 · 排版呼吸
+   继承全局 tokens，追加页面特有样式
+   ============================================ */
+
+/* ── Shell ──────────────────────────────── */
+.intro-shell {
+  display: grid;
+  grid-template-rows: auto;
+  gap: 0;
+  min-height: 100vh;
+  padding: 24px 32px 64px;
+}
+
+/* ── Nav ────────────────────────────────── */
+.intro-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.intro-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.intro-nav-link {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: color var(--duration-fast);
+}
+
+.intro-nav-link:hover {
+  color: var(--primary);
+}
+
+/* ── Section Label ──────────────────────── */
+.intro-section-label {
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  margin-bottom: 10px;
+  position: relative;
+}
+
+.intro-section-label::after {
+  content: "";
+  display: block;
+  width: 148px;
+  height: 3px;
+  margin: 14px auto 0;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--primary), var(--terracotta));
+}
+
+/* ── Hero ───────────────────────────────── */
+.intro-hero {
+  display: grid;
+  place-items: center;
+  gap: 24px;
+  text-align: center;
+  padding: 80px 24px 72px;
+  position: relative;
+}
+
+.intro-hero-overline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--primary);
+  padding: 6px 18px;
+  border: 1px solid var(--primary-mid);
+  border-radius: var(--radius-full);
+  background: var(--primary-light);
+}
+
+.intro-hero-overline svg {
+  color: var(--primary);
+}
+
+.intro-hero-title {
+  font-family: var(--font-heading);
+  font-size: clamp(2.8rem, 5.5vw, 4.5rem);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  max-width: 860px;
+}
+
+.intro-hero-subtitle {
+  max-width: 620px;
+  font-size: 1.05rem;
+  color: var(--muted-warm);
+  line-height: 1.75;
+  margin-top: 8px;
+}
+
+.intro-hero-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 0 32px;
+  border: none;
+  border-radius: var(--radius-full);
+  color: #F9F8F4;
+  background: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  margin-top: 16px;
+  transition: all var(--duration-fast) var(--ease-gentle);
+  box-shadow: var(--shadow-md);
+}
+
+.intro-hero-cta:hover {
+  background: var(--terracotta);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+}
+
+/* ── Values ─────────────────────────────── */
+.intro-values {
+  padding: 48px 0 72px;
+}
+
+.intro-values-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.intro-value-card {
+  display: grid;
+  gap: 16px;
+  padding: 32px 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--duration-regular) var(--ease-out);
+}
+
+.intro-value-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary);
+}
+
+.intro-value-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.intro-value-card h3 {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.intro-value-card p {
+  font-size: 0.88rem;
+  color: var(--muted-warm);
+  line-height: 1.7;
+}
+
+/* ── Advantages Section ─────────────────── */
+.intro-advantages {
+  display: grid;
+  gap: 32px;
+  max-width: 1020px;
+  margin: 0 auto;
+  padding: 20px 0 20px;
+}
+
+/* ── Advantage Card ─────────────────────── */
+.intro-card {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 40px;
+  align-items: center;
+  padding: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--duration-regular) var(--ease-out);
+}
+
+.intro-card:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary);
+}
+
+.intro-card.reverse {
+  grid-template-columns: 1fr 340px;
+}
+
+/* ── Card Body ──────────────────────────── */
+.intro-card-body {
+  display: grid;
+  gap: 14px;
+}
+
+.intro-card-tag {
+  display: inline-block;
+  align-self: start;
+  padding: 4px 14px;
+  border: 1px solid var(--primary-mid);
+  border-radius: var(--radius-full);
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--primary);
+  background: var(--primary-light);
+  width: fit-content;
+}
+
+.intro-card-body h3 {
+  font-family: var(--font-heading);
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.intro-card-body > p {
+  font-size: 0.9rem;
+  color: var(--muted-warm);
+  line-height: 1.7;
+}
+
+.intro-card-highlight {
+  margin-top: 4px;
+  padding: 18px 20px;
+  border-left: 3px solid var(--primary);
+  background: var(--primary-light);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.intro-card-highlight p {
+  font-size: 0.88rem;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+/* ── Card Illustration Container ──────── */
+.intro-card-illustration {
+  display: grid;
+  place-items: center;
+  min-height: 260px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--bg-soft) 0%, var(--panel-soft) 100%);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.intro-card-illustration::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.012;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* ═══════════════════════════════════════════
+   CSS 示意图
+   ═══════════════════════════════════════════ */
+
+/* ── 示意图 1: 逃离循环 ───────────────── */
+.ill-escape-loop {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  display: grid;
+  place-items: center;
+}
+
+.ill-loop-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px dashed var(--line);
+  opacity: 0.5;
+}
+
+.ring-1 {
+  width: 180px;
+  height: 180px;
+  border-color: var(--secondary);
+  animation: ringOrbit 6s linear infinite;
+}
+
+.ring-2 {
+  width: 140px;
+  height: 140px;
+  border-color: var(--primary-mid);
+  animation: ringOrbit 5s linear infinite reverse;
+}
+
+.ring-3 {
+  width: 100px;
+  height: 100px;
+  border-color: var(--secondary);
+  animation: ringOrbit 4s linear infinite;
+}
+
+.ill-loop-solid {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--primary), var(--terracotta));
+  z-index: 2;
+}
+
+.ill-person {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  gap: 6px;
+  place-items: center;
+}
+
+.ill-person-head {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2.5px solid var(--text);
+}
+
+.ill-person-body {
+  width: 36px;
+  height: 40px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: transparent;
+  border: 2.5px solid var(--text);
+  border-bottom: 0;
+  position: relative;
+}
+
+.ill-person-body::after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: var(--text);
+}
+
+/* ── 示意图 2: SOP Pipeline ──────────── */
+.ill-sop-pipeline {
+  display: grid;
+  gap: 0;
+  place-items: center;
+  width: 100%;
+  max-width: 320px;
+}
+
+.ill-sop-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.ill-sop-connector {
+  display: grid;
+  place-items: center;
+  height: 20px;
+}
+
+.ill-sop-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.ill-sop-node:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  left: calc(100% + 2px);
+  width: 16px;
+  height: 1.5px;
+  background: var(--primary-mid);
+  border-radius: var(--radius-full);
+}
+
+.ill-sop-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--primary);
+  background: var(--primary-light);
+  flex-shrink: 0;
+}
+
+.ill-sop-row:first-child .ill-sop-node:first-child .ill-sop-dot {
+  background: var(--primary);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(140, 154, 132, 0.18);
+}
+
+.ill-sop-dot.end {
+  border-color: var(--terracotta);
+  background: var(--terracotta-light);
+}
+
+.ill-sop-node span {
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+}
+
+/* ── 示意图 3: Cloud + Clock ─────────── */
+.ill-cloud-clock {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  display: grid;
+  place-items: center;
+}
+
+.ill-cloud {
+  position: relative;
+  width: 120px;
+  height: 72px;
+  margin-top: -30px;
+}
+
+.ill-cloud-part {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--primary-light);
+  border: 2px solid var(--primary-mid);
+}
+
+.part-1 {
+  width: 60px;
+  height: 60px;
+  top: 0;
+  left: 10px;
+}
+
+.part-2 {
+  width: 52px;
+  height: 52px;
+  top: -16px;
+  left: 40px;
+}
+
+.part-3 {
+  width: 44px;
+  height: 44px;
+  top: 4px;
+  left: 66px;
+  border-radius: 50%;
+}
+
+.ill-cloud::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: var(--primary-light);
+  border: 2px solid var(--primary-mid);
+  border-top: 0;
+}
+
+.ill-clock {
+  position: absolute;
+  bottom: 30px;
+  width: 72px;
+  height: 72px;
+}
+
+.ill-clock-face {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px solid var(--text);
+  background: var(--panel);
+  position: relative;
+}
+
+.ill-clock-face::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text);
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+
+.ill-clock-hand {
+  position: absolute;
+  bottom: 50%;
+  left: 50%;
+  transform-origin: bottom center;
+  border-radius: var(--radius-full);
+  background: var(--text);
+}
+
+.ill-clock-hand.hour {
+  width: 3px;
+  height: 20px;
+  transform: translateX(-50%) rotate(-30deg);
+}
+
+.ill-clock-hand.minute {
+  width: 2px;
+  height: 28px;
+  transform: translateX(-50%) rotate(45deg);
+  opacity: 0.6;
+}
+
+/* ── 示意图 4: 模块化拼图 ───────────── */
+.ill-blocks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 8px;
+  width: 180px;
+  height: 130px;
+}
+
+.ill-block {
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--line);
+  background: var(--panel);
+  transition: all var(--duration-regular) var(--ease-out);
+}
+
+.block-1 {
+  grid-column: 1;
+  grid-row: 1;
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+
+.block-2 {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.block-3 {
+  grid-column: 3;
+  grid-row: 1;
+  background: var(--terracotta-light);
+  border-color: var(--terracotta);
+}
+
+.block-4 {
+  grid-column: 1 / 3;
+  grid-row: 2;
+  border-style: dashed;
+  border-color: var(--primary-mid);
+}
+
+.block-5 {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.block-6 {
+  display: none;
+}
+
+/* ── Animations ──────────────────────────── */
+@keyframes ringOrbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ═══════════════════════════════════════════
+   Runtime Mode Selection
+   ═══════════════════════════════════════════ */
+
+.intro-runtime {
+  padding: 10px 0 10px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.intro-runtime-subtitle {
+  color: var(--muted-warm);
+  font-size: 0.92rem;
+  line-height: 1.65;
+  margin-top: -24px;
+  margin-bottom: 36px;
+}
+
+.intro-runtime-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.intro-runtime-card {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  padding: 24px 32px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--duration-regular) var(--ease-out);
+  font-family: var(--font-body);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.intro-runtime-card.local {
+  background: linear-gradient(135deg, rgba(140, 154, 132, 0.08), var(--panel) 60%);
+}
+
+.intro-runtime-card.cloud {
+  background: linear-gradient(135deg, rgba(124, 124, 154, 0.06), var(--panel) 60%);
+}
+
+.intro-runtime-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.12);
+}
+
+.intro-runtime-card.local:hover {
+  border-color: var(--primary);
+  background: linear-gradient(135deg, rgba(140, 154, 132, 0.14), var(--panel) 50%);
+  box-shadow: 0 20px 48px -12px rgba(140, 154, 132, 0.22);
+}
+
+.intro-runtime-card.cloud:hover {
+  border-color: #6C6C8A;
+  background: linear-gradient(135deg, rgba(124, 124, 154, 0.1), var(--panel) 50%);
+  box-shadow: 0 20px 48px -12px rgba(124, 124, 154, 0.2);
+}
+
+/* 选中态脉冲 */
+.intro-runtime-card:active {
+  transform: scale(0.98);
+}
+
+.intro-runtime-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.intro-runtime-icon {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-md);
+  transition: all var(--duration-regular) var(--ease-out);
+}
+
+.intro-runtime-icon.local-icon {
+  color: var(--primary);
+  background: rgba(140, 154, 132, 0.15);
+  box-shadow: 0 0 0 6px rgba(140, 154, 132, 0.06);
+}
+
+.intro-runtime-icon.cloud-icon {
+  color: #6C6C8A;
+  background: rgba(124, 124, 154, 0.12);
+  box-shadow: 0 0 0 6px rgba(124, 124, 154, 0.05);
+}
+
+.intro-runtime-card:hover .intro-runtime-icon.local-icon {
+  box-shadow: 0 0 0 10px rgba(140, 154, 132, 0.1);
+}
+
+.intro-runtime-card:hover .intro-runtime-icon.cloud-icon {
+  box-shadow: 0 0 0 10px rgba(124, 124, 154, 0.08);
+}
+
+.intro-runtime-check {
+  opacity: 0.35;
+  transition: opacity var(--duration-fast) var(--ease-gentle);
+}
+
+.intro-runtime-card.local .intro-runtime-check {
+  color: var(--primary);
+}
+
+.intro-runtime-card.cloud .intro-runtime-check {
+  color: #6C6C8A;
+}
+
+.intro-runtime-card:hover .intro-runtime-check {
+  opacity: 0.7;
+}
+
+.intro-runtime-card h3 {
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.intro-runtime-card > p {
+  color: var(--muted-warm);
+  font-size: 0.82rem;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.intro-runtime-features {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.intro-runtime-features li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.intro-runtime-card.local .intro-runtime-features li svg {
+  color: var(--primary);
+}
+
+.intro-runtime-card.cloud .intro-runtime-features li svg {
+  color: #6C6C8A;
+}
+
+.intro-runtime-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  justify-self: start;
+  margin-top: 6px;
+  padding: 10px 24px;
+  border-radius: var(--radius-full);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.intro-runtime-card.local .intro-runtime-cta {
+  color: #F9F8F4;
+  background: var(--primary);
+}
+
+.intro-runtime-card.cloud .intro-runtime-cta {
+  color: #F9F8F4;
+  background: #6C6C8A;
+}
+
+.intro-runtime-card:hover .intro-runtime-cta {
+  gap: 14px;
+}
+
+/* ── Responsive ──────────────────────────── */
+@media (max-width: 768px) {
+  .intro-runtime-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Responsive ──────────────────────────── */
+@media (max-width: 900px) {
+  .intro-shell {
+    padding: 16px;
+  }
+
+  .intro-hero {
+    padding: 48px 16px 40px;
+  }
+
+  .intro-hero-title {
+    font-size: clamp(2rem, 6vw, 2.8rem);
+  }
+
+  .intro-values-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .intro-card {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 28px;
+  }
+
+  .intro-card.reverse {
+    grid-template-columns: 1fr;
+  }
+
+  .intro-card.reverse .intro-card-illustration {
+    order: -1;
+  }
+
+  .intro-card-illustration {
+    min-height: 200px;
+  }
+
+  .intro-section-label {
+    font-size: 1.3rem;
+  }
+
+  .ill-sop-pipeline {
+    max-width: 240px;
+  }
+}
