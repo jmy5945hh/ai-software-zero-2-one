@@ -1026,6 +1026,40 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
       ) {
         buildRef.current.add(step);
 
+        // 如果已有编译命令（从历史恢复），跳过检测直接执行
+        if (session.buildCommand) {
+          triggerBuild(workspacePath || "", session.buildCommand)
+            .then((buildResult) => {
+              setSessions((prev) => ({
+                ...prev,
+                [step]: {
+                  ...prev[step],
+                  buildStatus: "loading",
+                },
+              }));
+              buildStepRef.current = step;
+              return wsRef.current!.request("build.trigger", {
+                taskId,
+                step,
+                buildResult,
+                workspacePath,
+                _realCommand: session.buildCommand,
+              });
+            })
+            .catch(() => {
+              buildStepRef.current = null;
+              buildRef.current.delete(step);
+              setSessions((prev) => ({
+                ...prev,
+                [step]: {
+                  ...prev[step],
+                  buildStatus: "error",
+                },
+              }));
+            });
+          continue;
+        }
+
         // Step 1: 模型检测编译命令
         setSessions((prev) => ({
           ...prev,
@@ -1035,7 +1069,7 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
           },
         }));
 
-        detectBuildCommand(taskId)
+        detectBuildCommand(workspacePath || "")
           .then((command) => {
             // 保存模型检测到的编译命令
             setSessions((prev) => ({
@@ -1130,6 +1164,10 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
       buildResult?: any;
       buildStatus?: string;
     }) => {
+      // 如果恢复的 session 需要重新触发编译，清除 buildRef 标记
+      if (restored.buildStatus === "pending" && !restored.buildCommand) {
+        buildRef.current.delete(step);
+      }
       setSessions((prev) => {
         const existing = prev[step] || defaultSession();
         // 判断是否需要触发总结：agent 已完成但 summary 未完成
