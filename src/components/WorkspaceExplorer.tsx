@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { FileText, Code2, X } from "lucide-react";
 import { SpecsExplorer } from "./SpecsExplorer";
 import { RepoExplorer } from "./RepoExplorer";
@@ -7,6 +7,10 @@ type ExplorerMode = "specs" | "repo" | null;
 
 type WorkspaceExplorerProps = {
   workspacePath: string;
+  /** 外部触发打开 repo explorer */
+  repoExplorerOpen?: boolean;
+  /** 关闭 repo explorer */
+  onCloseRepoExplorer?: () => void;
 };
 
 /**
@@ -14,10 +18,20 @@ type WorkspaceExplorerProps = {
  * 展示两个按钮：展开 specs 文档 / 展开项目代码仓库。
  * 点击后展开对应的全屏覆盖式页面。
  */
-export function WorkspaceExplorer({ workspacePath }: WorkspaceExplorerProps) {
+export function WorkspaceExplorer({ workspacePath, repoExplorerOpen, onCloseRepoExplorer }: WorkspaceExplorerProps) {
   const [mode, setMode] = useState<ExplorerMode>(null);
 
-  const handleClose = useCallback(() => setMode(null), []);
+  const handleClose = useCallback(() => {
+    setMode(null);
+    onCloseRepoExplorer?.();
+  }, [onCloseRepoExplorer]);
+
+  // 外部触发打开 repo explorer
+  useEffect(() => {
+    if (repoExplorerOpen) {
+      setMode("repo");
+    }
+  }, [repoExplorerOpen]);
 
   return (
     <>

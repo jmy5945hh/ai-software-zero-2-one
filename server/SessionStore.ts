@@ -33,6 +33,8 @@ export type StepSessionSnapshot = {
   }>;
   summary: string;
   summarizationResult?: Record<string, unknown> | null;
+  /** 模型检测到的项目编译命令（仅 coding 步骤有值） */
+  buildCommand?: string | null;
   /** 项目编译结果（仅 coding 步骤有值） */
   buildResult?: {
     command: string;
@@ -43,6 +45,13 @@ export type StepSessionSnapshot = {
     building: boolean;
     fixing: boolean;
   } | null;
+  // ── 执行状态（用于恢复时判断进度） ──
+  /** Agent 是否执行完成 */
+  completed?: boolean;
+  /** 结构化总结状态 */
+  summarizationStatus?: "idle" | "pending" | "loading" | "done" | "error";
+  /** 项目编译状态 */
+  buildStatus?: "idle" | "pending" | "detecting" | "loading" | "done" | "error";
 };
 
 /** 任务元信息（不含对话数据） */

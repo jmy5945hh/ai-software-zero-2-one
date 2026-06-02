@@ -72,6 +72,45 @@ export class AgentRunner {
     return session;
   }
 
+  /** 为编译命令检测 Agent 创建独立 AgentSession */
+  async createBuildCommandSession(
+    workspaceDir: string,
+  ): Promise<AgentSession> {
+    const provider = getDefaultProvider();
+    const key = process.env.DEEPSEEK_API_KEY;
+    if (!key) throw new Error("DEEPSEEK_API_KEY not found in environment");
+    this.authStorage.setRuntimeApiKey("deepseek", key);
+
+    const model = this.modelRegistry.find(provider, "deepseek-v4-flash");
+    if (!model) throw new Error(`Model not found: ${provider}/deepseek-v4-flash`);
+
+    const loader = new DefaultResourceLoader({
+      cwd: workspaceDir,
+      agentDir: workspaceDir,
+      systemPrompt: `你是一个项目构建配置分析专家。你的唯一职责是根据项目的构建配置文件，输出正确的编译命令。
+
+规则：
+1. 只输出编译命令本身，不要有任何额外说明文字（不要加 markdown 代码块、不要解释）
+2. 例如：npm run build、npm run compile、make、go build ./...、cargo build 等
+3. 如果找不到任何构建配置，输出 npm run build 作为默认值`,
+    });
+    await loader.reload();
+
+    const { session } = await createAgentSession({
+      model,
+      thinkingLevel: "low",
+      authStorage: this.authStorage,
+      modelRegistry: this.modelRegistry,
+      settingsManager: this.settingsManager,
+      tools: ["read", "grep", "find", "ls"],
+      customTools: [],
+      cwd: workspaceDir,
+      resourceLoader: loader,
+    });
+
+    return session;
+  }
+
   /** 为编译分析 Agent 创建独立 AgentSession */
   async createBuildSession(
     workspaceDir: string,

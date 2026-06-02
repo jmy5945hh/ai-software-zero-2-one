@@ -1,0 +1,915 @@
+/* ============================================
+   Swagger API 差异对比 — 页面样式
+   继承项目设计令牌，保持一致的手工质感
+   ============================================ */
+
+/* ── 页面布局 ───────────────────────────── */
+.swagger-diff-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+  padding: 24px 32px;
+}
+
+.swagger-diff-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.swagger-diff-nav .brand span {
+  display: block;
+  color: var(--muted-warm);
+  font-size: 0.72rem;
+  margin-top: 2px;
+}
+
+.swagger-diff-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swagger-diff-nav-actions .ghost-button.active {
+  border-color: var(--primary);
+  color: var(--text);
+  background: var(--primary-light);
+}
+
+/* ── 主体区域（历史侧边栏 + 对比区域）────── */
+.swagger-diff-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  padding-top: 20px;
+  min-height: 0;
+}
+
+/* 有历史栏时启用双列 */
+.swagger-diff-body:has(.swagger-diff-history) {
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+
+/* ── 历史记录侧边栏 ─────────────────────── */
+.swagger-diff-history {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  align-self: start;
+  position: sticky;
+  top: 20px;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+
+.diff-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.diff-history-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.diff-history-header svg {
+  color: var(--primary);
+}
+
+.diff-history-empty {
+  color: var(--muted-warm);
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 32px 0;
+}
+
+.diff-history-list {
+  display: grid;
+  gap: 8px;
+}
+
+.diff-history-item {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.diff-history-item:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.diff-history-item.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.diff-history-versions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.diff-history-versions svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.diff-history-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.diff-compat-tag {
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.diff-compat-tag.compatible {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.diff-compat-tag.breaking {
+  color: var(--terracotta);
+  background: var(--terracotta-light);
+}
+
+.diff-history-time {
+  color: var(--muted-warm);
+  font-size: 0.68rem;
+}
+
+/* ── 对比主内容 ─────────────────────────── */
+.swagger-diff-content {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* ── 输入面板区域（左右双列） ────────────── */
+.swagger-diff-inputs {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* ── 分割线 ─────────────────────────────── */
+.swagger-diff-divider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 0;
+  align-self: stretch;
+}
+
+.swagger-diff-divider-line {
+  flex: 1;
+  width: 1px;
+  min-height: 40px;
+  background: var(--line);
+}
+
+.swagger-diff-divider-icon {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* ── 输入面板 ───────────────────────────── */
+.swagger-input-panel {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--duration-regular) var(--ease-out);
+}
+
+.swagger-input-panel:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.swagger-input-panel.source {
+  border-left: 3px solid var(--primary);
+}
+
+.swagger-input-panel.target {
+  border-right: 3px solid var(--terracotta);
+}
+
+.swagger-input-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.swagger-input-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.swagger-input-header svg {
+  color: var(--primary);
+}
+
+.swagger-file-name {
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+/* ── 输入方式切换 ───────────────────────── */
+.swagger-input-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--bg-soft);
+}
+
+.swagger-input-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-full);
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.swagger-input-tab:hover {
+  color: var(--text);
+  background: var(--primary-light);
+}
+
+.swagger-input-tab.active {
+  color: #F9F8F4;
+  background: var(--text);
+  font-weight: 600;
+}
+
+/* ── 文本输入区 ─────────────────────────── */
+.swagger-textarea-wrap {
+  display: grid;
+  gap: 6px;
+}
+
+.swagger-textarea {
+  width: 100%;
+  min-height: 200px;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-family: "SF Mono", "Monaco", "Cascadia Code", monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-gentle);
+}
+
+.swagger-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.swagger-textarea::placeholder {
+  color: var(--muted-warm);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+}
+
+.swagger-textarea-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.7rem;
+}
+
+.swagger-valid {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.swagger-invalid {
+  color: var(--terracotta);
+  font-weight: 600;
+}
+
+.swagger-chars {
+  color: var(--muted-warm);
+}
+
+.swagger-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.65rem;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.swagger-clear-btn:hover {
+  border-color: var(--terracotta);
+  color: var(--terracotta);
+  background: var(--terracotta-light);
+}
+
+/* ── 上传区域 ───────────────────────────── */
+.swagger-upload-area {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+}
+
+.swagger-upload-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 20px;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  background: var(--bg-soft);
+  font-size: 0.82rem;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.swagger-upload-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.swagger-upload-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 20px;
+  color: var(--primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* ── Mock 徽章 ──────────────────────────── */
+.swagger-mock-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+/* ── 输入状态 ───────────────────────────── */
+.swagger-input-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  color: var(--muted-warm);
+}
+
+.swagger-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--secondary);
+}
+
+.swagger-status-dot.loaded {
+  background: var(--primary);
+}
+
+/* ── 操作区 ─────────────────────────────── */
+.swagger-diff-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.swagger-diff-actions .primary-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── 错误提示 ───────────────────────────── */
+.swagger-diff-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border: 1px solid var(--terracotta);
+  border-radius: var(--radius-md);
+  background: var(--terracotta-light);
+  color: var(--terracotta);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* ── 差异报告 ───────────────────────────── */
+.swagger-diff-report {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow-md);
+}
+
+/* 报告头部 */
+.diff-report-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.diff-report-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.diff-report-title svg {
+  color: var(--primary);
+}
+
+.diff-report-title h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.diff-report-versions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diff-report-versions svg {
+  color: var(--muted);
+}
+
+.diff-version-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: "SF Mono", "Monaco", monospace;
+}
+
+.diff-version-badge.source {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.diff-version-badge.target {
+  color: var(--terracotta);
+  background: var(--terracotta-light);
+}
+
+/* 兼容性结论 */
+.diff-compatibility {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+}
+
+.diff-compatibility.compat-ok {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.diff-compatibility.compat-breaking {
+  background: var(--terracotta-light);
+  color: var(--terracotta);
+}
+
+.diff-compatibility.compat-unknown {
+  background: var(--secondary-light);
+  color: var(--muted);
+}
+
+.diff-compatibility strong {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.diff-compatibility span {
+  opacity: 0.75;
+}
+
+.diff-timestamp {
+  margin-left: auto;
+  font-size: 0.7rem;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+/* 汇总统计卡片 */
+.diff-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.diff-summary-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+
+.diff-summary-card span {
+  color: var(--muted-warm);
+  font-size: 0.68rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.diff-summary-card strong {
+  font-family: var(--font-heading);
+  font-size: 1.8rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.diff-summary-card.total strong { color: var(--text); }
+.diff-summary-card.breaking strong { color: var(--terracotta); }
+.diff-summary-card.non-breaking strong { color: #B89B6C; }
+.diff-summary-card.info strong { color: var(--primary); }
+
+.diff-summary-card.breaking svg { color: var(--terracotta); }
+.diff-summary-card.non-breaking svg { color: #B89B6C; }
+.diff-summary-card.info svg { color: var(--primary); }
+
+/* 详细分类 */
+.diff-breakdown {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.diff-breakdown-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--bg-soft);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.diff-breakdown-item svg {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.diff-breakdown-item strong {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.8rem;
+  margin-left: 2px;
+}
+
+/* 工具栏 */
+.diff-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.diff-filter-group {
+  display: flex;
+  gap: 4px;
+}
+
+.diff-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 500;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.diff-filter-btn:hover {
+  color: var(--text);
+  background: var(--primary-light);
+}
+
+.diff-filter-btn.active {
+  border-color: var(--primary);
+  color: var(--text);
+  background: var(--primary-light);
+  font-weight: 600;
+}
+
+.diff-sort-select {
+  min-height: 30px;
+  padding: 0 28px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  color: var(--text);
+  background: var(--panel);
+  font-size: 0.72rem;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238C9A84' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  cursor: pointer;
+}
+
+.diff-sort-select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* 变更列表 */
+.diff-change-list {
+  display: grid;
+  gap: 6px;
+  max-height: 540px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.diff-change-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.diff-change-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.diff-change-list::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-full);
+  background: var(--line);
+}
+
+.diff-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: var(--muted);
+}
+
+.diff-change-item {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  transition: background var(--duration-fast) var(--ease-gentle);
+}
+
+.diff-change-item:hover {
+  background: var(--bg-soft);
+}
+
+.diff-change-item.breaking {
+  border-left: 3px solid var(--terracotta);
+}
+
+.diff-change-item.non-breaking {
+  border-left: 3px solid #B89B6C;
+}
+
+.diff-change-item.info {
+  border-left: 3px solid var(--primary);
+}
+
+.diff-change-icon {
+  padding-top: 2px;
+}
+
+.diff-change-item.breaking .diff-change-icon svg { color: var(--terracotta); }
+.diff-change-item.non-breaking .diff-change-icon svg { color: #B89B6C; }
+.diff-change-item.info .diff-change-icon svg { color: var(--primary); }
+
+.diff-change-content {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.diff-change-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.diff-severity {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.diff-severity.breaking {
+  color: var(--terracotta);
+  background: var(--terracotta-light);
+}
+
+.diff-severity.non-breaking {
+  color: #B89B6C;
+  background: rgba(184, 155, 108, 0.12);
+}
+
+.diff-severity.info {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.diff-change-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.diff-change-msg {
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.diff-change-values {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+}
+
+.diff-old-value,
+.diff-new-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+}
+
+.diff-old-value {
+  color: var(--terracotta);
+}
+
+.diff-new-value {
+  color: var(--primary);
+}
+
+.diff-old-value code,
+.diff-new-value code {
+  font-family: "SF Mono", "Monaco", "Cascadia Code", monospace;
+  font-size: 0.72rem;
+  word-break: break-all;
+}
+
+/* ── 空状态 / 初始引导 ──────────────────── */
+.swagger-diff-empty {
+  display: grid;
+  place-items: center;
+  gap: 16px;
+  padding: 60px 20px;
+  color: var(--muted-warm);
+  text-align: center;
+}
+
+.swagger-diff-empty svg {
+  color: var(--secondary);
+}
+
+.swagger-diff-empty strong {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+/* ── 响应式 ─────────────────────────────── */
+@media (max-width: 960px) {
+  .swagger-diff-shell {
+    padding: 16px;
+  }
+
+  .swagger-diff-inputs {
+    grid-template-columns: 1fr;
+  }
+
+  .swagger-diff-divider {
+    flex-direction: row;
+    padding: 0 20px;
+  }
+
+  .swagger-diff-divider-line {
+    width: auto;
+    height: 1px;
+    min-height: 0;
+    flex: 1;
+  }
+
+  .swagger-diff-body:has(.swagger-diff-history) {
+    grid-template-columns: 1fr;
+  }
+}

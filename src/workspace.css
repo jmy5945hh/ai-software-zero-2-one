@@ -1649,6 +1649,37 @@
   margin-bottom: 18px;
 }
 
+/* 编译状态徽标 */
+.build-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-left: 6px;
+}
+
+.build-badge-success {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.build-badge-failure {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.build-badge-running {
+  background: var(--primary-light);
+  color: var(--primary);
+  border: 1px solid var(--primary-mid);
+}
+
 .build-command {
   margin-bottom: 10px;
   padding: 8px 12px;
@@ -1692,8 +1723,78 @@
   border: 1px solid #fecaca;
 }
 
+/* 编译结果分析 */
+.build-analysis {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-sm);
+}
+
+.build-analysis-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #991b1b;
+  margin-bottom: 6px;
+}
+
+.build-analysis-content {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #7f1d1d;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.build-analysis-content code {
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .build-output {
   margin-bottom: 10px;
+}
+
+.build-output-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.build-output-header-clickable {
+  cursor: pointer;
+  padding: 4px 0;
+  border-radius: 4px;
+  transition: color var(--duration-fast) var(--ease-gentle);
+}
+
+.build-output-header-clickable:hover {
+  color: var(--text);
+}
+
+.build-output-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.build-output-meta {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.build-expand-icon {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
 }
 
 .build-output-pre {
@@ -1718,6 +1819,7 @@
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
+  flex-wrap: wrap;
 }
 
 .build-fix-exhausted {
@@ -1734,6 +1836,21 @@
 
 /* 暗色模式适配 */
 @media (prefers-color-scheme: dark) {
+  .build-badge-success {
+    background: #064e3b;
+    color: #a7f3d0;
+    border-color: #065f46;
+  }
+  .build-badge-failure {
+    background: #7f1d1d;
+    color: #fecaca;
+    border-color: #991b1b;
+  }
+  .build-badge-running {
+    background: rgba(140, 154, 132, 0.2);
+    color: #a8b8a0;
+    border-color: rgba(140, 154, 132, 0.35);
+  }
   .build-success {
     background: #064e3b;
     color: #a7f3d0;
@@ -1743,6 +1860,16 @@
     background: #7f1d1d;
     color: #fecaca;
     border-color: #991b1b;
+  }
+  .build-analysis {
+    background: #7f1d1d;
+    border-color: #991b1b;
+  }
+  .build-analysis-title {
+    color: #fecaca;
+  }
+  .build-analysis-content {
+    color: #fecaca;
   }
   .build-fix-exhausted {
     background: #78350f;
@@ -1923,6 +2050,39 @@
 .filechange-item.clickable:hover .filechange-chevron {
   transform: translateX(2px);
   color: var(--primary);
+}
+
+/* 文件变更 → 跳转仓库按钮 */
+.filechanges-repo-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  margin-top: 8px;
+  border: 1px solid var(--primary-mid);
+  border-radius: var(--radius-md);
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.filechanges-repo-btn:hover {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.filechanges-repo-btn svg:last-child {
+  margin-left: auto;
+  transition: transform var(--duration-fast) var(--ease-gentle);
+}
+
+.filechanges-repo-btn:hover svg:last-child {
+  transform: translateX(3px);
 }
 
 /* ── 交付Spec 目录树 ──────────────────────── */

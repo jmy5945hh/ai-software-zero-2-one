@@ -15,6 +15,10 @@ type LeftPanelProps = {
   agentSessions?: Record<string, SessionState>;
   intent?: string;
   workspacePath?: string;
+  /** 外部触发打开 repo explorer */
+  repoExplorerOpen?: boolean;
+  /** 关闭 repo explorer */
+  onCloseRepoExplorer?: () => void;
 };
 
 /**
@@ -29,6 +33,8 @@ export function LeftPanel({
   agentSessions,
   intent,
   workspacePath,
+  repoExplorerOpen,
+  onCloseRepoExplorer,
 }: LeftPanelProps) {
   return (
     <aside className="left-panel">
@@ -46,7 +52,11 @@ export function LeftPanel({
           <div className="left-card-header">
             <span>Workspace</span>
           </div>
-          <WorkspaceExplorer workspacePath={workspacePath} />
+          <WorkspaceExplorer
+            workspacePath={workspacePath}
+            repoExplorerOpen={repoExplorerOpen}
+            onCloseRepoExplorer={onCloseRepoExplorer}
+          />
         </section>
       )}
     </aside>

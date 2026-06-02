@@ -86,7 +86,9 @@ export type SessionState = {
   /** 总结 Agent 原始返回文本（调试 / 兜底用） */
   summarizationRaw?: string;
   /** 项目编译状态 */
-  buildStatus: "idle" | "pending" | "loading" | "done" | "error";
+  buildStatus: "idle" | "pending" | "detecting" | "loading" | "done" | "error";
+  /** 模型检测到的编译命令 */
+  buildCommand?: string;
   /** 编译结果 */
   buildResult?: import("../data/types").BuildResult;
   /** 编译 Agent 原始返回文本 */

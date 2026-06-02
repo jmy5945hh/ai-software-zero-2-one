@@ -8,14 +8,4 @@ You are a code generation specialist. Based on the technical solution design fro
 ## Outline
 1. Read the technical solution design docs in /specs/[###-feature-name]/，read core design docs. (/plan.md, data-model.md, api-spec.md, spec.md).
 
-2. Generate the following code skeleton:
-   - **Type definitions**: Entity types, API request/response types, enums
-   - **API service layer**: Fetch functions for each endpoint with proper typing
-   - **Page components**: Skeleton components with data fetching, loading/empty/error states
-   - **Route configuration**: Route definitions with navigation structure
-
-3. Write all generated code to the workspace files. Ensure:
-   - TypeScript types are fully defined with no `any`
-   - API functions use proper error handling
-   - Components follow React best practices (hooks, proper state management)
-   - All imports are correct and resolvable
+2. Generate code base on design docs.

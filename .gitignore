@@ -19,6 +19,7 @@ Thumbs.db
 
 # Claude / AI agent files
 .claude/
+.qwen/
 
 # Environment
 .env

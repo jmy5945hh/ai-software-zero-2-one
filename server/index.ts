@@ -214,10 +214,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 项目编译（自动检测 build 命令并执行）
+  // 项目编译（支持由模型提供编译命令）
   if (req.method === "GET" && req.url?.startsWith("/project-build")) {
     const url = new URL(req.url, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
+    const customCommand = url.searchParams.get("command");
+    console.log("[project-build] path=%s command=%s", projectPath, customCommand);
     if (!projectPath) {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Missing 'path' query parameter" }));
@@ -231,23 +233,12 @@ const server = http.createServer((req, res) => {
         return;
       }
 
-      // 自动检测 build 命令
-      const pkgPath = path.join(projectPath, "package.json");
-      let command = "npm run build";
-      if (fs.existsSync(pkgPath)) {
-        try {
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-          const scripts = pkg.scripts || {};
-          if (scripts.build) {
-            command = `npm run build`;
-          } else if (scripts.compile) {
-            command = `npm run compile`;
-          } else if (scripts.tsc) {
-            command = `npm run tsc`;
-          }
-        } catch {
-          // 使用默认命令
-        }
+      // 使用模型提供的编译命令，不再自动检测
+      const command = customCommand;
+      if (!command) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: false, output: "// 错误：模型未提供编译命令", command: "" }));
+        return;
       }
 
       // 执行编译
@@ -262,12 +253,12 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify({ success: true, output, command }));
     } catch (err: any) {
       // 编译失败（非零退出码）
-      const output = err.stdout || err.stderr || err.message || "";
+      const errOutput = err.stdout || err.stderr || err.message || "";
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({
         success: false,
-        output: output,
-        command: err.cmd || "npm run build",
+        output: errOutput,
+        command: customCommand, // 使用传入的命令，err.cmd 可能不存在
       }));
     }
     return;
@@ -391,7 +382,7 @@ function buildBuildPrompt(buildResult: {
 
 输出 JSON schema：
 {
-  "command": "编译命令",
+  "command": "编译命令（必须原样保留，不要修改）",
   "success": true/false,
   "output": "编译输出（完整保留原始输出，不要截断）",
   "timestamp": "编译时间戳",
@@ -403,7 +394,7 @@ function buildBuildPrompt(buildResult: {
 注意：
 - success 字段必须严格根据编译结果判断
 - output 字段必须完整保留原始编译输出，不要做任何修改或截断
-- command 字段保留原始编译命令
+- **command 字段必须原样使用下面传入的命令，不要做任何修改**
 
 以下是编译输出：
 ---
@@ -413,6 +404,16 @@ function buildBuildPrompt(buildResult: {
 输出:
 ${buildResult.output}
 ---`;
+}
+
+/** 构建编译命令检测 prompt */
+function buildDetectCommandPrompt(): string {
+  return `请分析当前项目的构建配置文件（如 package.json、Makefile、Cargo.toml、build.gradle、CMakeLists.txt 等），输出正确的编译命令。
+
+要求：
+1. 只输出编译命令本身，不要有任何额外说明文字
+2. 例如：npm run build、npm run compile、make、go build ./...、cargo build 等
+3. 如果找不到任何构建配置，输出 npm run build 作为默认值`;
 }
 
 /** 从 AgentMessage[] 中提取最后一条 assistant 消息的文本 */
@@ -925,6 +926,61 @@ wss.on("connection", (ws: WebSocket, req) => {
           const promptText = buildSummarizationPrompt(saved);
           console.log("[summarization.trigger] userPrompt=%.20s", promptText.slice(0, 20));
           await session.prompt(promptText);
+          break;
+        }
+
+        // ── 编译命令检测（独立模型调用，不广播中间事件到前端） ──
+        case "build.detectCommand": {
+          const { workspacePath } = msg.params as {
+            workspacePath: string;
+          };
+          const workspaceDir = workspacePath;
+          const session = await runner.createBuildCommandSession(workspaceDir);
+
+          // 收集完整输出，不广播中间事件到前端（避免污染 coding session 的 turns/messages）
+          let fullOutput = "";
+
+          // 监听 agent_end，完成后自动清理
+          const unsub = session.subscribe((sdkEvent) => {
+            const event = mapSdkEvent(sdkEvent);
+            if (!event) return;
+
+            if (event.type === "text_delta") {
+              fullOutput += event.delta;
+            }
+
+            if (event.type === "agent_end") {
+              unsub();
+              session.dispose();
+
+              // 清理输出：去掉 markdown 代码块标记、空白行和说明文字，提取编译命令
+              const lines = fullOutput
+                .split("\n")
+                .map((l) => l.trim())
+                .filter((l) => l && !l.startsWith("```") && !l.startsWith("`"));
+              // 找到第一个看起来像命令的行（不含中文、不含冒号说明）
+              const rawCommand =
+                lines.find(
+                  (l) =>
+                    !/[\u4e00-\u9fff]/.test(l) && !l.includes("：") && !l.includes(":"),
+                ) || lines[0] || "npm run build";
+              const command = rawCommand.replace(/^`|`$/g, "").trim();
+              console.log("[build.detectCommand] fullOutput:", fullOutput);
+              console.log("[build.detectCommand] detected command:", command);
+              ws.send(
+                JSON.stringify({
+                  type: "response",
+                  id: msg.id,
+                  result: { command },
+                }),
+              );
+            }
+          });
+
+          // 发送编译命令检测 prompt
+          const detectPrompt = buildDetectCommandPrompt();
+          console.log("[build.detectCommand] sending prompt");
+          await session.prompt(detectPrompt);
           break;
         }
 

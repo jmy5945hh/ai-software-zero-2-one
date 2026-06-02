@@ -25,6 +25,7 @@ import {
   Info,
   File,
   Folder,
+  Code2,
 } from "lucide-react";
 import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
 import { useStepKey } from "../hooks";
@@ -66,6 +67,11 @@ type DecisionBoardProps = {
     }>;
     summary: string;
     summarizationResult?: import("../data/types").AgentSummary | null;
+    buildCommand?: string | null;
+    buildResult?: import("../data/types").BuildResult | null;
+    completed?: boolean;
+    summarizationStatus?: "idle" | "pending" | "loading" | "done" | "error";
+    buildStatus?: "idle" | "pending" | "detecting" | "loading" | "done" | "error";
   }>;
   /** 各步骤的 Agent 总结摘要（stepId → brief） */
   stepSummaries: Record<string, string>;
@@ -76,8 +82,14 @@ type DecisionBoardProps = {
   agentResumeQuestion?: (step: string, answer: string) => Promise<void>;
   isAgentConnected: boolean;
   /** 项目编译 */
-  triggerBuild: (workspacePath: string) => Promise<{ success: boolean; output: string; command: string }>;
+  triggerBuild: (workspacePath: string, command?: string) => Promise<{ success: boolean; output: string; command: string }>;
+  /** 重新检测编译命令 */
+  detectBuildCommand?: (workspacePath: string) => Promise<string>;
   taskId: string | null;
+  /** 打开 Workspace 项目代码仓库 */
+  onOpenRepoExplorer?: () => void;
+  /** 编译数据持久化回调 */
+  onBuildUpdate?: (stepId: string, command: string, result: import("../data/types").BuildResult) => void;
 };
 
 export function DecisionBoard({
@@ -95,7 +107,10 @@ export function DecisionBoard({
   agentResumeQuestion,
   isAgentConnected,
   triggerBuild,
+  detectBuildCommand,
   taskId,
+  onOpenRepoExplorer,
+  onBuildUpdate,
 }: DecisionBoardProps) {
   const step = workflow[state.stepIndex];
   const stepKey = useStepKey(state.stepIndex);
@@ -109,6 +124,14 @@ export function DecisionBoard({
   );
   const [pendingAutoMessage, setPendingAutoMessage] = useState<string | null>(null);
   const [scrollToRound, setScrollToRound] = useState<number | null>(null);
+
+  // 包装 onBuildUpdate，注入当前 stepId
+  const handleBuildUpdate = useCallback(
+    (command: string, result: import("../data/types").BuildResult) => {
+      onBuildUpdate?.(step.id, command, result);
+    },
+    [onBuildUpdate, step.id],
+  );
 
   const handleSwitchToTrajectory = (msg?: string, roundIndex?: number) => {
     setActiveTab("trajectory");
@@ -170,7 +193,10 @@ export function DecisionBoard({
             agentPrompt={agentPrompt}
             agentSteer={agentSteer}
             triggerBuild={triggerBuild}
+            detectBuildCommand={detectBuildCommand}
             restoredSession={restoredSessions[step.id]}
+            onOpenRepoExplorer={onOpenRepoExplorer}
+            onBuildUpdate={handleBuildUpdate}
           />
         )}
         {activeTab === "trajectory" && (
@@ -203,7 +229,7 @@ export function DecisionBoard({
 // ── 检测 session 中是否有正在问答的 ask_user_question ──
 function hasPendingQuestion(session: SessionState | undefined): boolean {
   if (!session) return false;
-  for (const turn of session.turns) {
+  for (const turn of session.turns || []) {
     for (const tc of turn.toolCalls || []) {
       if (tc.name === "ask_user_question" && tc.status === "running") {
         return true;
@@ -228,6 +254,12 @@ function findLatestQuestionRound(session: SessionState | undefined): number | nu
   return null;
 }
 
+/** 获取 session 的最新轮次索引（1-based） */
+function latestRoundIndex(session: SessionState | undefined): number | null {
+  if (!session || session.turns.length === 0) return null;
+  return session.turns.length;
+}
+
 // ── Tab 1: 交付 & 协作 ──────────────────────
 function DeliveryCollabTab({
   state,
@@ -244,7 +276,10 @@ function DeliveryCollabTab({
   agentPrompt,
   agentSteer,
   triggerBuild,
+  detectBuildCommand,
   restoredSession,
+  onOpenRepoExplorer,
+  onBuildUpdate,
 }: {
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
@@ -259,7 +294,8 @@ function DeliveryCollabTab({
   agentResumeQuestion?: (step: string, answer: string) => Promise<void>;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentSteer: (step: string, text: string, intent?: string) => void;
-  triggerBuild: (workspacePath: string) => Promise<{ success: boolean; output: string; command: string }>;
+  triggerBuild: (workspacePath: string, command?: string) => Promise<{ success: boolean; output: string; command: string }>;
+  detectBuildCommand?: (workspacePath: string) => Promise<string>;
   /** 从历史记录恢复的当前步骤会话快照 */
   restoredSession?: {
     messages: Array<{ role: "user" | "assistant"; content: string }>;
@@ -281,8 +317,17 @@ function DeliveryCollabTab({
     }>;
     summary: string;
     summarizationResult?: import("../data/types").AgentSummary | null;
+    buildCommand?: string | null;
     buildResult?: import("../data/types").BuildResult | null;
+    /** Agent 是否执行完成 */
+    completed?: boolean;
+    /** 结构化总结状态 */
+    summarizationStatus?: "idle" | "pending" | "loading" | "done" | "error";
+    /** 项目编译状态 */
+    buildStatus?: "idle" | "pending" | "detecting" | "loading" | "done" | "error";
   } | null;
+  onOpenRepoExplorer?: () => void;
+  onBuildUpdate?: (command: string, result: import("../data/types").BuildResult) => void;
 }) {
   const agentCompleted = isAgentConnected && agentSession?.completed && !agentSession?.isStreaming;
   const agentWorking = isAgentConnected && agentSession && !agentCompleted;
@@ -292,20 +337,31 @@ function DeliveryCollabTab({
   const summaryResult = agentSession?.summarizationResult ?? restoredSession?.summarizationResult ?? undefined;
   const summaryLoading = agentSession?.summarizationStatus === "loading";
   const summaryError = agentSession?.summarizationStatus === "error";
-  const hasSummary = (agentSession?.summarizationStatus === "done" || !!restoredSession?.summarizationResult) && !!summaryResult;
+  const hasSummary = (agentSession?.summarizationStatus === "done" || restoredSession?.summarizationStatus === "done" || !!restoredSession?.summarizationResult) && !!summaryResult;
 
   // 从历史恢复且无 live session 时的状态判断
   // 只要有 restoredSession 数据且 agentSession 尚未产生新 turn，就视为历史恢复场景
   const hasRestoredData = !!restoredSession && (restoredSession?.turns?.length ?? 0) > 0;
-  const hasLiveProgress = !!agentSession && agentSession.turns.length > 0;
-  const restoredCompleted = hasRestoredData && !hasLiveProgress && !!restoredSession?.summarizationResult;
-  const restoredIncomplete = hasRestoredData && !hasLiveProgress && !restoredSession?.summarizationResult;
+  const hasLiveProgress = !!agentSession && (agentSession.turns?.length ?? 0) > 0;
+  // 使用持久化的 completed/summarizationStatus 判断，fallback 到 summarizationResult
+  // 注意：completed === true 但 summary 未完成时，不算 restoredCompleted
+  const restoredCompleted = hasRestoredData && !hasLiveProgress && (
+    restoredSession?.summarizationStatus === "done"
+    || !!restoredSession?.summarizationResult
+  );
+  const restoredIncomplete = hasRestoredData && !hasLiveProgress && !restoredCompleted;
+  // agent 已完成但 summary 未完成（需要自动触发总结）
+  const restoredPendingSummary = hasRestoredData && !hasLiveProgress
+    && !restoredCompleted
+    && restoredSession?.completed === true
+    && !!restoredSession?.summary;
 
   // agent 已连接但尚未产生新 turn（刚 resume 或刚进入历史会话页面）
   // 此时应显示"未完成"提示让用户点击继续执行
   const restoredPendingResume = isAgentConnected
     && !!restoredSession
-    && !restoredSession?.summarizationResult
+    && !restoredCompleted
+    && !restoredPendingSummary
     && (restoredSession?.turns?.length ?? 0) > 0
     && (!agentSession || agentSession.turns.length === 0);
 
@@ -484,10 +540,10 @@ function DeliveryCollabTab({
             <>
               <SummaryBrief brief={summaryResult.brief} />
               <KeyPointsGrid keyPoints={summaryResult.key_points ?? []} />
-              {/* intent / plan 阶段展示交付Spec 目录，其他阶段展示文件变更 */}
+              {/* intent / plan 阶段展示交付Spec 目录，其他阶段展示跳转到项目代码仓库的按钮 */}
               {(stepId === "intent" || stepId === "plan")
                 ? <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
-                : <FileChangesList files={fileChanges} onFileClick={handleFileClick} />
+                : <FileChangesButton files={fileChanges} onOpenRepoExplorer={onOpenRepoExplorer} />
               }
               {/* coding 步骤展示项目编译 */}
               {stepId === "coding" && (
@@ -496,6 +552,12 @@ function DeliveryCollabTab({
                   sessionId={state.sessionId}
                   triggerBuild={triggerBuild}
                   agentSession={agentSession}
+                  agentPrompt={agentPrompt}
+                  agentSteer={agentSteer}
+                  stepId={stepId}
+                  detectBuildCommand={detectBuildCommand}
+                  onSwitchToTrajectory={onSwitchToTrajectory}
+                  onBuildUpdate={onBuildUpdate}
                 />
               )}
               <TodoSection
@@ -528,7 +590,7 @@ function DeliveryCollabTab({
               <KeyPointsGrid keyPoints={summaryResult.key_points ?? []} />
               {(stepId === "intent" || stepId === "plan")
                 ? <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
-                : <FileChangesList files={fileChanges} onFileClick={handleFileClick} />
+                : <FileChangesButton files={fileChanges} onOpenRepoExplorer={onOpenRepoExplorer} />
               }
               {stepId === "coding" && (
                 <BuildSection
@@ -537,6 +599,13 @@ function DeliveryCollabTab({
                   triggerBuild={triggerBuild}
                   agentSession={undefined}
                   restoredBuildResult={restoredSession?.buildResult ?? null}
+                  restoredBuildCommand={restoredSession?.buildCommand ?? null}
+                  agentPrompt={agentPrompt}
+                  agentSteer={agentSteer}
+                  stepId={stepId}
+                  detectBuildCommand={detectBuildCommand}
+                  onSwitchToTrajectory={onSwitchToTrajectory}
+                  onBuildUpdate={onBuildUpdate}
                 />
               )}
               <TodoSection
@@ -589,7 +658,15 @@ function DeliveryCollabTab({
         </div>
       )}
 
-      {!isAgentConnected && !restoredCompleted && !restoredIncomplete && !restoredPendingResume && (
+      {/* agent 已完成但 summary 未完成：显示总结中 */}
+      {restoredPendingSummary && (
+        <div className="summary-loading">
+          <Loader2 size={20} className="spin-icon" />
+          <span>正在生成阶段总结...</span>
+        </div>
+      )}
+
+      {!isAgentConnected && !restoredCompleted && !restoredIncomplete && !restoredPendingResume && !restoredPendingSummary && (
         (stepId === "intent" || stepId === "plan") ? (
           <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
         ) : (
@@ -664,25 +741,78 @@ function BuildSection({
   triggerBuild,
   agentSession,
   restoredBuildResult,
+  restoredBuildCommand,
+  agentPrompt,
+  agentSteer,
+  stepId,
+  detectBuildCommand,
+  onSwitchToTrajectory,
+  onBuildUpdate,
 }: {
   workspacePath: string;
   sessionId: string;
-  triggerBuild: (workspacePath: string) => Promise<{ success: boolean; output: string; command: string }>;
+  triggerBuild: (workspacePath: string, command?: string) => Promise<{ success: boolean; output: string; command: string }>;
   agentSession?: import("../agent/types").SessionState;
   restoredBuildResult?: import("../data/types").BuildResult | null;
+  restoredBuildCommand?: string | null;
+  agentPrompt?: (step: string, text: string) => Promise<void>;
+  agentSteer?: (step: string, text: string, intent?: string, workspacePath?: string) => void;
+  stepId?: string;
+  detectBuildCommand?: (workspacePath: string) => Promise<string>;
+  onSwitchToTrajectory?: (msg?: string, roundIndex?: number) => void;
+  /** 编译数据更新回调，用于持久化到 session */
+  onBuildUpdate?: (command: string, result: import("../data/types").BuildResult) => void;
 }) {
+  const [outputExpanded, setOutputExpanded] = useState(false);
   const [showFullOutput, setShowFullOutput] = useState(false);
+  const [localBuildResult, setLocalBuildResult] = useState<import("../data/types").BuildResult | null>(null);
+  const [localBuilding, setLocalBuilding] = useState(false);
+  const [localDetecting, setLocalDetecting] = useState(false);
+  const [localBuildCommand, setLocalBuildCommand] = useState<string | null>(null);
 
-  const buildResult = agentSession?.buildResult ?? restoredBuildResult ?? null;
-  const buildStatus = agentSession?.buildStatus ?? (restoredBuildResult ? "done" : "idle");
-  const isBuilding = buildStatus === "loading" || buildStatus === "pending";
-  const isDone = buildStatus === "done";
-  const isError = buildStatus === "error";
+  const buildResult = localBuildResult ?? agentSession?.buildResult ?? restoredBuildResult ?? null;
+  const buildCommand = localBuildCommand ?? agentSession?.buildCommand ?? restoredBuildCommand ?? null;
+  const buildStatus = localBuildResult
+    ? "done"
+    : agentSession?.buildStatus ?? (restoredBuildResult ? "done" : "idle");
+  const isDetecting = buildStatus === "detecting" || localDetecting;
+  const isBuilding = buildStatus === "loading" || buildStatus === "pending" || localBuilding;
+  const isDone = buildStatus === "done" && !localBuilding && !localDetecting;
+  const isError = buildStatus === "error" && !localBuilding && !localDetecting;
 
   const doBuild = useCallback(async () => {
     if (!workspacePath) return;
-    await triggerBuild(workspacePath);
-  }, [workspacePath, triggerBuild]);
+    setLocalBuilding(true);
+    setOutputExpanded(true);
+    try {
+      const result = await triggerBuild(workspacePath, buildCommand || undefined);
+      const buildResult: import("../data/types").BuildResult = {
+        command: result.command,
+        success: result.success,
+        output: result.output,
+        timestamp: new Date().toISOString(),
+        retryCount: 0,
+        building: false,
+        fixing: false,
+      };
+      setLocalBuildResult(buildResult);
+      onBuildUpdate?.(buildCommand || result.command, buildResult);
+    } catch {
+      const buildResult: import("../data/types").BuildResult = {
+        command: buildCommand || "",
+        success: false,
+        output: "// 编译请求失败",
+        timestamp: new Date().toISOString(),
+        retryCount: 0,
+        building: false,
+        fixing: false,
+      };
+      setLocalBuildResult(buildResult);
+      onBuildUpdate?.(buildCommand || "", buildResult);
+    } finally {
+      setLocalBuilding(false);
+    }
+  }, [workspacePath, triggerBuild, buildCommand, onBuildUpdate]);
 
   // 截取缩略内容：前 50 行 + 后 20 行
   const truncatedOutput = useMemo(() => {
@@ -694,18 +824,70 @@ function BuildSection({
     return `${head}\n\n... (中间 ${lines.length - 70} 行已折叠) ...\n\n${tail}`;
   }, [buildResult?.output]);
 
+  // 编译结果分析摘要
+  const buildAnalysis = useMemo(() => {
+    if (!buildResult) return null;
+    if (buildResult.success) {
+      return { type: "success" as const, label: "编译成功", summary: "项目编译通过，无错误。" };
+    }
+    const lines = buildResult.output.split("\n");
+    const errorLines = lines.filter(l =>
+      /error|Error|ERROR|失败|Failed|FAILED/.test(l)
+    ).slice(0, 5);
+    const errorSummary = errorLines.length > 0
+      ? errorLines.map(l => l.trim()).filter(Boolean).join("\n")
+      : "编译过程出现错误，请查看完整输出。";
+    return {
+      type: "failure" as const,
+      label: "编译失败",
+      summary: errorSummary,
+    };
+  }, [buildResult]);
+
+  const outputLineCount = buildResult?.output ? buildResult.output.split("\n").length : 0;
+
   return (
     <div className="summary-section build-section">
       <div className="summary-section-header">
         <Terminal size={15} />
         <span>项目编译</span>
-        {isBuilding && <Loader2 size={14} className="spin-icon" style={{ marginLeft: 8 }} />}
+        {/* 编译状态徽标 */}
+        {isDone && buildResult && (
+          <span className={`build-badge ${buildResult.success ? "build-badge-success" : "build-badge-failure"}`}>
+            {buildResult.success ? "✓ 成功" : "✗ 失败"}
+          </span>
+        )}
+        {isBuilding && (
+          <span className="build-badge build-badge-running">
+            <Loader2 size={11} className="spin-icon" /> 编译中
+          </span>
+        )}
+        {isDetecting && (
+          <span className="build-badge build-badge-running">
+            <Loader2 size={11} className="spin-icon" /> 检测中
+          </span>
+        )}
       </div>
 
-      {/* 编译命令 */}
-      {buildResult?.command && (
+      {/* 模型检测到的编译命令 */}
+      {buildCommand && (
         <div className="build-command">
-          <span className="build-command-label">编译命令：</span>
+          <span className="build-command-label">检测到编译命令：</span>
+          <code>{buildCommand}</code>
+        </div>
+      )}
+
+      {/* 检测中 */}
+      {isDetecting && (
+        <div className="build-status" style={{ color: "var(--text-secondary)" }}>
+          <Loader2 size={14} className="spin-icon" /> AI 正在分析项目编译命令...
+        </div>
+      )}
+
+      {/* 实际执行的编译命令 */}
+      {buildResult?.command && buildResult.command !== buildCommand && (
+        <div className="build-command">
+          <span className="build-command-label">实际执行：</span>
           <code>{buildResult.command}</code>
         </div>
       )}
@@ -728,20 +910,44 @@ function BuildSection({
         </div>
       )}
 
-      {/* 编译输出 */}
+      {/* 编译结果分析 */}
+      {isDone && buildAnalysis && buildAnalysis.type === "failure" && (
+        <div className="build-analysis">
+          <div className="build-analysis-title">错误摘要</div>
+          <pre className="build-analysis-content"><code>{buildAnalysis.summary}</code></pre>
+        </div>
+      )}
+
+      {/* 编译输出 — 默认折叠，点击展开 */}
       {buildResult?.output && (
         <div className="build-output">
-          <pre className="build-output-pre">
-            <code>{showFullOutput ? buildResult.output : truncatedOutput}</code>
-          </pre>
-          {buildResult.output.split("\n").length > 100 && (
-            <button
-              className="ghost-button small"
-              type="button"
-              onClick={() => setShowFullOutput(!showFullOutput)}
-            >
-              {showFullOutput ? "收起" : "查看完整输出"}
-            </button>
+          <div
+            className="build-output-header build-output-header-clickable"
+            onClick={() => setOutputExpanded(!outputExpanded)}
+          >
+            <span>编译输出</span>
+            <span className="build-output-header-right">
+              <span className="build-output-meta">{outputLineCount} 行</span>
+              <span className="build-expand-icon">
+                {outputExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              </span>
+            </span>
+          </div>
+          {outputExpanded && (
+            <>
+              <pre className="build-output-pre">
+                <code>{showFullOutput ? buildResult.output : truncatedOutput}</code>
+              </pre>
+              {outputLineCount > 100 && (
+                <button
+                  className="ghost-button small"
+                  type="button"
+                  onClick={() => setShowFullOutput(!showFullOutput)}
+                >
+                  {showFullOutput ? "收起完整输出" : "查看完整输出"}
+                </button>
+              )}
+            </>
           )}
         </div>
       )}
@@ -752,43 +958,85 @@ function BuildSection({
           className="ghost-button"
           type="button"
           onClick={doBuild}
-          disabled={isBuilding}
+          disabled={isBuilding || isDetecting}
         >
-          {isBuilding ? (
+          {isDetecting ? (
+            <><Loader2 size={14} className="spin-icon" /> 检测编译命令...</>
+          ) : isBuilding ? (
             <><Loader2 size={14} className="spin-icon" /> 编译中...</>
           ) : (
             <><Play size={14} /> 重新编译</>
           )}
         </button>
+
+        {/* 重新检测编译命令 */}
+        {detectBuildCommand && workspacePath && (
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={async () => {
+              if (!detectBuildCommand || !workspacePath) return;
+              setLocalDetecting(true);
+              setLocalBuildCommand(null);
+              setLocalBuildResult(null);
+              try {
+                const command = await detectBuildCommand(workspacePath);
+                setLocalBuildCommand(command || null);
+                // 检测到新命令后，自动执行编译
+                if (command) {
+                  const result = await triggerBuild(workspacePath, command);
+                  const buildResult: import("../data/types").BuildResult = {
+                    command: result.command,
+                    success: result.success,
+                    output: result.output,
+                    timestamp: new Date().toISOString(),
+                    retryCount: 0,
+                    building: false,
+                    fixing: false,
+                  };
+                  setLocalBuildResult(buildResult);
+                  onBuildUpdate?.(command, buildResult);
+                }
+              } finally {
+                setLocalDetecting(false);
+              }
+            }}
+            disabled={isDetecting || isBuilding}
+          >
+            {isDetecting ? (
+              <><Loader2 size={14} className="spin-icon" /> 检测中...</>
+            ) : (
+              <><Terminal size={14} /> 重新检测编译命令</>
+            )}
+          </button>
+        )}
+
+        {/* 编译失败时显示修复按钮 */}
+        {buildResult && !buildResult.success && agentSteer && stepId && (
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={async () => {
+              const fixPrompt = `项目编译失败，请修复以下编译错误：\n\n编译命令：${buildResult.command}\n\n错误输出：\n${buildResult.output}`;
+              agentSteer(stepId, fixPrompt, undefined, workspacePath);
+              const latestRound = latestRoundIndex(agentSession);
+              onSwitchToTrajectory?.(undefined, latestRound ?? undefined);
+            }}
+          >
+            <Terminal size={14} /> 修复编译错误
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-// ── 文件变更列表 ─────────────────────────────
-function FileChangesList({ files, onFileClick }: { files: FileChange[]; onFileClick: (file: FileChange) => void }) {
+// ── 文件变更按钮 ─────────────────────────────
+function FileChangesButton({ files, onOpenRepoExplorer }: { files: FileChange[]; onOpenRepoExplorer?: () => void }) {
   if (files.length === 0) return null;
 
   const totalAdditions = files.reduce((sum, f) => sum + (f.additions || 0), 0);
   const totalDeletions = files.reduce((sum, f) => sum + (f.deletions || 0), 0);
-
-  const actionIcon = (action: FileChange["action"]) => {
-    switch (action) {
-      case "create": return <PlusCircle size={13} />;
-      case "modify": return <Edit3 size={13} />;
-      case "delete": return <Edit3 size={13} />;
-    }
-  };
-
-  const actionLabel = (action: FileChange["action"]) => {
-    switch (action) {
-      case "create": return "新增";
-      case "modify": return "修改";
-      case "delete": return "删除";
-    }
-  };
-
-  const actionClass = (action: FileChange["action"]) => `file-action-${action}`;
 
   return (
     <div className="summary-section filechanges-section">
@@ -809,39 +1057,16 @@ function FileChangesList({ files, onFileClick }: { files: FileChange[]; onFileCl
         )}
       </div>
 
-      <div className="filechanges-list">
-        {files.map((fc, i) => {
-          const hasStats = fc.additions !== undefined && fc.deletions !== undefined;
-          const hasContent = !!fc.diffContent;
-          const canClick = hasContent && fc.action !== "delete";
-
-          return (
-            <div
-              key={i}
-              className={`filechange-item${canClick ? " clickable" : ""}`}
-              onClick={() => canClick && onFileClick(fc)}
-              title={canClick ? "点击查看变更详情" : undefined}
-            >
-              <span className={`filechange-action ${actionClass(fc.action)}`}>
-                {actionIcon(fc.action)}
-                <span>{actionLabel(fc.action)}</span>
-              </span>
-              <span className="filechange-path">{fc.path}</span>
-              {hasStats && (fc.additions! > 0 || fc.deletions! > 0) && (
-                <span className="filechange-stats">
-                  {fc.additions! > 0 && <span className="filechange-stat-add">+{fc.additions}</span>}
-                  {fc.deletions! > 0 && <span className="filechange-stat-del">-{fc.deletions}</span>}
-                </span>
-              )}
-              {canClick && (
-                <span className="filechange-chevron">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {/* 跳转按钮 */}
+      <button
+        className="filechanges-repo-btn"
+        type="button"
+        onClick={onOpenRepoExplorer}
+      >
+        <Code2 size={15} />
+        <span>查看项目代码仓库变更</span>
+        <ChevronRight size={14} />
+      </button>
     </div>
   );
 }
@@ -1053,7 +1278,7 @@ function TodoSection({
       // 如果有补充的业务背景，先通过 agentSteer 发送，然后继续对话（不进入下一阶段）
       const contextText = contextValue.trim();
       if (contextText) {
-        agentSteer(stepId, contextText, intent);
+        agentSteer(stepId, contextText);
         // 有补充输入时不进入下一阶段，而是继续与 Agent 对话
         const lines = todos.map((todo, ti) => {
           const answer = todoAnswers[ti];
@@ -1495,7 +1720,7 @@ function TrajectoryChatTab({
           )}
 
           {/* 当前任务信息 */}
-          {agentSession && agentSession.turns.length > 0 && (
+          {agentSession && (agentSession.turns?.length ?? 0) > 0 && (
             <div className="trajectory-current-task">
               <div className="current-task-header">
                 <Loader2 size={14} className="spin-icon" />
@@ -1926,38 +2151,25 @@ function useTimeline(
     return true;
   }
 
-  // 从 session.messages 中提取所有 user 消息（不过滤），用于按原始顺序匹配 turn
-  // 无历史恢复时：第 0 条 user 是初始 prompt（已在"任务描述"中展示），跳过
-  // 有历史恢复时：agentSession 是新创建的，messages 中不包含初始 prompt，不过滤
-  const allUserMessages = (agentSession?.messages.filter((m) => m.role === "user") || []);
-  const allUserMessagesSliced = restoredSession ? allUserMessages : allUserMessages.slice(1);
-
-  // 按顺序匹配：第 N 条 user 消息（不过滤）→ 第 N 个 turn 之前
-  // 但只展示 shouldShowUserMessage 为 true 的消息
-  let userMsgIdx = 0; // 始终从 0 开始，allUserMessagesSliced 已过滤历史消息
-
+  // 遍历 turns，按 turn 的实际顺序构建事件流。
+  // role="user" 的 turn 直接展示为用户消息（按其在 turns 中的位置排列），
+  // role="assistant" 的 turn 展开为 round-divider + thought + tool + message。
   for (let ri = 0; ri < turns.length; ri++) {
     const turn = turns[ri];
 
-    // 跳过 role="user" 的条目（用户输入已通过 allUserMessagesSliced 展示）
+    // role="user" 的 turn → 直接展示为用户消息
     if ((turn as any).role === "user") {
-      continue;
-    }
-
-    // 在每个轮次前插入用户消息（按 messages 原始顺序匹配）
-    if (userMsgIdx < allUserMessagesSliced.length) {
-      const msg = allUserMessagesSliced[userMsgIdx];
-      if (shouldShowUserMessage(msg.content)) {
+      if (shouldShowUserMessage(turn.textContent)) {
         events.push({
           type: "user",
           id: `user-${ri}`,
-          content: msg.content,
+          content: turn.textContent,
         });
       }
-      userMsgIdx++;
+      continue;
     }
 
-    // 轮次分隔线
+    // role="assistant" 的 turn → 轮次分隔线
     events.push({
       type: "round-divider",
       id: `div-${turn.id}`,
@@ -2010,30 +2222,14 @@ function useTimeline(
       });
     }
 
-    // ask_user_question 的回答 → 作为用户输入事件，与轮次同级
-    for (const tc of turn.toolCalls || []) {
-      if (tc.name === "ask_user_question" && tc.status === "done" && tc.result) {
-        events.push({
-          type: "user",
-          id: `user-answer-${tc.id}`,
-          content: tc.result,
-        });
-      }
-    }
+    // ask_user_question 的回答已在 AskUserQuestionCard 中内联展示，
+    // 不再作为独立 user 事件插入，避免轮次计数断裂。
   }
 
-  // 剩余未被消费的用户消息（如 steer 后 agent 尚未产生新 turn）
-  while (userMsgIdx < allUserMessagesSliced.length) {
-    const msg = allUserMessagesSliced[userMsgIdx];
-    if (shouldShowUserMessage(msg.content)) {
-      events.push({
-        type: "user",
-        id: `user-extra-${userMsgIdx}`,
-        content: msg.content,
-      });
-    }
-    userMsgIdx++;
-  }
+  // 如果 turns 中最后一个 turn 是 user 类型且尚未被展示（steer 后 agent 尚未产生新 turn），
+  // 它已经在上面循环中被处理了，无需额外逻辑。
+  // 保留此段仅用于兜底：当 messages 中有 user 消息但 turns 中没有对应 user turn 时。
+  // 当前所有 user 输入（steer/prompt/answerQuestion）都会写入 turns，此兜底极少触发。
 
   // 如果 agent 正在 streaming 但轮次里没有 textContent 也没有 turn
   if (isAgentConnected && agentSession?.isStreaming && agentSession.streamingText && turns.length === 0) {
@@ -2167,10 +2363,19 @@ function AskUserQuestionCard({
   // 如果已有 result（已回答过），显示结果
   const alreadyAnswered = tc.status === "done" && tc.result;
 
-  // 自动 resume：从历史恢复后，自动重建 session 并让 agent 继续执行
+  // 自动 resume：仅在组件挂载时（历史恢复场景）触发一次。
+  // 使用 useRef 记录初始值，后续 alreadyAnswered 变化（live 流中工具完成）不触发。
+  const initialAnsweredRef = useRef(alreadyAnswered);
   const autoResumeRef = useRef(false);
   useEffect(() => {
-    if (alreadyAnswered && agentResumeQuestion && stepId && tc.result && !autoResumeRef.current) {
+    if (
+      initialAnsweredRef.current &&
+      alreadyAnswered &&
+      agentResumeQuestion &&
+      stepId &&
+      tc.result &&
+      !autoResumeRef.current
+    ) {
       autoResumeRef.current = true;
       agentResumeQuestion(stepId, tc.result).catch(() => {});
     }
@@ -2286,19 +2491,22 @@ function AskUserQuestionCard({
                 <div className="ask-question-answer-label">您的回答：</div>
                 <div className="ask-question-answer-value">{tc.result}</div>
                 {/* 从历史恢复的场景：显示"继续执行"按钮 */}
-                <button
-                  className="ask-question-resume-btn"
-                  type="button"
-                  onClick={handleResume}
-                  disabled={resuming}
-                >
-                  {resuming ? (
-                    <Loader2 size={14} className="spin-icon" />
-                  ) : (
-                    <Play size={14} />
-                  )}
-                  <span>继续执行</span>
-                </button>
+                {/* 仅在组件挂载时 alreadyAnswered 就为 true（历史恢复）时显示，避免 live 流中用户回答后误触 */}
+                {initialAnsweredRef.current && (
+                  <button
+                    className="ask-question-resume-btn"
+                    type="button"
+                    onClick={handleResume}
+                    disabled={resuming}
+                  >
+                    {resuming ? (
+                      <Loader2 size={14} className="spin-icon" />
+                    ) : (
+                      <Play size={14} />
+                    )}
+                    <span>继续执行</span>
+                  </button>
+                )}
               </div>
             ) : submitted ? (
               <div className="ask-question-answered">

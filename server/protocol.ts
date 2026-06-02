@@ -27,6 +27,7 @@ export type AgentMethod =
   | "session.saveMeta"
   | "session.loadMeta"
   // ── 项目编译 ──
+  | "build.detectCommand"
   | "build.save"
   | "build.fix"
   | "build.trigger";

@@ -25,6 +25,7 @@ export function TaskPage() {
   const [searchParams] = useSearchParams();
   const [state, setState] = useStoredState();
   const [drawerContent, setDrawerContent] = useState<DrawerContent>(null);
+  const [repoExplorerOpen, setRepoExplorerOpen] = useState(false);
 
   // ── URL sessionId 恢复 ──
   // 如果 URL 携带 sessionId 且与 localStorage 中的不一致，说明是刷新后首次加载，
@@ -85,6 +86,16 @@ export function TaskPage() {
   }, [state.createdAt]);
 
   const agent = useAgent(taskId, state.workspacePath);
+
+  // ── 从历史恢复 session 状态到 agent ──
+  // 当 restoredSessions 加载完成后，将各步骤的状态注入 agent sessions，
+  // 若 agent 已完成但 summary 未完成，自动触发总结流程
+  useEffect(() => {
+    if (!agent.restoreSessionState) return;
+    for (const [stepId, snapshot] of Object.entries(state.restoredSessions)) {
+      agent.restoreSessionState(stepId, snapshot);
+    }
+  }, [state.restoredSessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 会话记录自动保存 ──
   const sessionRecords = useSessionRecords();
@@ -354,6 +365,8 @@ export function TaskPage() {
               agentSessions={agent.sessions}
               intent={state.intent}
               workspacePath={state.workspacePath}
+              repoExplorerOpen={repoExplorerOpen}
+              onCloseRepoExplorer={() => setRepoExplorerOpen(false)}
             />
             <DecisionBoard
               state={state}
@@ -370,7 +383,26 @@ export function TaskPage() {
               agentResumeQuestion={agent.resumeQuestion}
               isAgentConnected={isAgentConnected}
               triggerBuild={agent.triggerBuild}
+              detectBuildCommand={agent.detectBuildCommand}
               taskId={taskId}
+              onOpenRepoExplorer={() => setRepoExplorerOpen(true)}
+              onBuildUpdate={(stepId, command, result) => {
+                agent.updateBuildData(stepId, command, result);
+                // 立即持久化，避免用户切换页面导致数据丢失
+                // 直接构造包含最新 build 数据的 sessions 快照传给 saveRecord
+                if (taskId && state.intent) {
+                  const updatedSessions = {
+                    ...agent.sessions,
+                    [stepId]: {
+                      ...(agent.sessions[stepId] || {}),
+                      buildCommand: command,
+                      buildResult: result,
+                      buildStatus: "done" as const,
+                    },
+                  };
+                  sessionRecords.saveRecord(state, taskId, stepSummaries, updatedSessions, state.restoredSessions);
+                }
+              }}
             />
           </div>
 
@@ -405,7 +437,7 @@ function getStepPrompt(
     case "plan":
       return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围，生成对应的技术方案文档。\n\n业务意图：${intent}`;
     case "coding":
-      return `基于技术方案设计，生成可运行的代码骨架，包括类型定义、API 服务层、页面组件和路由配置。\n\n业务意图：${intent}`;
+      return `基于技术方案设计，生成可运行的代码骨架。\n\n业务意图：${intent}`;
     case "quality":
       return `请执行代码检视、检查测试覆盖率，运行测试并输出质量报告。`;
     case "verify":

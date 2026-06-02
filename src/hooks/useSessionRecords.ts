@@ -34,8 +34,17 @@ export type StepSessionSnapshot = {
   summary: string;
   /** 结构化总结结果 */
   summarizationResult?: import("../data/types").AgentSummary | null;
+  /** 模型检测到的项目编译命令（仅 coding 步骤有值） */
+  buildCommand?: string | null;
   /** 项目编译结果（仅 coding 步骤有值） */
   buildResult?: import("../data/types").BuildResult | null;
+  // ── 执行状态（用于恢复时判断进度） ──
+  /** Agent 是否执行完成 */
+  completed?: boolean;
+  /** 结构化总结状态 */
+  summarizationStatus?: "idle" | "pending" | "loading" | "done" | "error";
+  /** 项目编译状态 */
+  buildStatus?: "idle" | "pending" | "detecting" | "loading" | "done" | "error";
 };
 
 /** 任务元信息（不含对话数据，与服务端 SessionMeta 对齐） */
@@ -195,6 +204,8 @@ export function useSessionRecords() {
         }>;
         summary: string;
         summarizationResult?: import("../data/types").AgentSummary | null;
+        buildCommand?: string | null;
+        buildResult?: import("../data/types").BuildResult | null;
       }>,
       restoredSessions?: Record<string, StepSessionSnapshot>,
     ) => {
@@ -267,8 +278,14 @@ export function useSessionRecords() {
             })),
             summary: session.summary || "",
             summarizationResult: session.summarizationResult || null,
-            // 保留编译结果（agent session 不携带，从 restored 继承）
-            buildResult: restoredStep?.buildResult || null,
+            // 保留模型检测到的编译命令
+            buildCommand: session.buildCommand ?? restoredStep?.buildCommand ?? null,
+            // 保留编译结果（优先 agent session 最新值，fallback 到 restored）
+            buildResult: session.buildResult ?? restoredStep?.buildResult ?? null,
+            // 保留执行状态
+            completed: session.completed ?? restoredStep?.completed ?? undefined,
+            summarizationStatus: session.summarizationStatus ?? restoredStep?.summarizationStatus ?? undefined,
+            buildStatus: session.buildStatus ?? restoredStep?.buildStatus ?? undefined,
           };
         }
       }

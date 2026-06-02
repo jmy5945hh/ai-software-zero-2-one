@@ -227,17 +227,38 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
 
-      setSessions((prev) => ({
-        ...prev,
-        [step]: {
-          ...(prev[step] || defaultSession()),
-          messages: [
-            ...(prev[step]?.messages || []),
-            { role: "user" as const, content: text },
-          ],
-          completed: false,
-        },
-      }));
+      // 记录到 steerInputPairsRef（与 steer 一致），确保 agent_end 时消息不被丢失
+      const inputs = steerInputsRef.current[step] || [];
+      const turnIndex = (sessions[step]?.turns?.length || 0);
+      inputs.push(text);
+      steerInputsRef.current[step] = inputs;
+      const inputPairs = steerInputPairsRef.current[step] || [];
+      inputPairs.push({ turnIndex, text });
+      steerInputPairsRef.current[step] = inputPairs;
+
+      setSessions((prev) => {
+        const existing = prev[step] || defaultSession();
+        // 在 turns 中插入一条 user 消息（与 steer 一致）
+        const userTurn = {
+          id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          index: existing.turns.length,
+          status: "done" as const,
+          textContent: text,
+          role: "user" as const,
+        };
+        return {
+          ...prev,
+          [step]: {
+            ...existing,
+            completed: false,
+            messages: [
+              ...(existing.messages || []),
+              { role: "user" as const, content: text },
+            ],
+            turns: [...existing.turns, userTurn],
+          },
+        };
+      });
 
       await wsRef.current.request("session.prompt", { taskId, step, text });
     },
@@ -246,7 +267,7 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
 
   // ── 流式修正 ──
   const steer = useCallback(
-    (step: string, text: string, intent?: string) => {
+    (step: string, text: string, intent?: string, workspacePath?: string) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
       // 记录到 ref（不受 React 批处理影响），同时记录当前 turn 数量
@@ -282,7 +303,7 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
           },
         };
       });
-      wsRef.current.request("session.steer", { taskId, step, text, intent });
+      wsRef.current.request("session.steer", { taskId, step, text, intent, workspacePath });
     },
     [taskId],
   );
@@ -291,6 +312,39 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
   const answerQuestion = useCallback(
     async (step: string, answer: string) => {
       if (!taskId || !wsRef.current) return;
+      activeStepRef.current = step;
+
+      // 记录到 steerInputPairsRef，确保 agent_end 时消息不被丢失
+      const inputs = steerInputsRef.current[step] || [];
+      const turnIndex = (sessions[step]?.turns?.length || 0);
+      inputs.push(answer);
+      steerInputsRef.current[step] = inputs;
+      const inputPairs = steerInputPairsRef.current[step] || [];
+      inputPairs.push({ turnIndex, text: answer });
+      steerInputPairsRef.current[step] = inputPairs;
+
+      setSessions((prev) => {
+        const existing = prev[step] || defaultSession();
+        const userTurn = {
+          id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          index: existing.turns.length,
+          status: "done" as const,
+          textContent: answer,
+          role: "user" as const,
+        };
+        return {
+          ...prev,
+          [step]: {
+            ...existing,
+            messages: [
+              ...(existing.messages || []),
+              { role: "user" as const, content: answer },
+            ],
+            turns: [...existing.turns, userTurn],
+          },
+        };
+      });
+
       await wsRef.current.request("session.answerQuestion", { taskId, step, answer });
     },
     [taskId],
@@ -553,12 +607,17 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
                 };
               }
               buildRef.current.delete(buildStep);
+              // 用真实编译命令覆盖 LLM 可能篡改的 command 字段
+              const realCommand = s.buildCommand;
               return {
                 ...prev,
                 [buildStep]: {
                   ...s,
                   buildStatus: "done",
-                  buildResult: result,
+                  buildResult: {
+                    ...result,
+                    command: realCommand || result.command,
+                  },
                   buildRaw: raw,
                 },
               };
@@ -925,12 +984,31 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
 
   // ── 项目编译 ──
   const triggerBuild = useCallback(
-    async (workspacePath: string): Promise<{ success: boolean; output: string; command: string }> => {
+    async (workspacePath: string, command?: string): Promise<{ success: boolean; output: string; command: string }> => {
+      if (!command) {
+        return { success: false, output: "// 错误：模型未提供编译命令", command: "" };
+      }
       try {
-        const res = await fetch(`/project-build?path=${encodeURIComponent(workspacePath)}`);
+        const url = `/project-build?path=${encodeURIComponent(workspacePath)}&command=${encodeURIComponent(command)}`;
+        console.log("[triggerBuild] url:", url);
+        const res = await fetch(url);
         return await res.json();
       } catch {
         return { success: false, output: "// 编译请求失败", command: "" };
+      }
+    },
+    [],
+  );
+
+  /** 通过模型检测编译命令 */
+  const detectBuildCommand = useCallback(
+    async (workspacePath: string): Promise<string> => {
+      if (!wsRef.current) return "";
+      try {
+        const result = await wsRef.current.request("build.detectCommand", { workspacePath }) as { command: string };
+        return result.command?.trim() || "";
+      } catch {
+        return "";
       }
     },
     [],
@@ -948,10 +1026,31 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
       ) {
         buildRef.current.add(step);
 
-        // Step 1: 执行编译
-        triggerBuild(workspacePath || "")
+        // Step 1: 模型检测编译命令
+        setSessions((prev) => ({
+          ...prev,
+          [step]: {
+            ...prev[step],
+            buildStatus: "detecting",
+          },
+        }));
+
+        detectBuildCommand(taskId)
+          .then((command) => {
+            // 保存模型检测到的编译命令
+            setSessions((prev) => ({
+              ...prev,
+              [step]: {
+                ...prev[step],
+                buildCommand: command,
+              },
+            }));
+
+            // Step 2: 执行编译
+            return triggerBuild(workspacePath || "", command);
+          })
           .then((buildResult) => {
-            // Step 2: 触发独立编译 session（让 LLM 分析编译结果）
+            // Step 3: 触发独立编译 session（让 LLM 分析编译结果）
             setSessions((prev) => ({
               ...prev,
               [step]: {
@@ -968,6 +1067,7 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
               step,
               buildResult,
               workspacePath,
+              _realCommand: command, // 传入真实命令，用于覆盖 LLM 可能篡改的 command
             });
           })
           .catch(() => {
@@ -983,7 +1083,7 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
           });
       }
     }
-  }, [sessions, taskId, triggerBuild]);
+  }, [sessions, taskId, triggerBuild, detectBuildCommand]);
 
   return {
     sessions,
@@ -1001,6 +1101,58 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
     readFile,
     browseDir,
     triggerBuild,
+    detectBuildCommand,
+    /** 更新指定步骤的编译数据（命令 + 结果），用于手动检测/编译后的持久化 */
+    updateBuildData: (step: string, command: string, result: import("../data/types").BuildResult) => {
+      setSessions((prev) => ({
+        ...prev,
+        [step]: {
+          ...prev[step],
+          buildCommand: command,
+          buildResult: result,
+          buildStatus: "done",
+        },
+      }));
+    },
+    /**
+     * 从历史恢复的 session 快照初始化 agent session 状态。
+     * 如果 agent 已完成但 summary 未完成，将 summarizationStatus 设为 "pending"
+     * 以触发自动总结流程。
+     */
+    restoreSessionState: (step: string, restored: {
+      completed?: boolean;
+      summarizationStatus?: string;
+      summary?: string;
+      turns?: Array<any>;
+      messages?: Array<any>;
+      summarizationResult?: any;
+      buildCommand?: string | null;
+      buildResult?: any;
+      buildStatus?: string;
+    }) => {
+      setSessions((prev) => {
+        const existing = prev[step] || defaultSession();
+        // 判断是否需要触发总结：agent 已完成但 summary 未完成
+        const needsSummary = restored.completed === true
+          && restored.summarizationStatus !== "done"
+          && !!restored.summary;
+        return {
+          ...prev,
+          [step]: {
+            ...existing,
+            completed: restored.completed ?? existing.completed,
+            summary: restored.summary || existing.summary,
+            messages: restored.messages || existing.messages,
+            turns: restored.turns || existing.turns,
+            summarizationResult: restored.summarizationResult ?? existing.summarizationResult,
+            summarizationStatus: needsSummary ? "pending" : (restored.summarizationStatus as any) || existing.summarizationStatus,
+            buildCommand: restored.buildCommand ?? existing.buildCommand,
+            buildResult: restored.buildResult ?? existing.buildResult,
+            buildStatus: (restored.buildStatus as any) || existing.buildStatus,
+          },
+        };
+      });
+    },
     /** 获取底层 WebSocket 实例，用于直接发送请求（如 git 操作） */
     getWs: () => wsRef.current,
     /** 注册轮次完成回调（接收 step 和最新的 sessions 快照） */
