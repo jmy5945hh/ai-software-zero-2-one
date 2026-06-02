@@ -182,6 +182,7 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
 
   const wsRef = useRef<AgentWebSocket | null>(null);
   const activeStepRef = useRef<string | null>(null);
+  const connectionStatusRef = useRef<ConnectionStatus>("disconnected");
   /** 记录哪些 step 的总结已被触发，确保只触发一次 */
   const summarizingRef = useRef<Set<string>>(new Set());
   /** 当前正在总结的 step（用于分流总结事件到对应 session） */
@@ -394,6 +395,7 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
       wsRef.current?.close();
       wsRef.current = null;
       setConnectionStatus("disconnected");
+      connectionStatusRef.current = "disconnected";
       setConnectionQuality({ latency: 0, reconnectAttempt: 0 });
       return;
     }
@@ -402,15 +404,29 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
     const ws = new AgentWebSocket(wsUrl);
     wsRef.current = ws;
     setConnectionStatus("connecting");
+    connectionStatusRef.current = "connecting";
 
     ws.onOpen(() => {
       setConnectionStatus("connected");
+      connectionStatusRef.current = "connected";
       setConnectionQuality({ latency: 0, reconnectAttempt: 0 });
     });
-    ws.onClose(() => setConnectionStatus("disconnected"));
+    ws.onClose(() => {
+      // 只在非 auth 错误时设 disconnected（auth_failed 由 onAuthError 处理）
+      if (connectionStatusRef.current !== "auth_failed") {
+        setConnectionStatus("disconnected");
+        connectionStatusRef.current = "disconnected";
+      }
+    });
+
+    ws.onAuthError(() => {
+      connectionStatusRef.current = "auth_failed";
+      setConnectionStatus("auth_failed");
+    });
 
     ws.onReconnecting((attempt: number) => {
       setConnectionStatus("reconnecting");
+      connectionStatusRef.current = "reconnecting";
       setConnectionQuality((prev) => ({ ...prev, reconnectAttempt: attempt }));
     });
 

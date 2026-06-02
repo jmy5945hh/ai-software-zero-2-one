@@ -1,4 +1,4 @@
-import { Wifi, WifiOff, Loader2, SignalLow, SignalMedium, SignalHigh } from "lucide-react";
+import { Wifi, WifiOff, Loader2, SignalLow, SignalMedium, SignalHigh, ShieldAlert } from "lucide-react";
 import type { ConnectionStatus } from "../agent/types";
 
 /**
@@ -48,6 +48,11 @@ export function AgentStatusBadge({
         <>
           <Loader2 size={13} className="agent-spin" />
           <span>重连 {quality.reconnectAttempt}...</span>
+        </>
+      ) : status === "auth_failed" ? (
+        <>
+          <ShieldAlert size={13} />
+          <span className="agent-auth-failed-text">认证失败，请检查 Token</span>
         </>
       ) : (
         <>

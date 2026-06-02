@@ -1352,6 +1352,13 @@
   border: 1px solid var(--terracotta);
 }
 
+.agent-status-badge.auth_failed {
+  background: #fde8e8;
+  color: #c53030;
+  border: 1px solid #e53e3e;
+  animation: badgePulse 1.5s ease-in-out infinite;
+}
+
 .agent-status-badge .agent-disconnected-text {
   color: var(--terracotta);
   font-weight: 600;

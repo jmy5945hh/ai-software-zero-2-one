@@ -2,6 +2,7 @@ import type { AgentEvent, WsMessage, ConnectionQuality } from "./types";
 
 type EventHandler = (event: AgentEvent) => void;
 type StatusHandler = (status: ConnectionQuality) => void;
+type AuthErrorHandler = () => void;
 
 /**
  * WebSocket 连接管理器 — 封装请求-响应 + 事件流。
@@ -21,6 +22,7 @@ export class AgentWebSocket {
   private closeHandlers: Array<() => void> = [];
   private reconnectingHandlers: Array<(attempt: number) => void> = [];
   private statusHandlers: StatusHandler[] = [];
+  private authErrorHandlers: AuthErrorHandler[] = [];
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private pongTimer: ReturnType<typeof setTimeout> | null = null;
@@ -83,10 +85,20 @@ export class AgentWebSocket {
       }
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (event: CloseEvent) => {
       this.stopHeartbeat();
+
+      // 4010-4019 → 认证相关错误，停止重连
+      if (event.code >= 4001 && event.code <= 4019) {
+        this.shouldReconnect = false;
+        for (const h of this.authErrorHandlers) h();
+      }
+
       for (const h of this.closeHandlers) h();
-      this.scheduleReconnect();
+
+      if (this.shouldReconnect) {
+        this.scheduleReconnect();
+      }
     };
 
     this.ws.onerror = () => {
@@ -195,6 +207,11 @@ export class AgentWebSocket {
   /** 注册连接质量更新（延迟、重连次数） */
   onStatusUpdate(handler: StatusHandler): void {
     this.statusHandlers.push(handler);
+  }
+
+  /** 注册认证失败处理器（Token 错误等，触发后不会重连） */
+  onAuthError(handler: AuthErrorHandler): void {
+    this.authErrorHandlers.push(handler);
   }
 
   /** 关闭连接（不重连） */

@@ -560,10 +560,12 @@ wss.on("connection", (ws: WebSocket, req) => {
       const token = url.searchParams.get("token");
       if (token !== AGENT_SECRET) {
         console.log("[ws] Rejected: invalid token from %s", req.socket.remoteAddress);
+        ws.send(JSON.stringify({ type: "error", id: "0", error: { code: "AUTH_FAILED", message: "认证失败：Token 无效" } }));
         ws.close(4001, "Unauthorized");
         return;
       }
     } catch {
+      ws.send(JSON.stringify({ type: "error", id: "0", error: { code: "AUTH_FAILED", message: "认证失败：Token 无效" } }));
       ws.close(4001, "Unauthorized");
       return;
     }

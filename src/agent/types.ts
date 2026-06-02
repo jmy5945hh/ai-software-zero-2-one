@@ -98,7 +98,8 @@ export type ConnectionStatus =
   | "connected"
   | "disconnected"
   | "connecting"
-  | "reconnecting";
+  | "reconnecting"
+  | "auth_failed";
 
 /** 连接质量指标（心跳延迟 + 重连统计） */
 export type ConnectionQuality = {

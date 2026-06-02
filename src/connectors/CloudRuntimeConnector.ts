@@ -21,9 +21,13 @@ import type {
   ResourceHandler,
 } from "../types/runtime";
 import { AgentWebSocket } from "../agent/ws";
-import { buildAgentWsUrl } from "../agent/config";
+import { buildAgentWsUrl, getAgentWsOrigin } from "../agent/config";
 
-const CLOUD_API_BASE = import.meta.env.VITE_CLOUD_API_URL || "http://localhost:3100";
+function getCloudApiBase(): string {
+  const origin = getAgentWsOrigin();
+  // 如果设置了 VITE_CLOUD_API_URL 则优先使用，否则从 WS URL 自动推导
+  return import.meta.env.VITE_CLOUD_API_URL || origin;
+}
 
 interface CloudProjectResponse {
   id: string;
@@ -129,6 +133,11 @@ export class CloudRuntimeConnector implements IRuntimeConnector {
       });
     });
 
+    this.ws.onAuthError(() => {
+      this._connected = false;
+      this.notifyStatus("error");
+    });
+
     this.ws.onStatusUpdate(() => {
       // 心跳状态变化时推送资源更新
       this.pushResourceUpdate();
@@ -153,7 +162,7 @@ export class CloudRuntimeConnector implements IRuntimeConnector {
 
   async getResources(): Promise<ResourceMetrics> {
     try {
-      const resp = await fetch(`${CLOUD_API_BASE}/api/resources`, {
+      const resp = await fetch(`${getCloudApiBase()}/api/resources`, {
         signal: AbortSignal.timeout(3000),
       });
       if (resp.ok) {
@@ -180,7 +189,7 @@ export class CloudRuntimeConnector implements IRuntimeConnector {
 
   async listProjects(): Promise<AgentProject[]> {
     try {
-      const resp = await fetch(`${CLOUD_API_BASE}/api/projects`, {
+      const resp = await fetch(`${getCloudApiBase()}/api/projects`, {
         signal: AbortSignal.timeout(5000),
       });
       if (resp.ok) {
@@ -194,7 +203,7 @@ export class CloudRuntimeConnector implements IRuntimeConnector {
   }
 
   async createProject(params: CreateProjectParams): Promise<AgentProject> {
-    const resp = await fetch(`${CLOUD_API_BASE}/api/projects`, {
+    const resp = await fetch(`${getCloudApiBase()}/api/projects`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
@@ -205,15 +214,15 @@ export class CloudRuntimeConnector implements IRuntimeConnector {
   }
 
   async deleteProject(id: string): Promise<void> {
-    await fetch(`${CLOUD_API_BASE}/api/projects/${id}`, { method: "DELETE" });
+    await fetch(`${getCloudApiBase()}/api/projects/${id}`, { method: "DELETE" });
   }
 
   async startProject(id: string): Promise<void> {
-    await fetch(`${CLOUD_API_BASE}/api/projects/${id}/start`, { method: "POST" });
+    await fetch(`${getCloudApiBase()}/api/projects/${id}/start`, { method: "POST" });
   }
 
   async pauseProject(id: string): Promise<void> {
-    await fetch(`${CLOUD_API_BASE}/api/projects/${id}/pause`, { method: "POST" });
+    await fetch(`${getCloudApiBase()}/api/projects/${id}/pause`, { method: "POST" });
   }
 
   onStatusChange(handler: StatusHandler): () => void {
