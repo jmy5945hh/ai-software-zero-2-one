@@ -21,6 +21,7 @@ import type {
   ResourceHandler,
 } from "../types/runtime";
 import { AgentWebSocket } from "../agent/ws";
+import { buildAgentWsUrl } from "../agent/config";
 
 const CLOUD_API_BASE = import.meta.env.VITE_CLOUD_API_URL || "http://localhost:3100";
 
@@ -110,12 +111,7 @@ export class CloudRuntimeConnector implements IRuntimeConnector {
   private _connected = false;
 
   async connect(): Promise<void> {
-    const wsUrl =
-      import.meta.env.VITE_AGENT_WS_URL ||
-      (import.meta.env.DEV
-        ? `ws://${window.location.hostname}:3100/agent`
-        : `ws://${window.location.host}/agent`);
-
+    const wsUrl = buildAgentWsUrl();
     this.ws = new AgentWebSocket(wsUrl);
 
     this.ws.onOpen(() => {

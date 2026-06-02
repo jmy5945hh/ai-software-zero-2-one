@@ -61,6 +61,9 @@ npm run dev
 |------|------|------|
 | `DEEPSEEK_API_KEY` | DeepSeek API Key | 是 |
 | `AGENT_PORT` | Agent Server 端口（默认 3100） | 否 |
+| `AGENT_SECRET` | Agent Server 连接认证 Token（为空时无认证） | 生产建议 |
+| `VITE_AGENT_SECRET` | 前端连接认证 Token（须与 AGENT_SECRET 一致） | 生产建议 |
+| `VITE_AGENT_WS_URL` | 前端 WebSocket 地址（默认 localhost:3100） | 否 |
 
 ### 常用命令
 

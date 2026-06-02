@@ -543,8 +543,32 @@ function mapSdkEvent(raw: unknown): AgentEvent | null {
   }
 }
 
+// ── WebSocket 连接认证 ──────────────────────
+const AGENT_SECRET = process.env.AGENT_SECRET;
+if (AGENT_SECRET) {
+  console.log("[auth] Token authentication enabled");
+} else {
+  console.log("[auth] WARNING: No AGENT_SECRET set — accepting all connections");
+}
+
 // ── WebSocket 连接处理 ──────────────────────
-wss.on("connection", (ws: WebSocket) => {
+wss.on("connection", (ws: WebSocket, req) => {
+  // Token 认证
+  if (AGENT_SECRET) {
+    try {
+      const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+      const token = url.searchParams.get("token");
+      if (token !== AGENT_SECRET) {
+        console.log("[ws] Rejected: invalid token from %s", req.socket.remoteAddress);
+        ws.close(4001, "Unauthorized");
+        return;
+      }
+    } catch {
+      ws.close(4001, "Unauthorized");
+      return;
+    }
+  }
+
   console.log("[ws] Client connected");
 
   ws.on("message", async (raw) => {

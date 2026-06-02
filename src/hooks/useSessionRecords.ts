@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { AppState } from "../data/types";
 import { AgentWebSocket } from "../agent/ws";
+import { buildAgentWsUrl } from "../agent/config";
 
 // ── 会话记录类型（与服务端 SessionStore 对齐） ──
 
@@ -86,12 +87,7 @@ export function useSessionRecords() {
 
   // ── 建立 WebSocket 连接 ──
   useEffect(() => {
-    const wsUrl =
-      import.meta.env.VITE_AGENT_WS_URL ||
-      (import.meta.env.DEV
-        ? `ws://${window.location.hostname}:3100/agent`
-        : `ws://${window.location.host}/agent`);
-
+    const wsUrl = buildAgentWsUrl();
     const ws = new AgentWebSocket(wsUrl);
     wsRef.current = ws;
 
