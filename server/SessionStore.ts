@@ -294,12 +294,13 @@ export class SessionStore {
               seen.add(meta.sessionId);
               metas.push(meta);
             }
-          } catch {
+          } catch (err) {
             // 跳过损坏的文件
+            console.warn(`[SessionStore] list() failed to read meta file ${metaFile}:`, (err as Error).message);
           }
         }
-      } catch {
-        // workspace 扫描失败
+      } catch (err) {
+        console.warn(`[SessionStore] list() workspace mirror scan failed:`, (err as Error).message);
       }
     }
 

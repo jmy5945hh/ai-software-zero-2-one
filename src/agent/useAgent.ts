@@ -200,6 +200,9 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   const steerInputPairsRef = useRef<Record<string, Array<{ turnIndex: number; text: string }>>>({});
   /** 云端模式 workspace 目录回调 */
   const onWorkspaceDirRef = useRef<((dir: string) => void) | null>(null);
+  /** 保存 hook 级别的 gitRepo，避免闭包陈旧 */
+  const hookGitRepoRef = useRef(hookGitRepo);
+  hookGitRepoRef.current = hookGitRepo;
 
   // ── 创建 session ──
   const createSession = useCallback(
@@ -214,8 +217,8 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       if (workspacePath) {
         params.workspacePath = workspacePath;
       }
-      // 优先使用调用者传入的 gitRepo，回退到 hook 级别的 gitRepo
-      const effectiveGitRepo = gitRepo || hookGitRepo;
+      // 优先使用调用者传入的 gitRepo，回退到 hook 级别的 gitRepo（通过 ref 避免闭包陈旧）
+      const effectiveGitRepo = gitRepo || hookGitRepoRef.current;
       if (effectiveGitRepo?.url) {
         params.gitRepo = effectiveGitRepo;
       }

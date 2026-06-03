@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { AppState } from "../data/types";
 import { createDefaultState } from "../data";
 
-const STORAGE_KEY = "zero-one-software.prototype.v4";
+export const STORAGE_KEY = "zero-one-software.prototype.v4";
 
 /**
  * 将 AppState 持久化到 localStorage，页面间（home / workspace）共享同一份状态。

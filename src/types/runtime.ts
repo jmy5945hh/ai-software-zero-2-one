@@ -3,6 +3,9 @@
 /** 运行时模式 */
 export type RuntimeMode = "local" | "cloud";
 
+/** localStorage 中运行时模式的存储键名 */
+export const RUNTIME_MODE_KEY = "zero-one-runtime-mode";
+
 /** 连接状态 */
 export type ConnectionStatus =
   | "disconnected"

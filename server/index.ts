@@ -17,9 +17,7 @@ const pool = new SessionPool();
 const summaryStore = new SummaryStore();
 const workspace = new WorkspaceManager(WorkspaceManager.defaultRoot());
 const sessionStore = new SessionStore(workspace);
-
-// WorkspaceManager 延迟注入，消除循环依赖
-sessionStore.setWorkspaceManager(workspace);
+// WorkspaceManager 已通过构造函数注入，无需重复调用 setWorkspaceManager
 
 // ── HTTP 服务 ───────────────────────────────
 const server = http.createServer((req, res) => {

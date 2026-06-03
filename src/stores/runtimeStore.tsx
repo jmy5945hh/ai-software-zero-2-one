@@ -25,6 +25,7 @@ import type {
   AgentProject,
   CreateProjectParams,
 } from "../types/runtime";
+import { RUNTIME_MODE_KEY } from "../types/runtime";
 import type { IRuntimeConnector } from "../types/runtime";
 import { switchRuntime } from "../connectors";
 
@@ -53,7 +54,7 @@ const initialState: Omit<RuntimeState, "mode"> = {
 
 /** 惰性初始化：在组件挂载时读取 localStorage */
 function createInitialState(): RuntimeState {
-  const mode = (localStorage.getItem("zero-one-runtime-mode") as RuntimeMode) || "local";
+  const mode = (localStorage.getItem(RUNTIME_MODE_KEY) as RuntimeMode) || "local";
   return { ...initialState, mode };
 }
 
@@ -135,6 +136,8 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
   const resourceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // 追踪 handler 取消函数，切换模式时清理旧 handler
   const unsubscribesRef = useRef<Array<() => void>>([]);
+  // 追踪组件挂载状态，防止异步操作在卸载后继续执行
+  const mountedRef = useRef(true);
 
   /** 清理旧 connector 的 handler 和轮询 */
   const cleanupConnector = useCallback(() => {
@@ -153,8 +156,10 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
     dispatch({ type: "SET_ERROR", error: null });
 
     try {
-      const connector = await switchRuntime(null, mode);
+      const connector = await switchRuntime(mode);
+      if (!mountedRef.current) { connector.disconnect(); return; }
       connectorRef.current = connector;
+
 
       unsubscribesRef.current.push(
         connector.onStatusChange((status: RuntimeStatus) => {
@@ -170,6 +175,7 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
       );
 
       const projects = await connector.listProjects();
+      if (!mountedRef.current) return;
       dispatch({ type: "SET_PROJECTS", projects });
 
       // 周期性刷新资源（仅在 store 层做，connector 不再重复轮询）
@@ -177,34 +183,41 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
         const metrics = await connector.getResources();
         dispatch({ type: "SET_RESOURCES", resources: metrics });
       }, 5000);
-    } catch {
+    } catch (err) {
+      connectorRef.current?.disconnect();
+      connectorRef.current = null;
       dispatch({ type: "SET_CONNECTION_STATUS", status: "error" });
       dispatch({ type: "SET_ERROR", error: `无法连接到${mode === "local" ? "本地" : "云端"}运行时` });
+      console.error("运行时连接失败:", err);
     } finally {
-      dispatch({ type: "SET_SWITCHING", switching: false });
+      if (mountedRef.current) {
+        dispatch({ type: "SET_SWITCHING", switching: false });
+      }
     }
   }, [cleanupConnector]);
 
   // ── 初始化连接（仅挂载时执行一次）──
   useEffect(() => {
+    mountedRef.current = true;
     setupConnector(state.mode);
 
     return () => {
+      mountedRef.current = false;
       cleanupConnector();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 持久化模式到 localStorage ──
   useEffect(() => {
-    localStorage.setItem("zero-one-runtime-mode", state.mode);
+    localStorage.setItem(RUNTIME_MODE_KEY, state.mode);
   }, [state.mode]);
 
   // ── Actions ──────────────────────────
 
   const switchMode = useCallback(async (mode: RuntimeMode) => {
     if (mode === state.mode) return;
-    dispatch({ type: "SET_MODE", mode });
     await setupConnector(mode);
+    dispatch({ type: "SET_MODE", mode });
   }, [state.mode, setupConnector]);
 
   const refreshProjects = useCallback(async () => {

@@ -3,6 +3,7 @@ import type { AppState } from "../data/types";
 import { AgentWebSocket } from "../agent/ws";
 import { buildAgentWsUrl } from "../agent/config";
 import type { RuntimeMode } from "../types/runtime";
+import { RUNTIME_MODE_KEY } from "../types/runtime";
 
 // ── 会话记录类型（与服务端 SessionStore 对齐） ──
 
@@ -99,7 +100,7 @@ export function useSessionRecords() {
 
   // ── 建立 WebSocket 连接 ──
   useEffect(() => {
-    const runtimeMode = (localStorage.getItem("zero-one-runtime-mode") as RuntimeMode) || "local";
+    const runtimeMode = (localStorage.getItem(RUNTIME_MODE_KEY) as RuntimeMode) || "local";
     const wsUrl = buildAgentWsUrl(runtimeMode);
     const ws = new AgentWebSocket(wsUrl);
     wsRef.current = ws;
@@ -283,7 +284,7 @@ export function useSessionRecords() {
                 category: tc.category,
                 input: tc.input,
                 result: tc.result,
-                outputFragments: (tc as any).outputFragments || [],
+                outputFragments: tc.outputFragments ?? [],
               })),
             })),
             summary: session.summary || "",
@@ -293,9 +294,9 @@ export function useSessionRecords() {
             // 保留编译结果（优先 agent session 最新值，fallback 到 restored）
             buildResult: session.buildResult ?? restoredStep?.buildResult ?? null,
             // 保留执行状态
-            completed: session.completed ?? (restoredStep as any)?.completed ?? undefined,
-            summarizationStatus: session.summarizationStatus ?? (restoredStep as any)?.summarizationStatus ?? undefined,
-            buildStatus: session.buildStatus ?? (restoredStep as any)?.buildStatus ?? undefined,
+            completed: session.completed ?? restoredStep?.completed ?? undefined,
+            summarizationStatus: session.summarizationStatus ?? restoredStep?.summarizationStatus ?? undefined,
+            buildStatus: session.buildStatus ?? restoredStep?.buildStatus ?? undefined,
           };
         }
       }

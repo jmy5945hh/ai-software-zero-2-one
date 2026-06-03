@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useStoredState } from "../hooks/useStoredState";
+import { useStoredState, STORAGE_KEY } from "../hooks/useStoredState";
 import { createDefaultState } from "../data";
 import type { AppState, HomeTab } from "../data/types";
 import { useSessionRecords } from "../hooks/useSessionRecords";
@@ -74,7 +74,7 @@ export function DashboardPage() {
       }));
       setShowWorkspacePicker(true);
     },
-    [setState],
+    [setState, runtimeState.mode],
   );
 
   const confirmWorkspace = useCallback(
@@ -99,16 +99,18 @@ export function DashboardPage() {
         // 持久化到 localStorage
         try {
           const currentState = JSON.parse(
-            localStorage.getItem("zero-one-software.prototype.v4") || "{}"
+            localStorage.getItem(STORAGE_KEY) || "{}"
           );
-          localStorage.setItem("zero-one-software.prototype.v4", JSON.stringify({
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
             ...currentState,
             gitRepo: { url, branch },
             workspacePath: "",
             view: "workspace",
             runtimeMode: "cloud",
           }));
-        } catch { /* ignore */ }
+        } catch (err) {
+          console.warn("[DashboardPage] Failed to persist cloud workspace:", err);
+        }
         navigate(`/task?sessionId=${state.sessionId}`);
         return;
       }
@@ -143,14 +145,16 @@ export function DashboardPage() {
       setShowWorkspacePicker(false);
       try {
         const currentState = JSON.parse(
-          localStorage.getItem("zero-one-software.prototype.v4") || "{}"
+          localStorage.getItem(STORAGE_KEY) || "{}"
         );
-        localStorage.setItem("zero-one-software.prototype.v4", JSON.stringify({
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
           ...currentState,
           workspacePath: path,
           view: "workspace",
         }));
-      } catch { /* ignore */ }
+      } catch (err) {
+        console.warn("[DashboardPage] Failed to persist local workspace:", err);
+      }
       navigate(`/task?sessionId=${state.sessionId}`);
     },
     [setState, navigate, state, agentAvailable, agent, runtimeState.mode],

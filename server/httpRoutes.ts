@@ -251,8 +251,21 @@ function handleCloudApiRequest(
   }
 
   if (req.method === "POST" && req.url === "/api/projects") {
+    const MAX_BODY_SIZE = 1024 * 1024; // 1MB
     let body = "";
-    req.on("data", (chunk) => { body += chunk; });
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > MAX_BODY_SIZE) {
+        res.writeHead(413, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Request body too large" }));
+        req.destroy();
+      }
+    });
+    req.on("error", (err) => {
+      console.error("[httpRoutes] Request body error:", err);
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid request body" }));
+    });
     req.on("end", () => {
       try {
         const { name, description } = JSON.parse(body);
@@ -266,7 +279,7 @@ function handleCloudApiRequest(
           toolCallCount: 0,
           fileCount: 0,
         };
-        res.writeHead(200, { "Content-Type": "application/json" });
+        res.writeHead(201, { "Content-Type": "application/json" });
         res.end(JSON.stringify(project));
       } catch {
         res.writeHead(400, { "Content-Type": "application/json" });
@@ -281,11 +294,13 @@ function handleCloudApiRequest(
     const projectId = decodeURIComponent(deleteMatch[1]);
     try {
       sessionStore.delete(projectId);
-    } catch {
-      // 忽略不存在的项目
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true }));
+    } catch (err) {
+      console.error(`[httpRoutes] Failed to delete project ${projectId}:`, err);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Failed to delete project" }));
     }
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ success: true }));
     return true;
   }
 

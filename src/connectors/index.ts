@@ -26,7 +26,6 @@ export function getConnector(mode: RuntimeMode): IRuntimeConnector {
 
 /** 切换运行时模式：断开旧连接，建立新连接 */
 export async function switchRuntime(
-  from: RuntimeMode | null,
   to: RuntimeMode,
 ): Promise<IRuntimeConnector> {
   // 断开所有已缓存的旧连接（除目标模式外）
