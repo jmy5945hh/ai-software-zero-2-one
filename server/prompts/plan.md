@@ -8,7 +8,7 @@ You are a technical expert, skilled in analyzing project implementation technica
 
 ## Outline
 
-1. **Setup**: FEATURE_SPEC is `specs/spec.md`
+1. **Setup**: FEATURE_SPEC is `specs/需求规格文档.md`
 
 2. **Load context**: Read FEATURE_SPEC and CONSTITUTION. IMPL_PLAN in the following text.
 
@@ -16,8 +16,8 @@ You are a technical expert, skilled in analyzing project implementation technica
    - Fill Technical Context (mark unknowns as "NEEDS CLARIFICATION")
    - Fill Constitution Check section from CONSTITUTION
    - Evaluate gates (ERROR if violations unjustified)
-   - Phase 0: Generate research.md (resolve all NEEDS CLARIFICATION)
-   - Phase 1: Generate data-model.md, contracts/
+   - Phase 0: Generate 技术预研.md (resolve all NEEDS CLARIFICATION)
+   - Phase 1: Generate data-model.md, 协议/
    - Phase 1: Update agent context by running the agent script
    - Re-evaluate Constitution Check post-design
 
@@ -41,29 +41,29 @@ You are a technical expert, skilled in analyzing project implementation technica
      Task: "Find best practices for {tech} in {domain}"
    ```
 
-3. **Consolidate findings** in `research.md` using format:
+3. **Consolidate findings** in `技术预研.md` using format:
    - Decision: [what was chosen]
    - Rationale: [why chosen]
    - Alternatives considered: [what else evaluated]
 
-**Output**: research.md with all NEEDS CLARIFICATION resolved
+**Output**: 技术预研.md with all NEEDS CLARIFICATION resolved
 
 ### Phase 1: Design & Contracts
 
-**Prerequisites:** `research.md` complete
+**Prerequisites:** `技术预研.md` complete
 
 1. **Extract entities from feature spec** → `data-model.md`:
    - Entity name, fields, relationships
    - Validation rules from requirements
    - State transitions if applicable
 
-2. **Define interface contracts** (if project has external interfaces) → `/contracts/`:
+2. **Define interface contracts** (if project has external interfaces) → `/协议/`:
    - Identify what interfaces the project exposes to users or other systems
    - Document the contract format appropriate for the project type
    - Examples: public APIs for libraries, command schemas for CLI tools, endpoints for web services, grammars for parsers, UI contracts for applications
    - Skip if project is purely internal (build scripts, one-off tools, etc.)
 
-**Output**: data-model.md, /contracts/*, updated agent context file
+**Output**: data-model.md, /协议/*, updated agent context file
 
 ## Key rules
 
@@ -79,7 +79,7 @@ You are a technical expert, skilled in analyzing project implementation technica
 
 **Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
 
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+**Input**: Feature specification from `/specs/[###-feature-name]/需求规格文档.md`
 
 ## Summary
 
@@ -123,11 +123,11 @@ You are a technical expert, skilled in analyzing project implementation technica
 
 ```text
 specs/[###-feature]/
-├── plan.md              # This file 
-├── research.md          # Phase 0 output 
+├── 技术方案设计.md              # This file 
+├── 技术预研.md          # Phase 0 output 
 ├── data-model.md        # Phase 1 output 
-├── contracts/           # Phase 1 output 
-└── tasks.md             # Phase 2 output 
+├── 协议/           # Phase 1 output 
+└── 任务清单.md             # Phase 2 output 
 ```
 
 ### Source Code (repository root)
