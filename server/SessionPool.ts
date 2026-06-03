@@ -55,6 +55,11 @@ export class SessionPool {
     }
   }
 
+  /** 获取活跃 session 数量 */
+  getActiveCount(): number {
+    return this.pool.size;
+  }
+
   /** 销毁全部 session */
   disposeAll(): void {
     for (const entry of this.pool.values()) {

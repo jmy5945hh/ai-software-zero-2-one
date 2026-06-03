@@ -39,6 +39,7 @@ import { MarkdownRenderer } from "./MarkdownRenderer";
 import { TokenUsageBadge } from "./TokenUsageBadge";
 import { ContentModal } from "./ContentModal";
 import type { ModalContent } from "./ContentModal";
+import type { StepSessionSnapshot } from "../hooks/useSessionRecords";
 
 type BoardTab = "delivery" | "trajectory";
 
@@ -369,7 +370,7 @@ function DeliveryCollabTab({
   const fileChanges: FileChange[] = agentSession?.turns
     ? extractFileChanges(agentSession.turns)
     : restoredSession?.turns
-      ? extractFileChanges(restoredSession.turns)
+      ? extractFileChanges(restoredSession.turns as Turn[])
       : [];
 
   // 点击文件变更 → 全屏弹窗查看详情
@@ -1584,7 +1585,7 @@ function TrajectoryChatTab({
         category: string;
         input: string;
         result?: string;
-        outputFragments: string[];
+        outputFragments?: string[];
       }>;
     }>;
     summary: string;
@@ -2189,7 +2190,7 @@ function useTimeline(
 
     // 工具调用（扁平每个调用为独立事件）
     for (const tc of turn.toolCalls || []) {
-      const output = tc.outputFragments.join("");
+      const output = (tc.outputFragments || []).join("");
       if (isDiffContent(output) && tc.status === "done") {
         const summary = parseDiffSummary(output);
         const addMatch = summary.match(/\+(\d+)/);
@@ -2668,7 +2669,7 @@ function TimelineEventV2({
 
     case "diff": {
       const tc = event.toolCall;
-      const resultText = tc.result || tc.outputFragments.join("");
+      const resultText = tc.result || (tc.outputFragments || []).join("");
 
       return (
         <div className={`timeline-tool done ${isExpanded ? "expanded" : ""}`}>
@@ -2824,7 +2825,7 @@ function TimelineEventV2({
       }
 
       const argsSummary = tc.input ? extractToolArgsSummary(tc.input, tc.name) : "";
-      const resultText = tc.result || tc.outputFragments.join("");
+      const resultText = tc.result || (tc.outputFragments || []).join("");
       const hasInput = !!tc.input;
       const hasOutput = tc.status !== "running" && resultText.trim();
 

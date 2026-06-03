@@ -45,7 +45,7 @@ export type ToolCallRecord = {
   name: string;
   status: "running" | "done" | "error";
   category: ToolCallCategory;
-  outputFragments: string[];
+  outputFragments?: string[];
   /** 调用参数（JSON 序列化后的字符串） */
   input: string;
   /** 调用完成后的完整结果 */
@@ -63,6 +63,8 @@ export type Turn = {
   toolCalls: ToolCallRecord[];
   /** 触发该轮的 user 输入（steer/followUp 时记录） */
   userInput?: string;
+  /** 用于区分 user 消息与 agent 回复 */
+  role?: "user" | "assistant";
 };
 
 /** 单个 Session 的状态快照（前端维护） */

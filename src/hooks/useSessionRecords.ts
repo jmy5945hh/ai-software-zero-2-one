@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { AppState } from "../data/types";
 import { AgentWebSocket } from "../agent/ws";
 import { buildAgentWsUrl } from "../agent/config";
+import type { RuntimeMode } from "../types/runtime";
 
 // ── 会话记录类型（与服务端 SessionStore 对齐） ──
 
@@ -27,7 +28,7 @@ export type StepSessionSnapshot = {
       category: string;
       input: string;
       result?: string;
-      outputFragments: string[];
+      outputFragments?: string[];
     }>;
   }>;
   /** Agent 原始总结文本 */
@@ -53,6 +54,8 @@ export type SessionMeta = {
   taskId: string;
   intent: string;
   workspacePath: string;
+  /** 运行时模式：local 或 cloud */
+  runtimeMode: "local" | "cloud";
   stepIndex: number;
   activeStage: string;
   scope: string;
@@ -96,7 +99,8 @@ export function useSessionRecords() {
 
   // ── 建立 WebSocket 连接 ──
   useEffect(() => {
-    const wsUrl = buildAgentWsUrl();
+    const runtimeMode = (localStorage.getItem("zero-one-runtime-mode") as RuntimeMode) || "local";
+    const wsUrl = buildAgentWsUrl(runtimeMode);
     const ws = new AgentWebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -119,15 +123,18 @@ export function useSessionRecords() {
 
   /** 刷新会话记录列表 */
   const refreshRecords = useCallback(async () => {
-    if (!wsRef.current || !connectedRef.current) return;
+    if (!wsRef.current || !connectedRef.current) {
+      console.warn("[useSessionRecords] refreshRecords skip: ws not connected");
+      return;
+    }
     setLoading(true);
     try {
       const result = (await wsRef.current.request("session.listRecords", {})) as {
         records: SessionMeta[];
       };
       setRecords(result.records || []);
-    } catch {
-      // 静默失败
+    } catch (err) {
+      console.error("[useSessionRecords] refreshRecords failed:", err);
     } finally {
       setLoading(false);
     }
@@ -150,8 +157,8 @@ export function useSessionRecords() {
             stepId,
             snapshot,
           });
-        } catch {
-          // 静默失败
+        } catch (err) {
+          console.error("[useSessionRecords] saveStep failed:", sessionId, stepId, err);
         }
       });
       await saveQueueRef.current;
@@ -170,8 +177,8 @@ export function useSessionRecords() {
         try {
           await wsRef.current!.request("session.saveMeta", meta as unknown as Record<string, unknown>);
           await refreshRecords();
-        } catch {
-          // 静默失败
+        } catch (err) {
+          console.error("[useSessionRecords] saveMeta failed:", sessionId, err);
         }
       });
       await saveQueueRef.current;
@@ -206,11 +213,14 @@ export function useSessionRecords() {
         summarizationResult?: import("../data/types").AgentSummary | null;
         buildCommand?: string | null;
         buildResult?: import("../data/types").BuildResult | null;
+        completed?: boolean;
+        summarizationStatus?: string;
+        buildStatus?: string;
       }>,
       restoredSessions?: Record<string, StepSessionSnapshot>,
     ) => {
       if (!wsRef.current || !connectedRef.current) {
-        console.log("[saveRecord] skip: ws or not connected");
+        console.warn("[saveRecord] skip: ws not connected (wsRef=", !!wsRef.current, "connected=", connectedRef.current, ")");
         return;
       }
 
@@ -273,7 +283,7 @@ export function useSessionRecords() {
                 category: tc.category,
                 input: tc.input,
                 result: tc.result,
-                outputFragments: tc.outputFragments || [],
+                outputFragments: (tc as any).outputFragments || [],
               })),
             })),
             summary: session.summary || "",
@@ -283,9 +293,9 @@ export function useSessionRecords() {
             // 保留编译结果（优先 agent session 最新值，fallback 到 restored）
             buildResult: session.buildResult ?? restoredStep?.buildResult ?? null,
             // 保留执行状态
-            completed: session.completed ?? restoredStep?.completed ?? undefined,
-            summarizationStatus: session.summarizationStatus ?? restoredStep?.summarizationStatus ?? undefined,
-            buildStatus: session.buildStatus ?? restoredStep?.buildStatus ?? undefined,
+            completed: session.completed ?? (restoredStep as any)?.completed ?? undefined,
+            summarizationStatus: session.summarizationStatus ?? (restoredStep as any)?.summarizationStatus ?? undefined,
+            buildStatus: session.buildStatus ?? (restoredStep as any)?.buildStatus ?? undefined,
           };
         }
       }
@@ -296,6 +306,7 @@ export function useSessionRecords() {
         taskId,
         intent: state.intent,
         workspacePath: state.workspacePath,
+        runtimeMode: state.runtimeMode || "local",
         stepIndex: state.stepIndex,
         activeStage: state.activeStage,
         scope: state.scope,
@@ -329,8 +340,8 @@ export function useSessionRecords() {
             });
           }
           await refreshRecords();
-        } catch {
-          // 静默失败
+        } catch (err) {
+          console.error("[useSessionRecords] saveRecord failed:", meta.sessionId, err);
         }
       });
       await saveQueueRef.current;
@@ -347,7 +358,8 @@ export function useSessionRecords() {
           sessionId,
         })) as { record: SessionRecord | null };
         return result.record;
-      } catch {
+      } catch (err) {
+        console.error("[useSessionRecords] loadRecord failed:", sessionId, err);
         return null;
       }
     },
@@ -364,7 +376,8 @@ export function useSessionRecords() {
           stepId,
         })) as { snapshot: StepSessionSnapshot | null };
         return result.snapshot;
-      } catch {
+      } catch (err) {
+        console.error("[useSessionRecords] loadStep failed:", sessionId, stepId, err);
         return null;
       }
     },
@@ -378,8 +391,8 @@ export function useSessionRecords() {
       try {
         await wsRef.current.request("session.deleteRecord", { sessionId });
         await refreshRecords();
-      } catch {
-        // 静默失败
+      } catch (err) {
+        console.error("[useSessionRecords] deleteRecord failed:", sessionId, err);
       }
     },
     [refreshRecords],

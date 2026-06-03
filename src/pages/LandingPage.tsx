@@ -19,6 +19,7 @@ import {
   Users,
 } from "lucide-react";
 import { TypewriterText } from "../components/TypewriterText";
+import { useRuntimeState, useRuntimeActions } from "../stores/runtimeStore";
 
 /**
  * 落地页 —— "/"
@@ -26,7 +27,9 @@ import { TypewriterText } from "../components/TypewriterText";
  */
 export function LandingPage() {
   const navigate = useNavigate();
-  const [selectedRuntime, setSelectedRuntime] = useState<"local" | "cloud">("cloud");
+  const runtimeState = useRuntimeState();
+  const runtimeActions = useRuntimeActions();
+  const [selectedRuntime, setSelectedRuntime] = useState<"local" | "cloud">(runtimeState.mode);
 
   return (
     <>
@@ -80,7 +83,10 @@ export function LandingPage() {
               // 单击 CTA 按钮区进入
               const cta = (e.target as HTMLElement).closest('.intro-runtime-cta');
               if (cta) {
-                localStorage.setItem("zero-one-runtime-mode", mode);
+                // 通过 runtime store 切换模式，确保全局状态一致
+                if (mode !== runtimeState.mode) {
+                  runtimeActions.switchMode(mode);
+                }
                 navigate("/dashboard");
               }
             }}

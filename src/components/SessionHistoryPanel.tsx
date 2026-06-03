@@ -12,6 +12,8 @@ import {
   FileText,
   Sparkles,
   MessageSquare,
+  Monitor,
+  Cloud,
 } from "lucide-react";
 import type { SessionMeta, SessionRecord } from "../hooks/useSessionRecords";
 
@@ -131,6 +133,9 @@ export function SessionHistoryPanel({
                     <span className="session-history-item-step">{stepLabel}</span>
                     <span className="session-history-item-time">{timeAgo}</span>
                     <span className="session-history-item-progress">{progress}%</span>
+                    <span className="session-history-item-mode" title={record.runtimeMode === "cloud" ? "云端运行" : "本地运行"}>
+                      {record.runtimeMode === "cloud" ? <Cloud size={11} /> : <Monitor size={11} />}
+                    </span>
                   </div>
                 </div>
                 <ChevronRight

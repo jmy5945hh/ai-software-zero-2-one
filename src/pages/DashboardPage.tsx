@@ -27,7 +27,7 @@ import { TypewriterText } from "../components/TypewriterText";
 import { WorkspaceSelector } from "../components/WorkspaceSelector";
 import { SessionHistoryPanel } from "../components/SessionHistoryPanel";
 import { useAgent } from "../agent";
-import { useRuntimeState } from "../stores/runtimeStore";
+import { useRuntimeState, useRuntimeActions } from "../stores/runtimeStore";
 
 /**
  * 控制台页 —— "/dashboard"
@@ -42,12 +42,14 @@ export function DashboardPage() {
 
   const [pendingRecord, setPendingRecord] = useState<SessionRecord | null>(null);
 
+  const runtimeState = useRuntimeState();
+  const runtimeActions = useRuntimeActions();
+
   const taskIdForPicker = showWorkspacePicker && state.createdAt
     ? `task-${new Date(state.createdAt).getTime()}`
     : null;
-  const agent = useAgent(taskIdForPicker);
+  const agent = useAgent(taskIdForPicker, undefined, undefined, runtimeState.mode);
   const agentAvailable = agent.connectionStatus === "connected" || agent.connectionStatus === "reconnecting";
-  const runtimeState = useRuntimeState();
 
   const patchState = useCallback(
     (patch: Partial<AppState>) =>
@@ -68,6 +70,7 @@ export function DashboardPage() {
         activeTaskCard,
         createdAt: new Date().toISOString(),
         sessionId,
+        runtimeMode: runtimeState.mode,
       }));
       setShowWorkspacePicker(true);
     },
@@ -77,6 +80,40 @@ export function DashboardPage() {
   const confirmWorkspace = useCallback(
     async (path: string) => {
       setDocsError(null);
+      const isCloud = runtimeState.mode === "cloud";
+
+      if (isCloud) {
+        // 云端模式：path 格式为 "url#branch"，解析为 gitRepo 配置
+        const hashIndex = path.lastIndexOf("#");
+        const url = hashIndex > 0 ? path.slice(0, hashIndex) : path;
+        const branch = hashIndex > 0 ? path.slice(hashIndex + 1) : "main";
+
+        setState((previous) => ({
+          ...previous,
+          workspacePath: "",
+          gitRepo: { url, branch },
+          view: "workspace",
+        }));
+        setShowWorkspacePicker(false);
+
+        // 持久化到 localStorage
+        try {
+          const currentState = JSON.parse(
+            localStorage.getItem("zero-one-software.prototype.v4") || "{}"
+          );
+          localStorage.setItem("zero-one-software.prototype.v4", JSON.stringify({
+            ...currentState,
+            gitRepo: { url, branch },
+            workspacePath: "",
+            view: "workspace",
+            runtimeMode: "cloud",
+          }));
+        } catch { /* ignore */ }
+        navigate(`/task?sessionId=${state.sessionId}`);
+        return;
+      }
+
+      // 本地模式：path 为本地目录路径
       const docsPath = state.activeTaskCard?.docs;
       if (docsPath && agentAvailable) {
         try {
@@ -116,7 +153,7 @@ export function DashboardPage() {
       } catch { /* ignore */ }
       navigate(`/task?sessionId=${state.sessionId}`);
     },
-    [setState, navigate, state, agentAvailable, agent],
+    [setState, navigate, state, agentAvailable, agent, runtimeState.mode],
   );
 
   const cancelWorkspacePicker = useCallback(() => {
@@ -142,12 +179,19 @@ export function DashboardPage() {
         stepSessions: {},
       };
 
+      // 历史恢复时先切换运行时模式，再进入任务页
+      const targetMode = fullRecord.runtimeMode || "local";
+      if (targetMode !== runtimeState.mode) {
+        await runtimeActions.switchMode(targetMode);
+      }
+
       setState((previous) => ({
         ...previous,
         intent: followUpPrompt
           ? `${fullRecord.intent}\n\n--- 补充需求 ---\n${followUpPrompt}`
           : fullRecord.intent,
         workspacePath: fullRecord.workspacePath,
+        runtimeMode: fullRecord.runtimeMode || "local",
         stepIndex: fullRecord.stepIndex,
         activeStage: fullRecord.activeStage as AppState["activeStage"],
         scope: fullRecord.scope as AppState["scope"],
@@ -166,7 +210,7 @@ export function DashboardPage() {
       }));
       navigate("/task");
     },
-    [setState, navigate, sessionRecords],
+    [setState, navigate, sessionRecords, runtimeState.mode, runtimeActions],
   );
 
   const startTaskFromIntent = () => {

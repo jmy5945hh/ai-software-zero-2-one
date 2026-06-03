@@ -1,31 +1,53 @@
+import type { RuntimeMode } from "../types/runtime";
+
 /**
  * Agent WebSocket URL 构造。
- * 自动附加 token 认证参数（若配置了 VITE_AGENT_SECRET）。
+ * - 云端模式：读取 VITE_CLOUD_AGENT_WS_URL + VITE_CLOUD_AGENT_SECRET
+ * - 本地模式：读取 VITE_LOCAL_AGENT_WS_URL（fallback ws://localhost:3100/agent）+ VITE_LOCAL_AGENT_SECRET
+ *
+ * Token 认证参数自动附加到 URL query 中。
  */
 
-export function getAgentWsOrigin(): string {
-  if (import.meta.env.VITE_AGENT_WS_URL) {
-    // ws://47.108.128.71:3100/agent → http://47.108.128.71:3100
-    const wsUrl = import.meta.env.VITE_AGENT_WS_URL as string;
-    return wsUrl.replace(/^ws/, "http").replace(/\/agent$/, "");
-  }
-  if (import.meta.env.DEV) {
-    return `http://${window.location.hostname}:3100`;
-  }
-  return window.location.origin;
+/** 将 ws://xxx/agent 格式转为 http://xxx（用于 REST API 调用） */
+export function getAgentWsOrigin(mode: RuntimeMode): string {
+  const wsUrl = getWsUrl(mode);
+  return wsUrl.replace(/^ws/, "http").replace(/\/agent$/, "");
 }
 
-export function buildAgentWsUrl(): string {
-  const base =
-    import.meta.env.VITE_AGENT_WS_URL ||
-    (import.meta.env.DEV
-      ? `ws://${window.location.hostname}:3100/agent`
-      : `ws://${window.location.host}/agent`);
-
-  const token = import.meta.env.VITE_AGENT_SECRET;
+/** 构建指定模式的 WebSocket URL（含 token） */
+export function buildAgentWsUrl(mode: RuntimeMode): string {
+  const base = getWsUrl(mode);
+  const token = getSecret(mode);
   if (token) {
     const sep = base.includes("?") ? "&" : "?";
     return `${base}${sep}token=${encodeURIComponent(token)}`;
   }
   return base;
+}
+
+// ── 内部辅助 ──────────────────────────────────
+
+function getWsUrl(mode: RuntimeMode): string {
+  if (mode === "cloud") {
+    const url = import.meta.env.VITE_CLOUD_AGENT_WS_URL as string | undefined;
+    if (url) return url;
+    // 云端未配置时 fallback 到旧有逻辑（开发环境用 localhost）
+    if (import.meta.env.DEV) {
+      return `ws://${window.location.hostname}:3100/agent`;
+    }
+    return `ws://${window.location.host}/agent`;
+  }
+
+  // 本地模式
+  const url = import.meta.env.VITE_LOCAL_AGENT_WS_URL as string | undefined;
+  if (url) return url;
+  // 默认值：ws://localhost:3100/agent
+  return "ws://localhost:3100/agent";
+}
+
+function getSecret(mode: RuntimeMode): string | undefined {
+  if (mode === "cloud") {
+    return import.meta.env.VITE_CLOUD_AGENT_SECRET as string | undefined;
+  }
+  return import.meta.env.VITE_LOCAL_AGENT_SECRET as string | undefined;
 }

@@ -1,4 +1,4 @@
-import { Wifi, WifiOff, Loader2, SignalLow, SignalMedium, SignalHigh, ShieldAlert } from "lucide-react";
+import { Wifi, WifiOff, Loader2, SignalLow, SignalMedium, SignalHigh, ShieldAlert, Monitor, Cloud } from "lucide-react";
 import type { ConnectionStatus } from "../agent/types";
 
 /**
@@ -7,9 +7,11 @@ import type { ConnectionStatus } from "../agent/types";
 export function AgentStatusBadge({
   status,
   quality,
+  mode,
 }: {
   status: ConnectionStatus;
   quality: { latency: number; reconnectAttempt: number };
+  mode?: "local" | "cloud";
 }) {
   const latencyMs = quality.latency;
   const latencyLabel =
@@ -28,6 +30,13 @@ export function AgentStatusBadge({
 
   return (
     <div className={`agent-status-badge ${status}`}>
+      {mode && (
+        <>
+          {mode === "local" ? <Monitor size={13} /> : <Cloud size={13} />}
+          <span className="agent-mode-label">{mode === "local" ? "本地" : "云端"}</span>
+          <span className="agent-mode-sep">·</span>
+        </>
+      )}
       {status === "connected" ? (
         <>
           <Wifi size={13} />

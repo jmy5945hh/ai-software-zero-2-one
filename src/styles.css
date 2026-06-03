@@ -4872,6 +4872,13 @@ p {
   font-weight: 500;
 }
 
+.session-history-item-mode {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted-warm);
+  margin-left: auto;
+}
+
 .session-history-chevron {
   color: var(--muted);
   flex-shrink: 0;

@@ -216,6 +216,8 @@ export function createDefaultState(): AppState {
     homeTab: "tasks",
     intent: "",
     workspacePath: "",
+    runtimeMode: "local",
+    gitRepo: undefined,
     activeStage: "intent",
     stepIndex: 0,
     scope: "mvp",

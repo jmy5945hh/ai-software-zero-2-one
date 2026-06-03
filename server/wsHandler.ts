@@ -1,4 +1,5 @@
 import { type WebSocket } from "ws";
+import fs from "fs";
 import { AgentRunner } from "./AgentRunner";
 import { SessionPool } from "./SessionPool";
 import { SummaryStore } from "./SummaryStore";
@@ -269,11 +270,17 @@ export async function handleWsMessage(
           step: string;
           intent?: string;
           workspacePath?: string;
+          gitRepo?: { url: string; branch: string };
         };
         const intent = (msg.params as { intent?: string }).intent || "";
         const extPath = (msg.params as { workspacePath?: string }).workspacePath;
+        const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
         let workspaceDir: string;
-        if (extPath) {
+
+        if (gitRepo?.url) {
+          // 云端模式：克隆仓库到 workspace
+          workspaceDir = workspace.initCloudWorkspace(taskId, gitRepo);
+        } else if (extPath) {
           workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
         } else {
           workspaceDir = workspace.initWorkspace(taskId, intent);
@@ -292,7 +299,7 @@ export async function handleWsMessage(
           JSON.stringify({
             type: "response",
             id: msg.id,
-            result: { sessionId: session.sessionId },
+            result: { sessionId: session.sessionId, workspaceDir },
           }),
         );
         break;
@@ -330,13 +337,21 @@ export async function handleWsMessage(
           if (extPath) {
             workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
           } else {
-            workspaceDir = workspace.initWorkspace(taskId, intent);
+            // 优先使用已映射的外部目录（云端模式 git clone 后已设置），否则创建新 workspace
+            workspaceDir = workspace.getDir(taskId);
+            if (!fs.existsSync(workspaceDir)) {
+              workspaceDir = workspace.initWorkspace(taskId, intent);
+            }
           }
           session = await runner.createSession(taskId, step, workspaceDir);
           pool.set(taskId, step, session);
         }
 
         ensureSubscription(pool, taskId, step, ws, msg.id);
+
+        // 关键修复：session.steer() 仅入队，不触发模型执行。
+        // 当 agent 空闲时，入队的消息永远不会被处理。
+        // 因此：streaming 中 → 用 steer() 入队中断；空闲时 → 用 prompt() 直接触发新轮次。
 
         console.log(`[session.steer] isStreaming=${session.isStreaming} step=${step} text=%.20s`, text.slice(0, 20));
         if (session.isStreaming) {
@@ -370,13 +385,19 @@ export async function handleWsMessage(
           if (extPath) {
             workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
           } else {
-            workspaceDir = workspace.initWorkspace(taskId, intent);
+            // 优先使用已映射的外部目录（云端模式 git clone 后已设置），否则创建新 workspace
+            workspaceDir = workspace.getDir(taskId);
+            if (!fs.existsSync(workspaceDir)) {
+              workspaceDir = workspace.initWorkspace(taskId, intent);
+            }
           }
           session = await runner.createSession(taskId, step, workspaceDir);
           pool.set(taskId, step, session);
         }
 
         ensureSubscription(pool, taskId, step, ws, msg.id);
+
+        // 同 steer：followUp() 仅入队，空闲时需用 prompt() 触发执行
 
         console.log(`[session.followUp] isStreaming=${session.isStreaming} step=${step} text=%.20s`, text.slice(0, 20));
         if (session.isStreaming) {
@@ -428,7 +449,11 @@ export async function handleWsMessage(
         if (extPath) {
           workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
         } else {
-          workspaceDir = workspace.initWorkspace(taskId, intent);
+          // 优先使用已映射的外部目录（云端模式 git clone 后已设置），否则创建新 workspace
+          workspaceDir = workspace.getDir(taskId);
+          if (!fs.existsSync(workspaceDir)) {
+            workspaceDir = workspace.initWorkspace(taskId, intent);
+          }
         }
         const newSession = await runner.createSession(taskId, step, workspaceDir, text);
         pool.set(taskId, step, newSession);
@@ -491,7 +516,11 @@ export async function handleWsMessage(
         if (workspacePath) {
           workspaceDir = workspace.setExternalWorkspace(taskId, workspacePath);
         } else {
-          workspaceDir = workspace.initWorkspace(taskId, intent || "");
+          // 优先使用已映射的外部目录（云端模式 git clone 后已设置），否则创建新 workspace
+          workspaceDir = workspace.getDir(taskId);
+          if (!fs.existsSync(workspaceDir)) {
+            workspaceDir = workspace.initWorkspace(taskId, intent || "");
+          }
         }
         const session = await runner.createSession(taskId, step, workspaceDir);
         pool.set(taskId, step, session);

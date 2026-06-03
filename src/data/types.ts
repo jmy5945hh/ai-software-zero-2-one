@@ -82,11 +82,23 @@ export type CodeItem = {
 export type TestRow = [string, string, string, string];
 
 // ── 应用状态 ─────────────────────────────────
+/** Git 仓库配置（云端模式） */
+export type GitRepoConfig = {
+  url: string;
+  branch: string;
+  /** 子目录（可选，只克隆仓库中的特定目录作为工作空间） */
+  subdirectory?: string;
+};
+
 export type AppState = {
   view: View;
   homeTab: HomeTab;
   intent: string;
   workspacePath: string;
+  /** 当前运行时模式（local / cloud），持久化到 localStorage */
+  runtimeMode: "local" | "cloud";
+  /** Git 仓库配置（仅云端模式使用） */
+  gitRepo?: GitRepoConfig;
   activeStage: WorkflowId;
   stepIndex: number;
   scope: ScopeChoice;

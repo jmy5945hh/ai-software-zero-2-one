@@ -3,6 +3,7 @@ import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCate
 import type { FileChange, AgentSummary } from "../data/types";
 import { AgentWebSocket } from "./ws";
 import { buildAgentWsUrl } from "./config";
+import type { RuntimeMode } from "../types/runtime";
 
 // ── 工具函数 ─────────────────────────────────
 
@@ -62,7 +63,7 @@ export function extractFileChanges(turns: Turn[]): FileChange[] {
       } else if (tc.name === "edit" && typeof parsed.path === "string") {
         if (!seen.has(parsed.path)) {
           seen.add(parsed.path);
-          const output = tc.result || tc.outputFragments.join("");
+          const output = tc.result || (tc.outputFragments || []).join("");
           const stats = extractDiffStats(output);
           changes.push({
             path: parsed.path,
@@ -170,7 +171,7 @@ function defaultSession(): SessionState {
  * useAgent — 前端 Agent 核心 Hook。
  * 管理 WebSocket 连接、多 session 状态、文件树、消息流。
  */
-export function useAgent(taskId: string | null, workspacePath?: string) {
+export function useAgent(taskId: string | null, workspacePath?: string, hookGitRepo?: { url: string; branch: string }, mode?: RuntimeMode) {
   const [sessions, setSessions] = useState<Record<string, SessionState>>({});
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [connectionStatus, setConnectionStatus] =
@@ -197,10 +198,12 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
   const steerInputsRef = useRef<Record<string, string[]>>({});
   /** 记录每个 step 的 steer 输入及对应的 turn 索引 */
   const steerInputPairsRef = useRef<Record<string, Array<{ turnIndex: number; text: string }>>>({});
+  /** 云端模式 workspace 目录回调 */
+  const onWorkspaceDirRef = useRef<((dir: string) => void) | null>(null);
 
   // ── 创建 session ──
   const createSession = useCallback(
-    async (step: string, intent: string, workspacePath?: string) => {
+    async (step: string, intent: string, workspacePath?: string, gitRepo?: { url: string; branch: string }) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
       const params: Record<string, unknown> = {
@@ -211,7 +214,17 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
       if (workspacePath) {
         params.workspacePath = workspacePath;
       }
-      const result = (await wsRef.current.request("session.create", params)) as { sessionId: string };
+      // 优先使用调用者传入的 gitRepo，回退到 hook 级别的 gitRepo
+      const effectiveGitRepo = gitRepo || hookGitRepo;
+      if (effectiveGitRepo?.url) {
+        params.gitRepo = effectiveGitRepo;
+      }
+      const result = (await wsRef.current.request("session.create", params)) as { sessionId: string; workspaceDir?: string };
+
+      // 云端模式：记录 workspace 目录路径（用于后续保存到 session meta）
+      if (result.workspaceDir && onWorkspaceDirRef.current) {
+        onWorkspaceDirRef.current(result.workspaceDir);
+      }
 
       setSessions((prev) => ({
         ...prev,
@@ -244,6 +257,8 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
           index: existing.turns.length,
           status: "done" as const,
           textContent: text,
+          thinking: "",
+          toolCalls: [],
           role: "user" as const,
         };
         return {
@@ -287,6 +302,8 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
           index: existing.turns.length,
           status: "done" as const,
           textContent: text,
+          thinking: "",
+          toolCalls: [],
           role: "user" as const,
         };
         const turns = [...existing.turns, userTurn];
@@ -330,6 +347,8 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
           index: existing.turns.length,
           status: "done" as const,
           textContent: answer,
+          thinking: "",
+          toolCalls: [],
           role: "user" as const,
         };
         return {
@@ -433,11 +452,11 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
 
   // ── 浏览目录 ──
   const browseDir = useCallback(
-    async (dirPath: string): Promise<{ name: string; type: string; path: string }[]> => {
+    async (dirPath: string): Promise<{ name: string; type: "dir" | "file"; path: string }[]> => {
       if (!wsRef.current) return [];
       const result = (await wsRef.current.request("workspace.browse", {
         dirPath,
-      })) as { entries: { name: string; type: string; path: string }[] };
+      })) as { entries: { name: string; type: "dir" | "file"; path: string }[] };
       return result.entries;
     },
     [],
@@ -454,7 +473,7 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
       return;
     }
 
-    const wsUrl = buildAgentWsUrl();
+    const wsUrl = buildAgentWsUrl(mode || "local");
     const ws = new AgentWebSocket(wsUrl);
     wsRef.current = ws;
     setConnectionStatus("connecting");
@@ -718,6 +737,8 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
                   index: updatedTurns.length,
                   status: "done" as const,
                   textContent: pair.text,
+                  thinking: "",
+                  toolCalls: [],
                   role: "user" as const,
                 });
                 existingUserContents.add(pair.text);
@@ -753,9 +774,9 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
                 streamingText: "",
                 turns: updatedTurns,
                 // 标记待触发独立总结
-                summarizationStatus: "pending",
+                summarizationStatus: "pending" as const,
                 // coding 步骤标记待触发编译
-                buildStatus: step === "coding" ? "pending" : "idle",
+                buildStatus: (step === "coding" ? "pending" : "idle") as "pending" | "idle",
               },
             };
             // 在 setSessions 完成后通知外部保存
@@ -843,7 +864,7 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
                   ...t,
                   toolCalls: (t.toolCalls || []).map((tc) =>
                     tc.id === event.toolCallId
-                      ? { ...tc, outputFragments: [...tc.outputFragments, event.output] }
+                      ? { ...tc, outputFragments: [...(tc.outputFragments || []), event.output] }
                       : tc,
                   ),
                 })),
@@ -1101,7 +1122,6 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
               step,
               buildResult,
               workspacePath,
-              _realCommand: command, // 传入真实命令，用于覆盖 LLM 可能篡改的 command
             });
           })
           .catch(() => {
@@ -1196,6 +1216,10 @@ export function useAgent(taskId: string | null, workspacePath?: string) {
     /** 注册轮次完成回调（接收 step 和最新的 sessions 快照） */
     setOnSessionComplete: (cb: ((step: string, sessions: Record<string, SessionState>) => void) | null) => {
       onSessionCompleteRef.current = cb;
+    },
+    /** 注册 workspace 目录回调（云端模式 session.create 完成后回传实际目录路径） */
+    setOnWorkspaceDir: (cb: ((dir: string) => void) | null) => {
+      onWorkspaceDirRef.current = cb;
     },
   } as const;
 }

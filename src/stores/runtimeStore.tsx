@@ -117,7 +117,7 @@ export type RuntimeActions = {
   pauseProject: (id: string) => Promise<void>;
 };
 
-const RuntimeStateContext = createContext<RuntimeState>(initialState);
+const RuntimeStateContext = createContext<RuntimeState>(createInitialState());
 const RuntimeActionsContext = createContext<RuntimeActions>({
   switchMode: async () => {},
   refreshProjects: async () => {},
@@ -133,52 +133,66 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, () => createInitialState());
   const connectorRef = useRef<IRuntimeConnector | null>(null);
   const resourceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // 追踪 handler 取消函数，切换模式时清理旧 handler
+  const unsubscribesRef = useRef<Array<() => void>>([]);
 
-  // ── 初始化连接 ──
-  useEffect(() => {
-    let cancelled = false;
+  /** 清理旧 connector 的 handler 和轮询 */
+  const cleanupConnector = useCallback(() => {
+    for (const unsub of unsubscribesRef.current) unsub();
+    unsubscribesRef.current = [];
+    if (resourceIntervalRef.current) {
+      clearInterval(resourceIntervalRef.current);
+      resourceIntervalRef.current = null;
+    }
+  }, []);
 
-    (async () => {
-      dispatch({ type: "SET_SWITCHING", switching: true });
-      try {
-        const connector = await switchRuntime(null, state.mode);
-        if (cancelled) return;
-        connectorRef.current = connector;
+  /** 建立 connector 连接并注册 handler */
+  const setupConnector = useCallback(async (mode: RuntimeMode) => {
+    cleanupConnector();
+    dispatch({ type: "SET_SWITCHING", switching: true });
+    dispatch({ type: "SET_ERROR", error: null });
 
+    try {
+      const connector = await switchRuntime(null, mode);
+      connectorRef.current = connector;
+
+      unsubscribesRef.current.push(
         connector.onStatusChange((status: RuntimeStatus) => {
           dispatch({ type: "SET_CONNECTION_STATUS", status: status.connected });
           dispatch({ type: "SET_MODEL_READY", ready: status.modelReady });
-        });
+        }),
+      );
 
+      unsubscribesRef.current.push(
         connector.onResourceUpdate((metrics: ResourceMetrics) => {
           dispatch({ type: "SET_RESOURCES", resources: metrics });
-        });
+        }),
+      );
 
-        const projects = await connector.listProjects();
-        dispatch({ type: "SET_PROJECTS", projects });
+      const projects = await connector.listProjects();
+      dispatch({ type: "SET_PROJECTS", projects });
 
-        // 周期性刷新资源
-        resourceIntervalRef.current = setInterval(async () => {
-          const metrics = await connector.getResources();
-          dispatch({ type: "SET_RESOURCES", resources: metrics });
-        }, 3000);
-      } catch {
-        dispatch({ type: "SET_CONNECTION_STATUS", status: "error" });
-        dispatch({ type: "SET_ERROR", error: "无法连接到运行时" });
-      } finally {
-        if (!cancelled) {
-          dispatch({ type: "SET_SWITCHING", switching: false });
-        }
-      }
-    })();
+      // 周期性刷新资源（仅在 store 层做，connector 不再重复轮询）
+      resourceIntervalRef.current = setInterval(async () => {
+        const metrics = await connector.getResources();
+        dispatch({ type: "SET_RESOURCES", resources: metrics });
+      }, 5000);
+    } catch {
+      dispatch({ type: "SET_CONNECTION_STATUS", status: "error" });
+      dispatch({ type: "SET_ERROR", error: `无法连接到${mode === "local" ? "本地" : "云端"}运行时` });
+    } finally {
+      dispatch({ type: "SET_SWITCHING", switching: false });
+    }
+  }, [cleanupConnector]);
+
+  // ── 初始化连接（仅挂载时执行一次）──
+  useEffect(() => {
+    setupConnector(state.mode);
 
     return () => {
-      cancelled = true;
-      if (resourceIntervalRef.current) {
-        clearInterval(resourceIntervalRef.current);
-      }
+      cleanupConnector();
     };
-  }, [state.mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 持久化模式到 localStorage ──
   useEffect(() => {
@@ -189,30 +203,9 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
 
   const switchMode = useCallback(async (mode: RuntimeMode) => {
     if (mode === state.mode) return;
-    dispatch({ type: "SET_SWITCHING", switching: true });
-    dispatch({ type: "SET_ERROR", error: null });
-    try {
-      const connector = await switchRuntime(state.mode, mode);
-      connectorRef.current = connector;
-
-      connector.onStatusChange((status: RuntimeStatus) => {
-        dispatch({ type: "SET_CONNECTION_STATUS", status: status.connected });
-        dispatch({ type: "SET_MODEL_READY", ready: status.modelReady });
-      });
-
-      connector.onResourceUpdate((metrics: ResourceMetrics) => {
-        dispatch({ type: "SET_RESOURCES", resources: metrics });
-      });
-
-      dispatch({ type: "SET_MODE", mode });
-      const projects = await connector.listProjects();
-      dispatch({ type: "SET_PROJECTS", projects });
-    } catch {
-      dispatch({ type: "SET_CONNECTION_STATUS", status: "error" });
-      dispatch({ type: "SET_ERROR", error: `无法切换到${mode === "local" ? "本地" : "云端"}运行时` });
-      dispatch({ type: "SET_SWITCHING", switching: false });
-    }
-  }, [state.mode]);
+    dispatch({ type: "SET_MODE", mode });
+    await setupConnector(mode);
+  }, [state.mode, setupConnector]);
 
   const refreshProjects = useCallback(async () => {
     if (!connectorRef.current) return;

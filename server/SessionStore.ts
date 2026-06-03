@@ -2,13 +2,16 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import crypto from "crypto";
+import type { WorkspaceManager } from "./WorkspaceManager";
 
 // ── 会话记录持久化存储 ──────────────────────
-// 存储位置：~/.aiNativeDevPlatform/sessions/
+// 主存储位置：~/.aiNativeDevPlatform/sessions/
+// 镜像存储位置：~/workspaces/{taskId}/session/
+//
 // 每个会话一个目录，目录名 = sessionId
 // 目录结构：
 //   {sessionId}/
-//     meta.json          ← 任务元信息（intent, workspacePath, stepIndex 等）
+//     meta.json          ← 任务元信息（intent, workspacePath, stepIndex, runtimeMode 等）
 //     step-{workflowId}.json  ← 各步骤的独立会话快照
 
 /** 单个步骤的会话快照 */
@@ -60,6 +63,8 @@ export type SessionMeta = {
   taskId: string;
   intent: string;
   workspacePath: string;
+  /** 运行时模式：local 或 cloud */
+  runtimeMode: "local" | "cloud";
   stepIndex: number;
   activeStage: string;
   scope: string;
@@ -86,16 +91,24 @@ export type SessionRecord = SessionMeta & {
 
 export class SessionStore {
   private baseDir: string;
+  /** 可选的 workspace 管理器引用，用于双重持久化 */
+  private workspaceManager?: WorkspaceManager;
 
-  constructor() {
+  constructor(workspaceManager?: WorkspaceManager) {
     this.baseDir = path.join(os.homedir(), ".aiNativeDevPlatform", "sessions");
     fs.mkdirSync(this.baseDir, { recursive: true });
+    this.workspaceManager = workspaceManager;
     console.log(`[SessionStore] sessions dir: ${this.baseDir}`);
   }
 
   /** 生成 32 位 sessionId */
   static generateSessionId(): string {
     return crypto.randomBytes(16).toString("hex");
+  }
+
+  /** 设置 workspace 管理器引用（延迟注入，避免循环依赖） */
+  setWorkspaceManager(wm: WorkspaceManager): void {
+    this.workspaceManager = wm;
   }
 
   /** 获取会话目录路径 */
@@ -113,19 +126,71 @@ export class SessionStore {
     return path.join(this.sessionDir(sessionId), `step-${stepId}.json`);
   }
 
-  /** 保存会话元信息 */
+  /** 获取 workspace 镜像目录路径 */
+  private workspaceSessionDir(meta: SessionMeta): string | null {
+    if (!this.workspaceManager || !meta.taskId) return null;
+    return this.workspaceManager.getSessionDir(meta.taskId);
+  }
+
+  /** 保存会话元信息（主存储 + workspace 镜像） */
   saveMeta(meta: SessionMeta): void {
+    // 主存储
     const dir = this.sessionDir(meta.sessionId);
     fs.mkdirSync(dir, { recursive: true });
     meta.updatedAt = new Date().toISOString();
-    fs.writeFileSync(this.metaPath(meta.sessionId), JSON.stringify(meta, null, 2), "utf-8");
+    const filePath = this.metaPath(meta.sessionId);
+    fs.writeFileSync(filePath, JSON.stringify(meta, null, 2), "utf-8");
+    console.log(`[SessionStore] saveMeta → ${filePath} (sessionId=${meta.sessionId}, runtimeMode=${meta.runtimeMode || "-"})`);
+
+    // workspace 镜像
+    this.saveMetaMirror(meta);
   }
 
-  /** 保存某步骤的会话快照（独立文件） */
+  /** 保存 meta 到 workspace 镜像目录 */
+  private saveMetaMirror(meta: SessionMeta): void {
+    const mirrorDir = this.workspaceSessionDir(meta);
+    if (!mirrorDir) return;
+    try {
+      fs.mkdirSync(mirrorDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(mirrorDir, "meta.json"),
+        JSON.stringify(meta, null, 2),
+        "utf-8",
+      );
+    } catch (err) {
+      // 镜像写入失败不影响主流程
+      console.warn(`[SessionStore] Mirror save failed for ${meta.sessionId}:`, (err as Error).message);
+    }
+  }
+
+  /** 保存某步骤的会话快照（主存储 + workspace 镜像） */
   saveStep(sessionId: string, stepId: string, snapshot: StepSessionSnapshot): void {
+    // 主存储
     const dir = this.sessionDir(sessionId);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(this.stepPath(sessionId, stepId), JSON.stringify(snapshot, null, 2), "utf-8");
+
+    // workspace 镜像
+    this.saveStepMirror(sessionId, stepId, snapshot);
+  }
+
+  /** 保存 step 到 workspace 镜像目录 */
+  private saveStepMirror(sessionId: string, stepId: string, snapshot: StepSessionSnapshot): void {
+    // 读取 meta 来获取 taskId
+    const meta = this.loadMeta(sessionId);
+    if (!meta) return;
+    const mirrorDir = this.workspaceSessionDir(meta);
+    if (!mirrorDir) return;
+    try {
+      fs.mkdirSync(mirrorDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(mirrorDir, `step-${stepId}.json`),
+        JSON.stringify(snapshot, null, 2),
+        "utf-8",
+      );
+    } catch (err) {
+      console.warn(`[SessionStore] Mirror save step failed for ${sessionId}/${stepId}:`, (err as Error).message);
+    }
   }
 
   /** 保存完整会话记录（兼容旧接口，内部拆分为 meta + step 文件） */
@@ -187,36 +252,87 @@ export class SessionStore {
 
   /** 列出所有会话记录（按更新时间倒序，不含对话数据） */
   list(): SessionMeta[] {
+    const seen = new Set<string>();
+    const metas: SessionMeta[] = [];
+
+    // 1. 加载主存储中的记录
     try {
       const entries = fs.readdirSync(this.baseDir);
-      const metas: SessionMeta[] = [];
+      console.log(`[SessionStore] list() → scanning ${entries.length} entries in ${this.baseDir}`);
       for (const entry of entries) {
         const dir = path.join(this.baseDir, entry);
         if (!fs.statSync(dir).isDirectory()) continue;
         const metaPath = path.join(dir, "meta.json");
         try {
           const raw = fs.readFileSync(metaPath, "utf-8");
-          metas.push(JSON.parse(raw) as SessionMeta);
+          const meta = JSON.parse(raw) as SessionMeta;
+          if (!seen.has(meta.sessionId)) {
+            seen.add(meta.sessionId);
+            metas.push(meta);
+          }
         } catch {
           // 跳过损坏的目录
         }
       }
-      metas.sort(
-        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-      );
-      return metas;
-    } catch {
-      return [];
+    } catch (err) {
+      console.warn(`[SessionStore] list() primary storage scan failed:`, (err as Error).message);
     }
+
+    // 2. 扫描 workspace 镜像存储（补充主存储中可能不存在的记录）
+    if (this.workspaceManager) {
+      try {
+        const taskDirs = this.workspaceManager.listTaskDirs();
+        for (const taskDir of taskDirs) {
+          const sessionDir = path.join(taskDir, "session");
+          if (!fs.existsSync(sessionDir)) continue;
+          const metaFile = path.join(sessionDir, "meta.json");
+          if (!fs.existsSync(metaFile)) continue;
+          try {
+            const raw = fs.readFileSync(metaFile, "utf-8");
+            const meta = JSON.parse(raw) as SessionMeta;
+            if (!seen.has(meta.sessionId)) {
+              seen.add(meta.sessionId);
+              metas.push(meta);
+            }
+          } catch {
+            // 跳过损坏的文件
+          }
+        }
+      } catch {
+        // workspace 扫描失败
+      }
+    }
+
+    // 按更新时间倒序
+    metas.sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+    return metas;
   }
 
-  /** 删除会话记录 */
+  /** 删除会话记录（同时删除主存储和 workspace 镜像） */
   delete(sessionId: string): void {
+    // 删除前先加载 meta 以获取 taskId（用于删除镜像）
+    const meta = this.loadMeta(sessionId);
+
+    // 删除主存储
     const dir = this.sessionDir(sessionId);
     try {
       fs.rmSync(dir, { recursive: true, force: true });
     } catch {
       // 目录不存在忽略
+    }
+
+    // 删除 workspace 镜像
+    if (meta && this.workspaceManager) {
+      const mirrorDir = this.workspaceManager.getSessionDir(meta.taskId);
+      try {
+        if (fs.existsSync(mirrorDir)) {
+          fs.rmSync(mirrorDir, { recursive: true, force: true });
+        }
+      } catch {
+        // 忽略镜像删除失败
+      }
     }
   }
 }

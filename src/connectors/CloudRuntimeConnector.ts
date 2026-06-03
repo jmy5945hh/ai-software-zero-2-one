@@ -4,9 +4,10 @@
  * 职责：
  * - 通过 WebSocket 与云端 Agent Server 通信
  * - 通过 REST API 管理云端项目
- * - 指数退避自动重连
- * - 资源配额监控（月度 token、任务队列）
+ * - 资源配额监控（monthly token、任务队列）
  *
+ * 重连策略：统一由 AgentWebSocket 内部处理（指数退避），
+ * 本连接器仅订阅 open/close/reconnecting 事件并转为 RuntimeStatus 推送。
  * 复用现有 src/agent/ws.ts 的 AgentWebSocket 基础设施。
  * 当云端不可达时降级展示离线状态。
  */
@@ -24,9 +25,9 @@ import { AgentWebSocket } from "../agent/ws";
 import { buildAgentWsUrl, getAgentWsOrigin } from "../agent/config";
 
 function getCloudApiBase(): string {
-  const origin = getAgentWsOrigin();
+  const origin = getAgentWsOrigin("cloud");
   // 如果设置了 VITE_CLOUD_API_URL 则优先使用，否则从 WS URL 自动推导
-  return import.meta.env.VITE_CLOUD_API_URL || origin;
+  return (import.meta.env.VITE_CLOUD_API_URL as string | undefined) || origin;
 }
 
 interface CloudProjectResponse {
@@ -68,69 +69,32 @@ function toAgentProject(p: CloudProjectResponse): AgentProject {
   };
 }
 
-/** 带指数退避的重连管理 */
-class ReconnectManager {
-  private baseDelay = 1000;
-  private maxDelay = 30000;
-  private maxAttempts = 5;
-  private attempt = 0;
-  private timer: ReturnType<typeof setTimeout> | null = null;
-  private callback: (() => void) | null = null;
-
-  start(cb: () => void): void {
-    this.callback = cb;
-    this.attempt = 0;
-    this.scheduleNext();
-  }
-
-  reset(): void {
-    this.attempt = 0;
-    this.clearTimer();
-  }
-
-  clearTimer(): void {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
-  }
-
-  private scheduleNext(): void {
-    if (this.attempt >= this.maxAttempts) return;
-    const delay = Math.min(this.baseDelay * Math.pow(2, this.attempt), this.maxDelay);
-    this.attempt++;
-    this.timer = setTimeout(() => {
-      this.callback?.();
-    }, delay);
-  }
-}
-
 export class CloudRuntimeConnector implements IRuntimeConnector {
   readonly mode: RuntimeMode = "cloud";
 
   private ws: AgentWebSocket | null = null;
   private statusHandlers: StatusHandler[] = [];
   private resourceHandlers: ResourceHandler[] = [];
-  private reconnectMgr = new ReconnectManager();
   private _connected = false;
 
   async connect(): Promise<void> {
-    const wsUrl = buildAgentWsUrl();
+    const wsUrl = buildAgentWsUrl("cloud");
     this.ws = new AgentWebSocket(wsUrl);
 
+    // AgentWebSocket 内部已处理重连（指数退避），
+    // 这里只订阅生命周期事件并转为 RuntimeStatus。
     this.ws.onOpen(() => {
       this._connected = true;
-      this.reconnectMgr.reset();
       this.notifyStatus("connected");
     });
 
     this.ws.onClose(() => {
       this._connected = false;
       this.notifyStatus("disconnected");
-      this.reconnectMgr.start(() => {
-        this.notifyStatus("connecting");
-        this.connect(); // 重新连接
-      });
+    });
+
+    this.ws.onReconnecting(() => {
+      this.notifyStatus("connecting");
     });
 
     this.ws.onAuthError(() => {
@@ -145,7 +109,6 @@ export class CloudRuntimeConnector implements IRuntimeConnector {
   }
 
   disconnect(): void {
-    this.reconnectMgr.clearTimer();
     this.ws?.close();
     this.ws = null;
     this._connected = false;
@@ -241,7 +204,7 @@ export class CloudRuntimeConnector implements IRuntimeConnector {
 
   // ── 内部方法 ─────────────────────────────────
 
-  private notifyStatus(status: "connected" | "disconnected" | "connecting"): void {
+  private notifyStatus(status: "connected" | "disconnected" | "connecting" | "error"): void {
     const s: RuntimeStatus = {
       mode: "cloud",
       connected: status,

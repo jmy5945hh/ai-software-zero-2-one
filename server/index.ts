@@ -15,12 +15,15 @@ const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 const runner = new AgentRunner("./server/models.json");
 const pool = new SessionPool();
 const summaryStore = new SummaryStore();
-const workspace = new WorkspaceManager("./server/workspaces");
-const sessionStore = new SessionStore();
+const workspace = new WorkspaceManager(WorkspaceManager.defaultRoot());
+const sessionStore = new SessionStore(workspace);
+
+// WorkspaceManager 延迟注入，消除循环依赖
+sessionStore.setWorkspaceManager(workspace);
 
 // ── HTTP 服务 ───────────────────────────────
 const server = http.createServer((req, res) => {
-  const handled = handleHttpRequest(req, res);
+  const handled = handleHttpRequest(req, res, { pool, sessionStore });
   if (!handled) {
     res.writeHead(404);
     res.end();

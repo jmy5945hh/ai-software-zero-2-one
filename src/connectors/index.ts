@@ -29,9 +29,11 @@ export async function switchRuntime(
   from: RuntimeMode | null,
   to: RuntimeMode,
 ): Promise<IRuntimeConnector> {
-  // 断开旧连接
-  if (from && instances.has(from)) {
-    instances.get(from)!.disconnect();
+  // 断开所有已缓存的旧连接（除目标模式外）
+  for (const [mode, connector] of instances) {
+    if (mode !== to) {
+      connector.disconnect();
+    }
   }
 
   // 获取或创建新连接器
