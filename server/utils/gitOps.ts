@@ -41,6 +41,54 @@ export function getRepoDiff(projectPath: string): string {
 }
 
 /**
+ * 获取按文件拆分的 git diff（当前工作区变更）
+ * 返回 { files: { path: string, diff: string, additions: number, deletions: number }[] }
+ */
+export function getRepoDiffFiles(projectPath: string): {
+  files: { path: string; diff: string; additions: number; deletions: number }[];
+} {
+  const fullDiff = getRepoDiff(projectPath);
+  if (fullDiff === "No changes" || fullDiff.startsWith("//")) {
+    return { files: [] };
+  }
+
+  const files: { path: string; diff: string; additions: number; deletions: number }[] = [];
+  const lines = fullDiff.split("\n");
+  let currentFile: string | null = null;
+  let currentDiff: string[] = [];
+  let adds = 0;
+  let dels = 0;
+
+  for (const line of lines) {
+    const fileHeaderMatch = line.match(/^diff --git a\/(.+?) b\/(.+?)$/);
+    if (fileHeaderMatch) {
+      // Save previous file
+      if (currentFile) {
+        files.push({ path: currentFile, diff: currentDiff.join("\n"), additions: adds, deletions: dels });
+      }
+      currentFile = fileHeaderMatch[2];
+      currentDiff = [line];
+      adds = 0;
+      dels = 0;
+      continue;
+    }
+
+    if (currentFile) {
+      currentDiff.push(line);
+      if (line.startsWith("+") && !line.startsWith("+++")) adds++;
+      if (line.startsWith("-") && !line.startsWith("---")) dels++;
+    }
+  }
+
+  // Save last file
+  if (currentFile) {
+    files.push({ path: currentFile, diff: currentDiff.join("\n"), additions: adds, deletions: dels });
+  }
+
+  return { files };
+}
+
+/**
  * 在指定目录下执行 shell 命令
  * @param command 要执行的命令
  * @param cwd 工作目录

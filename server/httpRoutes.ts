@@ -1,7 +1,7 @@
 import http from "http";
 import path from "path";
 import { readSpecsTree, readRepoTree, readFileSafe, writeFileSafe, existsSync } from "./utils/fileOps";
-import { getRepoDiff, execCommand } from "./utils/gitOps";
+import { getRepoDiff, getRepoDiffFiles, execCommand } from "./utils/gitOps";
 import { SessionPool } from "./SessionPool";
 import { SessionStore } from "./SessionStore";
 
@@ -142,6 +142,26 @@ export function handleHttpRequest(
     } catch {
       res.writeHead(404, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "File not found" }));
+    }
+    return true;
+  }
+
+  // 获取按文件拆分的 git diff（必须放在 /repo-diff 之前，避免路由被先匹配）
+  if (req.method === "GET" && req.url?.startsWith("/repo-diff-files")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const projectPath = url.searchParams.get("path");
+    if (!projectPath) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'path' query parameter" }));
+      return true;
+    }
+    try {
+      const result = getRepoDiffFiles(projectPath);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Git diff failed" }));
     }
     return true;
   }

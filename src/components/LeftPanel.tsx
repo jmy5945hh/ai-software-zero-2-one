@@ -15,6 +15,8 @@ type LeftPanelProps = {
   agentSessions?: Record<string, SessionState>;
   intent?: string;
   workspacePath?: string;
+  /** 当前会话 sessionId */
+  sessionId?: string;
   /** 外部触发打开 repo explorer */
   repoExplorerOpen?: boolean;
   /** 关闭 repo explorer */
@@ -33,6 +35,7 @@ export function LeftPanel({
   agentSessions,
   intent,
   workspacePath,
+  sessionId,
   repoExplorerOpen,
   onCloseRepoExplorer,
 }: LeftPanelProps) {
@@ -44,6 +47,7 @@ export function LeftPanel({
         onBackToTasks={onBackToTasks}
         stepSummaries={stepSummaries}
         intent={intent}
+        sessionId={sessionId}
       />
 
       {/* 工作空间模块：两个按钮 */}
@@ -72,11 +76,13 @@ function TaskCardResident({
   onBackToTasks,
   stepSummaries,
   intent,
+  sessionId,
 }: {
   taskCard: TaskCard | null;
   onBackToTasks: () => void;
   stepSummaries?: Record<string, string>;
   intent?: string;
+  sessionId?: string;
 }) {
   return (
     <section className="left-card story-resident">
@@ -112,6 +118,12 @@ function TaskCardResident({
               切换任务
             </button>
           </div>
+          {sessionId && (
+            <div className="story-resident-session">
+              <span className="story-resident-session-label">Session ID</span>
+              <code className="story-resident-session-value">{sessionId}</code>
+            </div>
+          )}
         </div>
       ) : (
         <div className="story-resident-empty">

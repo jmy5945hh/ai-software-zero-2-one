@@ -57,6 +57,4 @@ export type AgentEvent =
   | { type: "error"; message: string }
   | { type: "queue_update"; steering: string[]; followUp: string[] }
   | { type: "compaction_start" }
-  | { type: "compaction_end" }
-  | { type: "auto_retry_start" }
-  | { type: "auto_retry_end" };
+  | { type: "compaction_end" };

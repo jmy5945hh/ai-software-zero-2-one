@@ -40,6 +40,7 @@ import { TokenUsageBadge } from "./TokenUsageBadge";
 import { ContentModal } from "./ContentModal";
 import type { ModalContent } from "./ContentModal";
 import type { StepSessionSnapshot } from "../hooks/useSessionRecords";
+import { DiffViewer } from "./DiffViewer";
 
 type BoardTab = "delivery" | "trajectory";
 
@@ -2704,17 +2705,7 @@ function TimelineEventV2({
                   <span>文件变更 · {parseDiffSummary(resultText)}</span>
                 </div>
                 <div className="tl-tool-expand-pre">
-                  {parseDiffLines(resultText).slice(0, 40).map((line, li) => (
-                    <div key={li} className={`cm-diff-line ${line.type}`}>
-                      <span className="cm-diff-num">{li + 1}</span>
-                      <span className="cm-diff-text">{line.content}</span>
-                    </div>
-                  ))}
-                  {resultText.split("\n").length > 40 && (
-                    <div style={{ padding: "6px 0", color: "var(--muted)", fontStyle: "italic" }}>
-                      ... 共 {resultText.split("\n").length} 行，弹窗查看完整内容
-                    </div>
-                  )}
+                  <DiffViewer content={resultText} maxLines={40} showFileHeaders={false} />
                 </div>
               </div>
               <div className="tl-tool-expand-action">
@@ -2912,7 +2903,7 @@ function TimelineEventV2({
   }
 }
 
-// ── Diff 检测与解析工具 ────────────────────
+// ── Diff 检测工具 ────────────────────────
 function isDiffContent(text: string): boolean {
   if (!text) return false;
   // 检测 unified diff 格式：包含 @@ ... @@ 头部或 +++/--- 前缀
@@ -2931,16 +2922,6 @@ function parseDiffSummary(text: string): string {
   const fileMatch = text.match(/^[-+]{3}\s+[ab]\/(.+)$/m);
   const file = fileMatch ? fileMatch[1] : "变更文件";
   return `${file} · +${adds} -${dels}`;
-}
-
-type DiffLine = { type: "add" | "del" | "ctx"; content: string };
-
-function parseDiffLines(text: string): DiffLine[] {
-  return text.split("\n").map((line) => {
-    if (line.startsWith("+") && !line.startsWith("+++")) return { type: "add", content: line };
-    if (line.startsWith("-") && !line.startsWith("---")) return { type: "del", content: line };
-    return { type: "ctx", content: line };
-  });
 }
 
 function formatJsonOrText(text: string): string {

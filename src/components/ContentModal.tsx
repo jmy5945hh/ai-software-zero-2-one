@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useState } from "react";
 import { X, Maximize2, Edit3, Save, RotateCcw } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { DiffViewer } from "./DiffViewer";
 
 export type ModalContent = {
   type: "code" | "markdown" | "json" | "diff" | "html";
@@ -237,31 +238,6 @@ function CodeViewer({ language, code }: { language: string; code: string }) {
       <pre className="content-modal-pre"><code>{code}</code></pre>
     </div>
   );
-}
-
-/** Diff 查看器 */
-function DiffViewer({ content }: { content: string }) {
-  const lines = parseDiffLines(content);
-  return (
-    <div className="content-modal-diff">
-      {lines.map((line, i) => (
-        <div key={i} className={`cm-diff-line ${line.type}`}>
-          <span className="cm-diff-num">{i + 1}</span>
-          <span className="cm-diff-text">{line.content}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-type DiffLine = { type: "add" | "del" | "ctx"; content: string };
-
-function parseDiffLines(text: string): DiffLine[] {
-  return text.split("\n").map((line) => {
-    if (line.startsWith("+") && !line.startsWith("+++")) return { type: "add", content: line };
-    if (line.startsWith("-") && !line.startsWith("---")) return { type: "del", content: line };
-    return { type: "ctx", content: line };
-  });
 }
 
 function formatJson(text: string): string {

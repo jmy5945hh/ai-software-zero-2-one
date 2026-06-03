@@ -6,7 +6,10 @@ import {
   GitBranch,
   Loader2,
   FileDiff,
+  FilePlus,
+  FileMinus,
 } from "lucide-react";
+import { DiffViewer } from "./DiffViewer";
 
 type TreeNode = {
   name: string;
@@ -14,11 +17,51 @@ type TreeNode = {
   children?: TreeNode[];
 };
 
+type DiffFileInfo = {
+  path: string;
+  diff: string;
+  additions: number;
+  deletions: number;
+};
+
 type RepoExplorerProps = {
   workspacePath: string;
 };
 
 type RepoTab = "tree" | "diff";
+
+/**
+ * Build a tree structure from flat file paths.
+ */
+function buildFileTree(files: DiffFileInfo[]): TreeNode[] {
+  const root: TreeNode[] = [];
+  const map = new Map<string, TreeNode[]>();
+
+  for (const f of files) {
+    const parts = f.path.split("/");
+    let current = root;
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const isLast = i === parts.length - 1;
+      const parentPath = parts.slice(0, i).join("/");
+      const key = parentPath ? `${parentPath}/${part}` : part;
+
+      if (isLast) {
+        current.push({ name: part, type: "file" });
+      } else {
+        let folder = current.find((n) => n.name === part && n.type === "folder") as TreeNode | undefined;
+        if (!folder) {
+          folder = { name: part, type: "folder", children: [] };
+          current.push(folder);
+        }
+        current = folder.children!;
+      }
+    }
+  }
+
+  return root;
+}
 
 /**
  * RepoExplorer — 浏览项目仓库目录（排除 specs 目录），
@@ -30,7 +73,8 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
   const [loading, setLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState("");
-  const [diffContent, setDiffContent] = useState("");
+  const [diffFiles, setDiffFiles] = useState<DiffFileInfo[]>([]);
+  const [selectedDiffFile, setSelectedDiffFile] = useState<string | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [treeWidth, setTreeWidth] = useState(240);
   const splitRef = useRef<HTMLDivElement>(null);
@@ -87,11 +131,19 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
   const loadDiff = useCallback(async () => {
     setDiffLoading(true);
     try {
-      const res = await fetch(`/repo-diff?path=${encodeURIComponent(workspacePath)}`);
+      const res = await fetch(`/repo-diff-files?path=${encodeURIComponent(workspacePath)}`);
       const data = await res.json();
-      setDiffContent(data.diff || "No changes");
+      const files: DiffFileInfo[] = data.files || [];
+      setDiffFiles(files);
+      // Auto-select first file
+      if (files.length > 0) {
+        setSelectedDiffFile(files[0].path);
+      } else {
+        setSelectedDiffFile(null);
+      }
     } catch {
-      setDiffContent("// 获取 diff 失败");
+      setDiffFiles([]);
+      setSelectedDiffFile(null);
     } finally {
       setDiffLoading(false);
     }
@@ -120,6 +172,15 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
     },
     [workspacePath],
   );
+
+  // Get selected diff content
+  const selectedDiff = selectedDiffFile
+    ? diffFiles.find((f) => f.path === selectedDiffFile)
+    : null;
+
+  // Build file tree from diff files
+  const diffFileTree = useRef<TreeNode[]>([]);
+  diffFileTree.current = buildFileTree(diffFiles);
 
   return (
     <div className="repo-explorer">
@@ -192,7 +253,7 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
         </div>
       )}
 
-      {/* Diff 视图 */}
+      {/* Diff 视图 — 左侧变更文件树 + 右侧 Diff 内容 */}
       {tab === "diff" && (
         <div className="repo-explorer-content">
           {diffLoading ? (
@@ -200,21 +261,61 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
               <Loader2 size={20} className="spin-icon" />
               <span>加载 Diff...</span>
             </div>
+          ) : diffFiles.length === 0 ? (
+            <div className="repo-explorer-empty">
+              <FileDiff size={32} />
+              <p>工作区无变更</p>
+            </div>
           ) : (
-            <div className="repo-diff-viewer">
-              <div className="repo-diff-header">
-                <span className="repo-diff-label">工作区变更 (git diff HEAD)</span>
-                <button
-                  className="ghost-button small"
-                  type="button"
-                  onClick={loadDiff}
-                >
-                  刷新
-                </button>
+            <div className="repo-diff-split">
+              {/* 左侧：变更文件树 */}
+              <div className="repo-diff-tree" style={{ width: treeWidth, flexShrink: 0 }}>
+                <div className="repo-diff-tree-header">
+                  <span className="repo-diff-tree-label">变更文件</span>
+                  <button
+                    className="ghost-button small"
+                    type="button"
+                    onClick={loadDiff}
+                    title="刷新"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  </button>
+                </div>
+                <div className="repo-diff-tree-list">
+                  {diffFileTree.current.map((node) => (
+                    <DiffTreeNode
+                      key={node.name}
+                      node={node}
+                      path=""
+                      depth={0}
+                      diffFiles={diffFiles}
+                      selectedFile={selectedDiffFile}
+                      onSelect={setSelectedDiffFile}
+                    />
+                  ))}
+                </div>
               </div>
-              <pre className="repo-diff-content">
-                <code>{diffContent}</code>
-              </pre>
+              <div className="repo-split-handle" onMouseDown={handleMouseDown} />
+              {/* 右侧：Diff 内容 */}
+              <div className="repo-diff-preview" style={{ flex: 1, minWidth: 0 }}>
+                {selectedDiff ? (
+                  <div className="repo-diff-viewer">
+                    <div className="repo-diff-header">
+                      <span className="repo-diff-label">{selectedDiff.path}</span>
+                      <span className="repo-diff-stats">
+                        <span className="diff-stat-add">+{selectedDiff.additions}</span>
+                        <span className="diff-stat-del">-{selectedDiff.deletions}</span>
+                      </span>
+                    </div>
+                    <DiffViewer content={selectedDiff.diff} />
+                  </div>
+                ) : (
+                  <div className="repo-preview-placeholder">
+                    <FileDiff size={32} />
+                    <p>从左侧选择文件查看变更</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -284,6 +385,89 @@ function RepoTreeNode({
     >
       <FileText size={14} />
       <span>{node.name}</span>
+    </button>
+  );
+}
+
+// ── Diff 文件树节点 ─────────────────────────
+
+function DiffTreeNode({
+  node,
+  path: parentPath,
+  depth = 0,
+  diffFiles,
+  selectedFile,
+  onSelect,
+}: {
+  node: TreeNode;
+  path: string;
+  depth?: number;
+  diffFiles: DiffFileInfo[];
+  selectedFile: string | null;
+  onSelect: (path: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const fullPath = parentPath ? `${parentPath}/${node.name}` : node.name;
+
+  if (node.type === "folder") {
+    return (
+      <div className="repo-tree-folder">
+        <button
+          className="repo-tree-toggle"
+          type="button"
+          style={{ paddingLeft: 8 + depth * 16 }}
+          onClick={() => setExpanded(!expanded)}
+        >
+          <ChevronRight
+            size={14}
+            style={{
+              transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+              transition: "transform 0.2s",
+            }}
+          />
+          <Folder size={14} />
+          <span>{node.name}</span>
+        </button>
+        {expanded &&
+          node.children?.map((child) => (
+            <DiffTreeNode
+              key={child.name}
+              node={child}
+              path={fullPath}
+              depth={depth + 1}
+              diffFiles={diffFiles}
+              selectedFile={selectedFile}
+              onSelect={onSelect}
+            />
+          ))}
+      </div>
+    );
+  }
+
+  const info = diffFiles.find((f) => f.path === fullPath);
+  const isSelected = selectedFile === fullPath;
+
+  return (
+    <button
+      className={`repo-tree-file diff-file ${isSelected ? "active" : ""}`}
+      type="button"
+      style={{ paddingLeft: 8 + depth * 16 + 12 }}
+      onClick={() => onSelect(fullPath)}
+    >
+      {info && info.additions > 0 && info.deletions === 0 ? (
+        <FilePlus size={14} className="diff-icon-add" />
+      ) : info && info.deletions > 0 && info.additions === 0 ? (
+        <FileMinus size={14} className="diff-icon-del" />
+      ) : (
+        <FileDiff size={14} className="diff-icon-mod" />
+      )}
+      <span className="diff-file-name">{node.name}</span>
+      {info && (
+        <span className="diff-file-stats-inline">
+          <span className="diff-stat-add">+{info.additions}</span>
+          <span className="diff-stat-del">-{info.deletions}</span>
+        </span>
+      )}
     </button>
   );
 }

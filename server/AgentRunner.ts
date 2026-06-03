@@ -29,7 +29,7 @@ export class AgentRunner {
 
     this.settingsManager = SettingsManager.inMemory({
       compaction: { enabled: false },
-      retry: { enabled: true, maxRetries: 2 },
+      retry: { enabled: false },
     });
   }
 

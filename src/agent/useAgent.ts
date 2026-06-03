@@ -158,7 +158,6 @@ function defaultSession(): SessionState {
     messages: [],
     turns: [],
     isCompacting: false,
-    isRetrying: false,
     queue: { steering: [], followUp: [] },
     summarizationStatus: "idle",
     buildStatus: "idle",
@@ -928,18 +927,6 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
             return {
               ...prev,
               [step]: { ...s, isCompacting: false },
-            };
-
-          case "auto_retry_start":
-            return {
-              ...prev,
-              [step]: { ...s, isRetrying: true },
-            };
-
-          case "auto_retry_end":
-            return {
-              ...prev,
-              [step]: { ...s, isRetrying: false },
             };
 
           default:

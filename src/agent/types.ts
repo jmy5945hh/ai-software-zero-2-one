@@ -16,9 +16,7 @@ export type AgentEvent =
   | { type: "error"; message: string }
   | { type: "queue_update"; steering: string[]; followUp: string[] }
   | { type: "compaction_start" }
-  | { type: "compaction_end" }
-  | { type: "auto_retry_start" }
-  | { type: "auto_retry_end" };
+  | { type: "compaction_end" };
 
 /** WebSocket 统一消息格式 */
 export type WsMessage =
@@ -79,7 +77,6 @@ export type SessionState = {
   turns: Turn[];
   error?: string;
   isCompacting: boolean;
-  isRetrying: boolean;
   queue: { steering: string[]; followUp: string[] };
   /** 结构化总结状态 */
   summarizationStatus: "idle" | "pending" | "loading" | "done" | "error";

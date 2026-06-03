@@ -365,6 +365,7 @@ export function TaskPage() {
               agentSessions={agent.sessions}
               intent={state.intent}
               workspacePath={state.workspacePath}
+              sessionId={state.sessionId}
               repoExplorerOpen={repoExplorerOpen}
               onCloseRepoExplorer={() => setRepoExplorerOpen(false)}
             />

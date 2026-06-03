@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { X, Copy, Check, ExternalLink } from "lucide-react";
 import type { DrawerContent } from "../data/types";
+import { DiffViewer } from "./DiffViewer";
 
 type DrawerProps = {
   content: DrawerContent;
@@ -212,32 +213,6 @@ function HtmlPreview({ html }: { html: string }) {
           <p>沙盒预览将在发布后可用</p>
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Diff 查看器 ────────────────────────────
-
-type DiffLine = { type: "add" | "del" | "ctx"; content: string };
-
-function parseDiffLines(text: string): DiffLine[] {
-  return text.split("\n").map((line) => {
-    if (line.startsWith("+") && !line.startsWith("+++")) return { type: "add", content: line };
-    if (line.startsWith("-") && !line.startsWith("---")) return { type: "del", content: line };
-    return { type: "ctx", content: line };
-  });
-}
-
-function DiffViewer({ content }: { content: string }) {
-  const lines = parseDiffLines(content);
-  return (
-    <div className="drawer-diff">
-      {lines.map((line, i) => (
-        <div key={i} className={`cm-diff-line ${line.type}`}>
-          <span className="cm-diff-num">{i + 1}</span>
-          <span className="cm-diff-text">{line.content}</span>
-        </div>
-      ))}
     </div>
   );
 }

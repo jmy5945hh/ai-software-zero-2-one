@@ -3893,51 +3893,6 @@ p {
   padding: 24px 28px;
 }
 
-/* ── 弹窗：Diff ──────────────────────────── */
-.content-modal-diff {
-  font-family: "JetBrains Mono", "Fira Code", monospace;
-  font-size: 0.78rem;
-  line-height: 1.6;
-}
-
-.cm-diff-line {
-  display: flex;
-  padding: 0 24px;
-  min-height: 24px;
-  align-items: center;
-}
-
-.cm-diff-line.add {
-  background: rgba(52, 211, 153, 0.06);
-  color: #2D6A4F;
-}
-
-.cm-diff-line.del {
-  background: rgba(194, 123, 102, 0.06);
-  color: #A05A4A;
-}
-
-.cm-diff-line.ctx {
-  color: var(--muted);
-}
-
-.cm-diff-num {
-  width: 48px;
-  flex-shrink: 0;
-  text-align: right;
-  padding-right: 14px;
-  border-right: 1px solid var(--line);
-  margin-right: 14px;
-  color: var(--muted-warm);
-  user-select: none;
-  font-size: 0.68rem;
-}
-
-.cm-diff-text {
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
 /* ── 弹窗：HTML 预览 ─────────────────────── */
 .content-modal-html {
   height: 100%;
@@ -4385,10 +4340,6 @@ p {
 
   .content-modal-pre {
     padding: 14px 16px;
-  }
-
-  .cm-diff-line {
-    padding: 0 16px;
   }
 
   .ws-selector-modal {

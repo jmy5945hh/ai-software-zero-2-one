@@ -200,7 +200,7 @@ function mapSdkEvent(raw: unknown): AgentEvent | null {
     case "compaction_end":
     case "auto_retry_start":
     case "auto_retry_end":
-      return { type };
+      return null;
 
     default:
       return null;
@@ -317,7 +317,15 @@ export async function handleWsMessage(
 
         ensureSubscription(pool, taskId, step, ws, msg.id);
 
-        await session.prompt(text);
+        console.log(`[session.prompt] isStreaming=${session.isStreaming} step=${step}`);
+        if (session.isStreaming) {
+          // Agent 正在处理中，用 steer() 排队（不 await，避免阻塞 response）
+          console.log(`[session.prompt] → steer() (queue during streaming)`);
+          session.steer(text);
+        } else {
+          console.log(`[session.prompt] → prompt() (idle, start new run)`);
+          await session.prompt(text);
+        }
         ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
         break;
       }
