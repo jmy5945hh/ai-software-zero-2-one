@@ -261,6 +261,39 @@
   color: var(--muted-warm);
 }
 
+/* ── Session ID 复制按钮（当前任务头部） ──── */
+.session-id-copy-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--bg, #fff);
+  cursor: pointer;
+  color: var(--muted-warm);
+  font-size: 0.6rem;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+.session-id-copy-btn:hover {
+  border-color: var(--primary-light, #b8d4f0);
+  background: var(--primary-bg, #f0f7ff);
+  color: var(--primary, #1a73e8);
+}
+
+.session-id-copy-btn:active {
+  transform: scale(0.96);
+}
+
+.session-id-text {
+  font-family: var(--font-mono, "SF Mono", "Fira Code", monospace);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+}
+
 /* 工作空间折叠切换按钮 */
 .workspace-tree-toggle {
   display: flex;
@@ -317,36 +350,6 @@
   color: var(--muted-warm);
   font-size: 0.78rem;
   margin-bottom: 12px;
-}
-
-/* ── Session ID ──────────────────────────── */
-.story-resident-session {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-}
-
-.story-resident-session-label {
-  font-size: 0.65rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-
-.story-resident-session-value {
-  font-size: 0.65rem;
-  font-family: var(--font-mono, "SF Mono", "Fira Code", monospace);
-  color: var(--muted-warm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  user-select: all;
-  cursor: text;
 }
 
 /* ── 文件树 ──────────────────────────────── */
@@ -1015,6 +1018,26 @@
 .chat-send-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.chat-stop-btn {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--terracotta);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  color: var(--terracotta);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+  flex-shrink: 0;
+}
+
+.chat-stop-btn:hover {
+  background: var(--terracotta-light);
+  border-color: var(--terracotta);
+  color: var(--terracotta);
 }
 
 /* ── 决策操作区 ──────────────────────────── */

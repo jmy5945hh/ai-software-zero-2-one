@@ -5,8 +5,8 @@ import { SessionPool } from "./SessionPool";
 import { SummaryStore } from "./SummaryStore";
 import { WorkspaceManager } from "./WorkspaceManager";
 import { SessionStore } from "./SessionStore";
-import { resolveQuestion, continueQuestion } from "./customTools";
-import type { WsMessage, AgentEvent } from "./protocol";
+import { resolveQuestion, continueQuestion, pendingQuestions } from "./customTools";
+import type { WsMessage, AgentEvent, SessionSnapshot } from "./protocol";
 
 // ── 总结 Prompt 构建 ───────────────────────
 /** 构造总结 Agent 的 prompt（与前端 buildSummarizationPrompt 一致） */
@@ -437,6 +437,77 @@ export async function handleWsMessage(
         const { taskId, step } = msg.params as { taskId: string; step: string };
         pool.dispose(taskId, step);
         ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
+        break;
+      }
+
+      // ── 重连恢复 session 状态 ────────────
+      case "session.reconnect": {
+        const { sessionId } = msg.params as { sessionId: string };
+        console.log("[session.reconnect] sessionId=%s", sessionId);
+
+        const found = pool.findBySessionId(sessionId);
+        if (!found) {
+          console.log("[session.reconnect] session not found: %s", sessionId);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: { found: false } }));
+          break;
+        }
+
+        const { taskId, step, session } = found;
+
+        // 重新绑定事件订阅到当前 WebSocket
+        ensureSubscription(pool, taskId, step, ws, msg.id);
+
+        // 从 session 中提取当前消息列表
+        const messages = (session as any).agent?.state?.messages || [];
+        const mappedMessages = messages
+          .filter((m: any) => m.role === "user" || m.role === "assistant")
+          .map((m: any) => ({
+            role: m.role as "user" | "assistant",
+            content: typeof m.content === "string" ? m.content : "",
+          }));
+
+        // 检查是否有 pending question
+        const pqKey = `${taskId}:${step}`;
+        const pq = pendingQuestions.get(pqKey);
+        const hasPendingQuestion = !!pq && pq.storedAnswer === null;
+
+        // 构建 turns（从 messages 中提取）
+        const turns: SessionSnapshot["turns"] = [];
+        let turnIndex = 0;
+        for (const msg of messages) {
+          if (msg.role === "assistant") {
+            const content = typeof msg.content === "string" ? msg.content : "";
+            turns.push({
+              id: `turn-${turnIndex}`,
+              index: turnIndex++,
+              status: "done",
+              textContent: content,
+              thinking: "",
+              toolCalls: [],
+            });
+          }
+        }
+
+        const snapshot: SessionSnapshot = {
+          sessionId,
+          taskId,
+          step,
+          isStreaming: session.isStreaming,
+          completed: !session.isStreaming,
+          messages: mappedMessages,
+          turns,
+          hasPendingQuestion,
+          pendingQuestion: hasPendingQuestion && pq
+            ? { question: pq.question, options: pq.options }
+            : undefined,
+        };
+
+        console.log("[session.reconnect] found, isStreaming=%s, messages=%d, hasPendingQuestion=%s",
+          snapshot.isStreaming, snapshot.messages.length, snapshot.hasPendingQuestion);
+
+        // 先发 response，再发 snapshot 事件（前端按顺序处理）
+        ws.send(JSON.stringify({ type: "response", id: msg.id, result: { found: true } }));
+        ws.send(JSON.stringify({ type: "event", id: msg.id, event: { type: "session_snapshot", session: snapshot } }));
         break;
       }
 

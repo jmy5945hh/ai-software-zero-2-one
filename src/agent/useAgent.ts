@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory, Turn, ConnectionQuality } from "./types";
+import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory, Turn, ConnectionQuality, SessionSnapshot } from "./types";
 import type { FileChange, AgentSummary } from "../data/types";
 import { AgentWebSocket } from "./ws";
 import { buildAgentWsUrl } from "./config";
@@ -202,6 +202,8 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   /** 保存 hook 级别的 gitRepo，避免闭包陈旧 */
   const hookGitRepoRef = useRef(hookGitRepo);
   hookGitRepoRef.current = hookGitRepo;
+  /** 记录需要重连恢复的 session（step → sessionId），WebSocket 重连后自动触发 reconnect */
+  const pendingReconnectRef = useRef<Record<string, string>>({});
 
   // ── 创建 session ──
   const createSession = useCallback(
@@ -232,6 +234,9 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
         ...prev,
         [step]: { ...defaultSession(), id: result.sessionId },
       }));
+
+      // 记录 sessionId，用于 WebSocket 重连后自动恢复
+      pendingReconnectRef.current[step] = result.sessionId;
     },
     [taskId],
   );
@@ -327,6 +332,27 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     [taskId],
   );
 
+  // ── 中断当前 session ──
+  const abort = useCallback(
+    (step: string) => {
+      if (!taskId || !wsRef.current) return;
+      wsRef.current.request("session.abort", { taskId, step });
+      setSessions((prev) => {
+        const existing = prev[step];
+        if (!existing) return prev;
+        return {
+          ...prev,
+          [step]: {
+            ...existing,
+            isStreaming: false,
+            completed: true,
+          },
+        };
+      });
+    },
+    [taskId],
+  );
+
   // ── 回答问题 ──
   const answerQuestion = useCallback(
     async (step: string, answer: string) => {
@@ -395,13 +421,22 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
         },
       }));
 
-      await wsRef.current.request("session.resumeQuestion", {
+      const result = await wsRef.current.request("session.resumeQuestion", {
         taskId,
         step,
         answer,
         intent,
         workspacePath,
-      });
+      }) as { sessionId: string };
+
+      // 记录 sessionId，用于 WebSocket 重连后自动恢复
+      if (result?.sessionId) {
+        pendingReconnectRef.current[step] = result.sessionId;
+        setSessions((prev) => ({
+          ...prev,
+          [step]: { ...prev[step], id: result.sessionId },
+        }));
+      }
     },
     [taskId],
   );
@@ -425,7 +460,33 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       // 清除该 step 的总结标记，允许重新触发总结
       summarizingRef.current.delete(step);
 
-      await wsRef.current.request("session.retry", { taskId, step, text, initialPrompt });
+      const result = await wsRef.current.request("session.retry", { taskId, step, text, initialPrompt }) as { sessionId: string };
+
+      // 更新 sessionId，用于 WebSocket 重连后自动恢复
+      if (result?.sessionId) {
+        pendingReconnectRef.current[step] = result.sessionId;
+        setSessions((prev) => ({
+          ...prev,
+          [step]: { ...prev[step], id: result.sessionId },
+        }));
+      }
+    },
+    [taskId],
+  );
+
+  // ── 重连恢复 session ──
+  const reconnectSession = useCallback(
+    async (step: string, sessionId: string): Promise<boolean> => {
+      if (!taskId || !wsRef.current) return false;
+      activeStepRef.current = step;
+      try {
+        const result = (await wsRef.current.request("session.reconnect", {
+          sessionId,
+        })) as { found: boolean };
+        return result.found;
+      } catch {
+        return false;
+      }
     },
     [taskId],
   );
@@ -481,10 +542,30 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     setConnectionStatus("connecting");
     connectionStatusRef.current = "connecting";
 
-    ws.onOpen(() => {
+    ws.onOpen(async () => {
       setConnectionStatus("connected");
       connectionStatusRef.current = "connected";
       setConnectionQuality({ latency: 0, reconnectAttempt: 0 });
+
+      // WebSocket 重连后，自动恢复之前活跃的 session
+      const reconnectMap = pendingReconnectRef.current;
+      const entries = Object.entries(reconnectMap);
+      if (entries.length > 0) {
+        console.log("[useAgent] onOpen — reconnecting %d sessions", entries.length);
+        for (const [step, sessionId] of entries) {
+          try {
+            const result = await ws.request("session.reconnect", { sessionId }) as { found: boolean };
+            if (!result.found) {
+              console.log("[useAgent] reconnect session not found, removing: step=%s sessionId=%s", step, sessionId);
+              delete pendingReconnectRef.current[step];
+            }
+            // found=true 时，session_snapshot 事件会通过 onEvent 处理
+          } catch (err) {
+            console.error("[useAgent] reconnect failed for step=%s sessionId=%s", step, sessionId, err);
+            delete pendingReconnectRef.current[step];
+          }
+        }
+      }
     });
     ws.onClose(() => {
       // 只在非 auth 错误时设 disconnected（auth_failed 由 onAuthError 处理）
@@ -510,6 +591,73 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     });
 
     ws.onEvent((event: AgentEvent) => {
+      // ── session_snapshot 事件：重连恢复状态 ──
+      if (event.type === "session_snapshot") {
+        const snapshot = event.session;
+        console.log("[useAgent] session_snapshot received: step=%s isStreaming=%s messages=%d",
+          snapshot.step, snapshot.isStreaming, snapshot.messages.length);
+
+        // 清除该 step 的重连标记
+        delete pendingReconnectRef.current[snapshot.step];
+
+        // 用 snapshot 数据恢复 session 状态
+        setSessions((prev) => {
+          const existing = prev[snapshot.step] || defaultSession();
+          const turns = snapshot.turns.map((t, i) => ({
+            id: t.id || `turn-${i}`,
+            index: t.index,
+            status: t.status as "running" | "done",
+            textContent: t.textContent,
+            thinking: t.thinking || "",
+            toolCalls: (t.toolCalls || []).map((tc) => ({
+              id: tc.id,
+              name: tc.name,
+              status: tc.status as "running" | "done" | "error",
+              category: tc.category as ToolCallCategory,
+              input: tc.input,
+              result: tc.result,
+              outputFragments: tc.outputFragments || [],
+            })),
+          }));
+
+          return {
+            ...prev,
+            [snapshot.step]: {
+              ...existing,
+              id: snapshot.sessionId,
+              isStreaming: snapshot.isStreaming,
+              completed: snapshot.completed,
+              messages: snapshot.messages,
+              turns,
+              streamingText: "",
+              // 如果有 pending question，标记为等待用户回答
+              summarizationStatus: existing.summarizationStatus || "idle",
+              buildStatus: existing.buildStatus || "idle",
+            },
+          };
+        });
+
+        // 如果 session 已完成，触发后续流程（总结、编译等）
+        if (snapshot.completed) {
+          queueMicrotask(() => {
+            setSessions((prev) => {
+              const s = prev[snapshot.step];
+              if (!s) return prev;
+              return {
+                ...prev,
+                [snapshot.step]: {
+                  ...s,
+                  summarizationStatus: "pending" as const,
+                  buildStatus: (snapshot.step === "coding" ? "pending" : "idle") as "pending" | "idle",
+                },
+              };
+            });
+          });
+        }
+
+        return; // session_snapshot 不继续走下面的分流逻辑
+      }
+
       // ── 总结事件分流（独立 session，不影响正常流程）──
       const sumStep = summarizingStepRef.current;
       if (sumStep) {
@@ -1137,10 +1285,12 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     createSession,
     prompt,
     steer,
+    abort,
     answerQuestion,
     continueQuestion,
     resumeQuestion,
     retrySession,
+    reconnectSession,
     getFileTree,
     readFile,
     browseDir,

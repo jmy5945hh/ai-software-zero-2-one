@@ -378,6 +378,7 @@ export function TaskPage() {
               restoredSessions={state.restoredSessions}
               stepSummaries={stepSummaries}
               agentSteer={agent.steer}
+              agentAbort={agent.abort}
               agentPrompt={agent.prompt}
               agentAnswerQuestion={agent.answerQuestion}
               agentContinueQuestion={agent.continueQuestion}

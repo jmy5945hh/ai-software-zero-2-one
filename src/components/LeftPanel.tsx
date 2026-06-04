@@ -1,4 +1,5 @@
-import { Sparkles, GitBranch } from "lucide-react";
+import { Sparkles, GitBranch, Copy, Check } from "lucide-react";
+import { useState, useCallback } from "react";
 import type { TaskCard } from "../data/types";
 import { categoryMeta, priorityLabel } from "../data";
 import type { SessionState } from "../agent/types";
@@ -84,12 +85,33 @@ function TaskCardResident({
   intent?: string;
   sessionId?: string;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  const copySessionId = useCallback(() => {
+    if (!sessionId) return;
+    navigator.clipboard.writeText(sessionId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [sessionId]);
+
   return (
     <section className="left-card story-resident">
       {/* 头部 */}
       <div className="left-card-header">
         <Sparkles size={16} />
         <span>当前任务</span>
+        {sessionId && (
+          <button
+            className="session-id-copy-btn"
+            type="button"
+            onClick={copySessionId}
+            title="点击复制 Session ID"
+          >
+            <code className="session-id-text">{sessionId.slice(0, 8)}</code>
+            {copied ? <Check size={12} /> : <Copy size={12} />}
+          </button>
+        )}
       </div>
 
       {/* 故事卡信息 */}
@@ -118,12 +140,6 @@ function TaskCardResident({
               切换任务
             </button>
           </div>
-          {sessionId && (
-            <div className="story-resident-session">
-              <span className="story-resident-session-label">Session ID</span>
-              <code className="story-resident-session-value">{sessionId}</code>
-            </div>
-          )}
         </div>
       ) : (
         <div className="story-resident-empty">

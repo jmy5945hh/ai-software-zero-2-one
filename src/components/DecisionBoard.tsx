@@ -14,6 +14,7 @@ import {
   Package,
   MessageSquare,
   Send,
+  Square,
   FileText,
   ListChecks,
   FolderOpen,
@@ -78,6 +79,7 @@ type DecisionBoardProps = {
   /** 各步骤的 Agent 总结摘要（stepId → brief） */
   stepSummaries: Record<string, string>;
   agentSteer: (step: string, text: string, intent?: string) => void;
+  agentAbort: (step: string) => void;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion: (step: string) => Promise<void>;
@@ -103,6 +105,7 @@ export function DecisionBoard({
   restoredSessions,
   stepSummaries,
   agentSteer,
+  agentAbort,
   agentPrompt,
   agentAnswerQuestion,
   agentContinueQuestion,
@@ -207,6 +210,7 @@ export function DecisionBoard({
             stepIndex={state.stepIndex}
             stepId={step.id}
             agentSteer={agentSteer}
+            agentAbort={agentAbort}
             agentPrompt={agentPrompt}
             agentAnswerQuestion={agentAnswerQuestion}
             agentContinueQuestion={agentContinueQuestion}
@@ -1547,6 +1551,7 @@ function TrajectoryChatTab({
   stepIndex,
   stepId,
   agentSteer,
+  agentAbort,
   agentPrompt,
   agentAnswerQuestion,
   agentContinueQuestion,
@@ -1566,6 +1571,7 @@ function TrajectoryChatTab({
   stepIndex: number;
   stepId: string;
   agentSteer: (step: string, text: string, intent?: string) => void;
+  agentAbort: (step: string) => void;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentAnswerQuestion: (step: string, answer: string) => Promise<void>;
   agentContinueQuestion: (step: string) => Promise<void>;
@@ -1928,14 +1934,25 @@ function TrajectoryChatTab({
             placeholder="输入消息，和 AI 继续对话…"
             rows={1}
           />
-          <button
-            className="chat-send-btn"
-            type="button"
-            onClick={handleSend}
-            disabled={!input.trim()}
-          >
-            <Send size={16} />
-          </button>
+          {agentSession?.isStreaming ? (
+            <button
+              className="chat-stop-btn"
+              type="button"
+              onClick={() => agentAbort(stepId)}
+              title="中断当前会话"
+            >
+              <Square size={16} />
+            </button>
+          ) : (
+            <button
+              className="chat-send-btn"
+              type="button"
+              onClick={handleSend}
+              disabled={!input.trim()}
+            >
+              <Send size={16} />
+            </button>
+          )}
         </div>
       </div>
 

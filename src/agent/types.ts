@@ -16,7 +16,36 @@ export type AgentEvent =
   | { type: "error"; message: string }
   | { type: "queue_update"; steering: string[]; followUp: string[] }
   | { type: "compaction_start" }
-  | { type: "compaction_end" };
+  | { type: "compaction_end" }
+  | { type: "session_snapshot"; session: SessionSnapshot };
+
+/** 重连时推送的 session 状态快照 */
+export type SessionSnapshot = {
+  sessionId: string;
+  taskId: string;
+  step: string;
+  isStreaming: boolean;
+  completed: boolean;
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  turns: Array<{
+    id: string;
+    index: number;
+    status: "running" | "done";
+    textContent: string;
+    thinking: string;
+    toolCalls: Array<{
+      id: string;
+      name: string;
+      status: "running" | "done" | "error";
+      category: string;
+      input: string;
+      result?: string;
+      outputFragments: string[];
+    }>;
+  }>;
+  hasPendingQuestion: boolean;
+  pendingQuestion?: { question: string; options?: string[] };
+};
 
 /** WebSocket 统一消息格式 */
 export type WsMessage =
