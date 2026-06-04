@@ -22,6 +22,7 @@ type DiffFileInfo = {
   diff: string;
   additions: number;
   deletions: number;
+  changeType: "create" | "modify" | "delete";
 };
 
 type RepoExplorerProps = {
@@ -300,7 +301,10 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
               <div className="repo-diff-preview" style={{ flex: 1, minWidth: 0 }}>
                 {selectedDiff ? (
                   <div className="repo-diff-viewer">
-                    <div className="repo-diff-header">
+                    <div className={`repo-diff-header diff-type-${selectedDiff.changeType}`}>
+                      <span className={`repo-diff-type-badge diff-type-${selectedDiff.changeType}`}>
+                        {selectedDiff.changeType === "create" ? "新增" : selectedDiff.changeType === "delete" ? "删除" : "修改"}
+                      </span>
                       <span className="repo-diff-label">{selectedDiff.path}</span>
                       <span className="repo-diff-stats">
                         <span className="diff-stat-add">+{selectedDiff.additions}</span>
@@ -447,20 +451,26 @@ function DiffTreeNode({
   const info = diffFiles.find((f) => f.path === fullPath);
   const isSelected = selectedFile === fullPath;
 
+  const changeIcon = () => {
+    if (!info) return <FileDiff size={14} className="diff-icon-mod" />;
+    switch (info.changeType) {
+      case "create":
+        return <FilePlus size={14} className="diff-icon-create" />;
+      case "delete":
+        return <FileMinus size={14} className="diff-icon-delete" />;
+      default:
+        return <FileDiff size={14} className="diff-icon-modify" />;
+    }
+  };
+
   return (
     <button
-      className={`repo-tree-file diff-file ${isSelected ? "active" : ""}`}
+      className={`repo-tree-file diff-file diff-type-${info?.changeType || "modify"} ${isSelected ? "active" : ""}`}
       type="button"
       style={{ paddingLeft: 8 + depth * 16 + 12 }}
       onClick={() => onSelect(fullPath)}
     >
-      {info && info.additions > 0 && info.deletions === 0 ? (
-        <FilePlus size={14} className="diff-icon-add" />
-      ) : info && info.deletions > 0 && info.additions === 0 ? (
-        <FileMinus size={14} className="diff-icon-del" />
-      ) : (
-        <FileDiff size={14} className="diff-icon-mod" />
-      )}
+      {changeIcon()}
       <span className="diff-file-name">{node.name}</span>
       {info && (
         <span className="diff-file-stats-inline">

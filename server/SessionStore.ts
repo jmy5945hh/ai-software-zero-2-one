@@ -252,10 +252,9 @@ export class SessionStore {
 
   /** 列出所有会话记录（按更新时间倒序，不含对话数据） */
   list(): SessionMeta[] {
-    const seen = new Set<string>();
     const metas: SessionMeta[] = [];
 
-    // 1. 加载主存储中的记录
+    // 仅以主存储 ~/.aiNativeDevPlatform/sessions/ 为准
     try {
       const entries = fs.readdirSync(this.baseDir);
       console.log(`[SessionStore] list() → scanning ${entries.length} entries in ${this.baseDir}`);
@@ -266,42 +265,13 @@ export class SessionStore {
         try {
           const raw = fs.readFileSync(metaPath, "utf-8");
           const meta = JSON.parse(raw) as SessionMeta;
-          if (!seen.has(meta.sessionId)) {
-            seen.add(meta.sessionId);
-            metas.push(meta);
-          }
+          metas.push(meta);
         } catch {
           // 跳过损坏的目录
         }
       }
     } catch (err) {
       console.warn(`[SessionStore] list() primary storage scan failed:`, (err as Error).message);
-    }
-
-    // 2. 扫描 workspace 镜像存储（补充主存储中可能不存在的记录）
-    if (this.workspaceManager) {
-      try {
-        const taskDirs = this.workspaceManager.listTaskDirs();
-        for (const taskDir of taskDirs) {
-          const sessionDir = path.join(taskDir, "session");
-          if (!fs.existsSync(sessionDir)) continue;
-          const metaFile = path.join(sessionDir, "meta.json");
-          if (!fs.existsSync(metaFile)) continue;
-          try {
-            const raw = fs.readFileSync(metaFile, "utf-8");
-            const meta = JSON.parse(raw) as SessionMeta;
-            if (!seen.has(meta.sessionId)) {
-              seen.add(meta.sessionId);
-              metas.push(meta);
-            }
-          } catch (err) {
-            // 跳过损坏的文件
-            console.warn(`[SessionStore] list() failed to read meta file ${metaFile}:`, (err as Error).message);
-          }
-        }
-      } catch (err) {
-        console.warn(`[SessionStore] list() workspace mirror scan failed:`, (err as Error).message);
-      }
     }
 
     // 按更新时间倒序

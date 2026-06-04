@@ -40,16 +40,24 @@ export function getRepoDiff(projectPath: string): string {
   return combined || "No changes";
 }
 
+type DiffFileEntry = {
+  path: string;
+  diff: string;
+  additions: number;
+  deletions: number;
+  changeType: "create" | "modify" | "delete";
+};
+
 /**
  * 获取按文件拆分的 git diff（当前工作区变更），包含新增的未跟踪文件
- * 返回 { files: { path: string, diff: string, additions: number, deletions: number }[] }
+ * 返回 { files: DiffFileEntry[] }
  */
 export function getRepoDiffFiles(projectPath: string): {
-  files: { path: string; diff: string; additions: number; deletions: number }[];
+  files: DiffFileEntry[];
 } {
   const fullDiff = getRepoDiff(projectPath);
 
-  const files: { path: string; diff: string; additions: number; deletions: number }[] = [];
+  const files: DiffFileEntry[] = [];
 
   // 1. 解析已跟踪文件的 diff
   if (fullDiff !== "No changes" && !fullDiff.startsWith("//")) {
@@ -58,18 +66,20 @@ export function getRepoDiffFiles(projectPath: string): {
     let currentDiff: string[] = [];
     let adds = 0;
     let dels = 0;
+    let changeType: "create" | "modify" | "delete" = "modify";
 
     for (const line of lines) {
       const fileHeaderMatch = line.match(/^diff --git a\/(.+?) b\/(.+?)$/);
       if (fileHeaderMatch) {
         // Save previous file
         if (currentFile) {
-          files.push({ path: currentFile, diff: currentDiff.join("\n"), additions: adds, deletions: dels });
+          files.push({ path: currentFile, diff: currentDiff.join("\n"), additions: adds, deletions: dels, changeType });
         }
         currentFile = fileHeaderMatch[2];
         currentDiff = [line];
         adds = 0;
         dels = 0;
+        changeType = "modify";
         continue;
       }
 
@@ -77,12 +87,15 @@ export function getRepoDiffFiles(projectPath: string): {
         currentDiff.push(line);
         if (line.startsWith("+") && !line.startsWith("+++")) adds++;
         if (line.startsWith("-") && !line.startsWith("---")) dels++;
+        // Detect change type from git diff metadata lines
+        if (line.startsWith("new file mode")) changeType = "create";
+        if (line.startsWith("deleted file mode")) changeType = "delete";
       }
     }
 
     // Save last file
     if (currentFile) {
-      files.push({ path: currentFile, diff: currentDiff.join("\n"), additions: adds, deletions: dels });
+      files.push({ path: currentFile, diff: currentDiff.join("\n"), additions: adds, deletions: dels, changeType });
     }
   }
 
@@ -117,6 +130,7 @@ export function getRepoDiffFiles(projectPath: string): {
         diff,
         additions: lines.length,
         deletions: 0,
+        changeType: "create",
       });
     }
   } catch {

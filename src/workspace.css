@@ -3356,6 +3356,45 @@
   flex-shrink: 0;
 }
 
+.repo-diff-header.diff-type-create {
+  border-left: 3px solid #2D6A4F;
+}
+
+.repo-diff-header.diff-type-modify {
+  border-left: 3px solid #5B8C5A;
+}
+
+.repo-diff-header.diff-type-delete {
+  border-left: 3px solid #C27B66;
+}
+
+.repo-diff-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.repo-diff-type-badge.diff-type-create {
+  background: rgba(45, 106, 79, 0.12);
+  color: #2D6A4F;
+}
+
+.repo-diff-type-badge.diff-type-modify {
+  background: rgba(91, 140, 90, 0.12);
+  color: #3D6C3C;
+}
+
+.repo-diff-type-badge.diff-type-delete {
+  background: rgba(194, 123, 102, 0.12);
+  color: #C27B66;
+}
+
 .repo-diff-label {
   font-size: 0.75rem;
   font-weight: 600;
@@ -3434,6 +3473,43 @@
   font-weight: 600;
 }
 
+/* file tree row tint by change type */
+.repo-tree-file.diff-file.diff-type-create {
+  background: rgba(45, 106, 79, 0.04);
+}
+
+.repo-tree-file.diff-file.diff-type-create:hover {
+  background: rgba(45, 106, 79, 0.10);
+}
+
+.repo-tree-file.diff-file.diff-type-create.active {
+  background: rgba(45, 106, 79, 0.15);
+}
+
+.repo-tree-file.diff-file.diff-type-delete {
+  background: rgba(194, 123, 102, 0.04);
+}
+
+.repo-tree-file.diff-file.diff-type-delete:hover {
+  background: rgba(194, 123, 102, 0.10);
+}
+
+.repo-tree-file.diff-file.diff-type-delete.active {
+  background: rgba(194, 123, 102, 0.15);
+}
+
+.repo-tree-file.diff-file.diff-type-modify {
+  background: rgba(91, 140, 90, 0.03);
+}
+
+.repo-tree-file.diff-file.diff-type-modify:hover {
+  background: rgba(91, 140, 90, 0.08);
+}
+
+.repo-tree-file.diff-file.diff-type-modify.active {
+  background: rgba(91, 140, 90, 0.12);
+}
+
 .repo-tree-file.diff-file .diff-icon-add {
   color: #2D6A4F;
   flex-shrink: 0;
@@ -3446,6 +3522,22 @@
 
 .repo-tree-file.diff-file .diff-icon-mod {
   color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* change-type icon colors */
+.repo-tree-file.diff-file .diff-icon-create {
+  color: #2D6A4F;
+  flex-shrink: 0;
+}
+
+.repo-tree-file.diff-file .diff-icon-delete {
+  color: var(--terracotta);
+  flex-shrink: 0;
+}
+
+.repo-tree-file.diff-file .diff-icon-modify {
+  color: #5B8C5A;
   flex-shrink: 0;
 }
 
