@@ -90,17 +90,41 @@ export function TaskPage() {
   // ── 从历史恢复 session 状态到 agent ──
   // 当 restoredSessions 加载完成后，将各步骤的状态注入 agent sessions，
   // 若 agent 已完成但 summary 未完成，自动触发总结流程
+  // 同时恢复 server-side session，确保后续用户输入能正确路由到有历史上下文的 session
+  const restoreFromHistoryRef = useRef(false);
   useEffect(() => {
     if (!agent.restoreSessionState) return;
+    const restoredKeys = Object.keys(state.restoredSessions);
+    if (restoredKeys.length === 0) return;
+
+    // 恢复 client-side 状态（每次 restoredSessions 变化都执行）
     for (const [stepId, snapshot] of Object.entries(state.restoredSessions)) {
       agent.restoreSessionState(stepId, snapshot);
     }
-  }, [state.restoredSessions]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // 恢复 server-side session（仅在 agent 已连接时执行一次）
+    if (agent.connectionStatus === "connected" && !restoreFromHistoryRef.current) {
+      restoreFromHistoryRef.current = true;
+      for (const [stepId, snapshot] of Object.entries(state.restoredSessions)) {
+        const userMessages = (snapshot.messages || []).filter(m => m.role === "user");
+        if (userMessages.length > 0) {
+          agent.restoreServerSession?.(
+            stepId,
+            snapshot.messages,
+            state.intent,
+            state.workspacePath,
+          );
+        }
+      }
+    }
+  }, [state.restoredSessions, agent.connectionStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 会话记录自动保存 ──
   const sessionRecords = useSessionRecords();
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCompletedRef = useRef<Record<string, boolean>>({});
+  /** 记录每个 step 上一次保存时的 turn 数量，用于检测新用户输入后立即保存 */
+  const lastSavedTurnCountRef = useRef<Record<string, number>>({});
 
   const stepSummaries = useMemo(() => {
     const summaries: Record<string, string> = {};
@@ -235,6 +259,10 @@ export function TaskPage() {
 
       const startIntent = async () => {
         await agent.createSession("intent", state.intent, state.workspacePath);
+        // 首次 session 创建后立即保存，确保初始状态不丢失
+        if (taskId && state.intent) {
+          sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
+        }
         await agent.prompt("intent", intentPrompt);
         agent.getFileTree();
       };

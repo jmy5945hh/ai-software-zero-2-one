@@ -12,6 +12,7 @@ export type AgentMethod =
   | "session.continueQuestion"
   | "session.retry"
   | "session.reconnect"
+  | "session.restore"
   | "summarization.save"
   | "summarization.trigger"
   | "workspace.tree"

@@ -511,6 +511,61 @@ export async function handleWsMessage(
         break;
       }
 
+      // ── 从历史恢复 session（创建新 session + 回放历史消息）──
+      case "session.restore": {
+        const { taskId, step, messages } = msg.params as {
+          taskId: string;
+          step: string;
+          messages?: Array<{ role: "user" | "assistant"; content: string }>;
+          intent?: string;
+          workspacePath?: string;
+        };
+        console.log("[session.restore] step=%s messages=%d", step, messages?.length || 0);
+
+        const intent = (msg.params as { intent?: string }).intent || "";
+        const extPath = (msg.params as { workspacePath?: string }).workspacePath;
+        let workspaceDir: string;
+        if (extPath) {
+          workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
+        } else {
+          workspaceDir = workspace.getDir(taskId);
+          if (!fs.existsSync(workspaceDir)) {
+            workspaceDir = workspace.initWorkspace(taskId, intent);
+          }
+        }
+
+        // 如果已有 session，先销毁
+        pool.dispose(taskId, step);
+
+        const session = await runner.createSession(taskId, step, workspaceDir);
+        pool.set(taskId, step, session);
+
+        const unsub = session.subscribe((sdkEvent) => {
+          const event = mapSdkEvent(sdkEvent);
+          if (!event) return;
+          ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
+        });
+        pool.setUnsub(taskId, step, unsub);
+
+        // 回放历史用户消息（用 steer 入队，不触发模型执行）
+        if (messages) {
+          for (const m of messages) {
+            if (m.role === "user") {
+              session.steer(m.content);
+            }
+          }
+        }
+
+        ws.send(
+          JSON.stringify({
+            type: "response",
+            id: msg.id,
+            result: { sessionId: session.sessionId },
+          }),
+        );
+        break;
+      }
+
       // ── 重试整个 Agent 流程 ──────────────
       case "session.retry": {
         const { taskId, step, text, initialPrompt } = msg.params as {

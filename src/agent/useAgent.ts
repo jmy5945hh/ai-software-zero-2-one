@@ -491,6 +491,39 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     [taskId],
   );
 
+  // ── 从历史恢复 server-side session（创建新 session + 回放历史消息）──
+  const restoreServerSession = useCallback(
+    async (
+      step: string,
+      messages: Array<{ role: "user" | "assistant"; content: string }>,
+      intent?: string,
+      workspacePath?: string,
+    ): Promise<string | undefined> => {
+      if (!taskId || !wsRef.current) return undefined;
+      activeStepRef.current = step;
+      try {
+        const result = (await wsRef.current.request("session.restore", {
+          taskId,
+          step,
+          messages,
+          intent,
+          workspacePath,
+        })) as { sessionId: string };
+
+        // 记录 sessionId，用于 WebSocket 重连后自动恢复
+        if (result?.sessionId) {
+          pendingReconnectRef.current[step] = result.sessionId;
+        }
+
+        return result?.sessionId;
+      } catch (err) {
+        console.error("[useAgent] restoreServerSession failed:", step, err);
+        return undefined;
+      }
+    },
+    [taskId],
+  );
+
   // ── 获取文件树 ──
   const getFileTree = useCallback(async () => {
     if (!taskId || !wsRef.current) return;
@@ -965,7 +998,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
           }
 
           case "turn_end": {
-            return {
+            const turnEndState = {
               ...prev,
               [step]: {
                 ...s,
@@ -977,6 +1010,11 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
                 streamingText: "",
               },
             };
+            // 每轮自问自答完成后立即触发保存，保证消息实时性
+            queueMicrotask(() => {
+              onSessionCompleteRef.current?.(step, turnEndState);
+            });
+            return turnEndState;
           }
 
           case "tool_execution_start":
@@ -1291,6 +1329,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     resumeQuestion,
     retrySession,
     reconnectSession,
+    restoreServerSession,
     getFileTree,
     readFile,
     browseDir,
