@@ -1,0 +1,25 @@
+name: Deploy to ALIBABA VM 47.108.128.71
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.KEY }}
+          port: ${{ secrets.PORT }}
+          script: |
+            cd ~/code/ai-software-zero-2-one
+            git pull origin main
+            chmod +x deploy-agent-server.sh
+            ./deploy-agent-server.sh
