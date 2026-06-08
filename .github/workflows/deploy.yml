@@ -2,7 +2,7 @@ name: Deploy to ALIBABA VM 47.108.128.71
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
 
 jobs:
   deploy:
@@ -20,6 +20,6 @@ jobs:
           port: ${{ secrets.PORT }}
           script: |
             cd ~/code/ai-software-zero-2-one
-            git pull origin main
+            git pull origin master
             chmod +x deploy-agent-server.sh
             ./deploy-agent-server.sh
