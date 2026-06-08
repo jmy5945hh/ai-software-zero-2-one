@@ -20,6 +20,7 @@ import {
 import type {
   RuntimeMode,
   ConnectionStatus,
+  EndpointStatus,
   RuntimeStatus,
   ResourceMetrics,
   AgentProject,
@@ -41,6 +42,10 @@ export type RuntimeState = {
   switching: boolean;
   /** 错误信息 */
   error: string | null;
+  /** 本地端点连接状态 */
+  localEndpoint: EndpointStatus;
+  /** 云端端点连接状态 */
+  cloudEndpoint: EndpointStatus;
 };
 
 const initialState: Omit<RuntimeState, "mode"> = {
@@ -50,6 +55,8 @@ const initialState: Omit<RuntimeState, "mode"> = {
   projects: [],
   switching: false,
   error: null,
+  localEndpoint: { connectionStatus: "disconnected", latency: 0 },
+  cloudEndpoint: { connectionStatus: "disconnected", latency: 0 },
 };
 
 /** 惰性初始化：在组件挂载时读取 localStorage */
@@ -70,7 +77,8 @@ type RuntimeAction =
   | { type: "UPDATE_PROJECT"; id: string; patch: Partial<AgentProject> }
   | { type: "REMOVE_PROJECT"; id: string }
   | { type: "SET_SWITCHING"; switching: boolean }
-  | { type: "SET_ERROR"; error: string | null };
+  | { type: "SET_ERROR"; error: string | null }
+  | { type: "SET_ENDPOINT_STATUS"; endpoint: RuntimeMode; status: EndpointStatus };
 
 function reducer(state: RuntimeState, action: RuntimeAction): RuntimeState {
   switch (action.type) {
@@ -102,6 +110,11 @@ function reducer(state: RuntimeState, action: RuntimeAction): RuntimeState {
       return { ...state, switching: action.switching };
     case "SET_ERROR":
       return { ...state, error: action.error };
+    case "SET_ENDPOINT_STATUS":
+      return {
+        ...state,
+        [action.endpoint === "local" ? "localEndpoint" : "cloudEndpoint"]: action.status,
+      };
     default:
       return state;
   }
@@ -132,78 +145,126 @@ const RuntimeActionsContext = createContext<RuntimeActions>({
 
 export function RuntimeProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, () => createInitialState());
-  const connectorRef = useRef<IRuntimeConnector | null>(null);
-  const resourceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // 追踪 handler 取消函数，切换模式时清理旧 handler
+  const localConnectorRef = useRef<IRuntimeConnector | null>(null);
+  const cloudConnectorRef = useRef<IRuntimeConnector | null>(null);
   const unsubscribesRef = useRef<Array<() => void>>([]);
-  // 追踪组件挂载状态，防止异步操作在卸载后继续执行
   const mountedRef = useRef(true);
+  const heartbeatRefs = useRef<{ local: ReturnType<typeof setInterval> | null; cloud: ReturnType<typeof setInterval> | null }>({ local: null, cloud: null });
 
-  /** 清理旧 connector 的 handler 和轮询 */
-  const cleanupConnector = useCallback(() => {
-    for (const unsub of unsubscribesRef.current) unsub();
-    unsubscribesRef.current = [];
-    if (resourceIntervalRef.current) {
-      clearInterval(resourceIntervalRef.current);
-      resourceIntervalRef.current = null;
+  /** 对指定端点发送心跳请求并更新延迟 */
+  const heartbeat = useCallback(async (endpoint: RuntimeMode) => {
+    const connector = endpoint === "local" ? localConnectorRef.current : cloudConnectorRef.current;
+    if (!connector || !mountedRef.current) return;
+    const start = Date.now();
+    try {
+      const status = await connector.getStatus();
+      const latency = Date.now() - start;
+      if (!mountedRef.current) return;
+      dispatch({
+        type: "SET_ENDPOINT_STATUS",
+        endpoint,
+        status: { connectionStatus: status.connected, latency },
+      });
+      if (endpoint === state.mode) {
+        dispatch({ type: "SET_CONNECTION_STATUS", status: status.connected });
+        dispatch({ type: "SET_MODEL_READY", ready: status.modelReady });
+      }
+    } catch {
+      if (!mountedRef.current) return;
+      dispatch({
+        type: "SET_ENDPOINT_STATUS",
+        endpoint,
+        status: { connectionStatus: "error", latency: 0 },
+      });
+      if (endpoint === state.mode) {
+        dispatch({ type: "SET_CONNECTION_STATUS", status: "error" });
+      }
     }
-  }, []);
+  }, [state.mode]);
 
-  /** 建立 connector 连接并注册 handler */
-  const setupConnector = useCallback(async (mode: RuntimeMode) => {
-    cleanupConnector();
-    dispatch({ type: "SET_SWITCHING", switching: true });
-    dispatch({ type: "SET_ERROR", error: null });
+  /** 为指定端点建立连接器 */
+  const setupEndpoint = useCallback(async (mode: RuntimeMode) => {
+    const targetRef = mode === "local" ? localConnectorRef : cloudConnectorRef;
+
+    dispatch({
+      type: "SET_ENDPOINT_STATUS",
+      endpoint: mode,
+      status: { connectionStatus: "connecting", latency: 0 },
+    });
+    if (mode === state.mode) {
+      dispatch({ type: "SET_CONNECTION_STATUS", status: "connecting" });
+    }
 
     try {
       const connector = await switchRuntime(mode);
       if (!mountedRef.current) { connector.disconnect(); return; }
-      connectorRef.current = connector;
-
+      targetRef.current = connector;
 
       unsubscribesRef.current.push(
         connector.onStatusChange((status: RuntimeStatus) => {
-          dispatch({ type: "SET_CONNECTION_STATUS", status: status.connected });
-          dispatch({ type: "SET_MODEL_READY", ready: status.modelReady });
+          if (!mountedRef.current) return;
+          dispatch({
+            type: "SET_ENDPOINT_STATUS",
+            endpoint: mode,
+            status: {
+              connectionStatus: status.connected,
+              latency: mode === "local" ? state.localEndpoint.latency : state.cloudEndpoint.latency,
+            },
+          });
+          if (mode === state.mode) {
+            dispatch({ type: "SET_CONNECTION_STATUS", status: status.connected });
+            dispatch({ type: "SET_MODEL_READY", ready: status.modelReady });
+          }
         }),
       );
 
       unsubscribesRef.current.push(
         connector.onResourceUpdate((metrics: ResourceMetrics) => {
+          if (!mountedRef.current || mode !== state.mode) return;
           dispatch({ type: "SET_RESOURCES", resources: metrics });
         }),
       );
 
-      const projects = await connector.listProjects();
-      if (!mountedRef.current) return;
-      dispatch({ type: "SET_PROJECTS", projects });
+      if (mode === state.mode) {
+        const projects = await connector.listProjects();
+        if (!mountedRef.current) return;
+        dispatch({ type: "SET_PROJECTS", projects });
+      }
 
-      // 周期性刷新资源（仅在 store 层做，connector 不再重复轮询）
-      resourceIntervalRef.current = setInterval(async () => {
-        const metrics = await connector.getResources();
-        dispatch({ type: "SET_RESOURCES", resources: metrics });
-      }, 5000);
+      await heartbeat(mode);
+
+      if (heartbeatRefs.current[mode]) clearInterval(heartbeatRefs.current[mode]);
+      heartbeatRefs.current[mode] = setInterval(() => heartbeat(mode), 5000);
     } catch (err) {
-      connectorRef.current?.disconnect();
-      connectorRef.current = null;
-      dispatch({ type: "SET_CONNECTION_STATUS", status: "error" });
-      dispatch({ type: "SET_ERROR", error: `无法连接到${mode === "local" ? "本地" : "云端"}运行时` });
-      console.error("运行时连接失败:", err);
-    } finally {
-      if (mountedRef.current) {
-        dispatch({ type: "SET_SWITCHING", switching: false });
+      if (targetRef.current) { targetRef.current.disconnect(); targetRef.current = null; }
+      dispatch({
+        type: "SET_ENDPOINT_STATUS",
+        endpoint: mode,
+        status: { connectionStatus: "error", latency: 0 },
+      });
+      if (mode === state.mode) {
+        dispatch({ type: "SET_CONNECTION_STATUS", status: "error" });
+        dispatch({ type: "SET_ERROR", error: `无法连接到${mode === "local" ? "本地" : "云端"}运行时` });
       }
     }
-  }, [cleanupConnector]);
+  }, [state.mode, state.localEndpoint.latency, state.cloudEndpoint.latency, heartbeat]);
 
-  // ── 初始化连接（仅挂载时执行一次）──
+  // ── 初始化：同时连接本地和云端 ──
   useEffect(() => {
     mountedRef.current = true;
-    setupConnector(state.mode);
+    setupEndpoint("local");
+    setupEndpoint("cloud");
 
     return () => {
       mountedRef.current = false;
-      cleanupConnector();
+      for (const unsub of unsubscribesRef.current) unsub();
+      unsubscribesRef.current = [];
+      localConnectorRef.current?.disconnect();
+      cloudConnectorRef.current?.disconnect();
+      localConnectorRef.current = null;
+      cloudConnectorRef.current = null;
+      if (heartbeatRefs.current.local) clearInterval(heartbeatRefs.current.local);
+      if (heartbeatRefs.current.cloud) clearInterval(heartbeatRefs.current.cloud);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -212,44 +273,72 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(RUNTIME_MODE_KEY, state.mode);
   }, [state.mode]);
 
+  /** 获取当前活跃模式的连接器 */
+  const getCurrentConnector = useCallback((): IRuntimeConnector | null => {
+    return state.mode === "local" ? localConnectorRef.current : cloudConnectorRef.current;
+  }, [state.mode]);
+
   // ── Actions ──────────────────────────
 
   const switchMode = useCallback(async (mode: RuntimeMode) => {
     if (mode === state.mode) return;
-    await setupConnector(mode);
+    dispatch({ type: "SET_SWITCHING", switching: true });
+    dispatch({ type: "SET_ERROR", error: null });
+    const targetConnector = mode === "local" ? localConnectorRef.current : cloudConnectorRef.current;
+    if (targetConnector) {
+      try {
+        const status = await targetConnector.getStatus();
+        if (mountedRef.current) {
+          dispatch({ type: "SET_CONNECTION_STATUS", status: status.connected });
+          dispatch({ type: "SET_MODEL_READY", ready: status.modelReady });
+          const projects = await targetConnector.listProjects();
+          dispatch({ type: "SET_PROJECTS", projects });
+        }
+      } catch {
+        await setupEndpoint(mode);
+      }
+    } else {
+      await setupEndpoint(mode);
+    }
     dispatch({ type: "SET_MODE", mode });
-  }, [state.mode, setupConnector]);
+    dispatch({ type: "SET_SWITCHING", switching: false });
+  }, [state.mode, setupEndpoint]);
 
   const refreshProjects = useCallback(async () => {
-    if (!connectorRef.current) return;
-    const projects = await connectorRef.current.listProjects();
+    const connector = getCurrentConnector();
+    if (!connector) return;
+    const projects = await connector.listProjects();
     dispatch({ type: "SET_PROJECTS", projects });
-  }, []);
+  }, [getCurrentConnector]);
 
   const createProject = useCallback(async (params: CreateProjectParams) => {
-    if (!connectorRef.current) throw new Error("No connector");
-    const project = await connectorRef.current.createProject(params);
+    const connector = getCurrentConnector();
+    if (!connector) throw new Error("No connector");
+    const project = await connector.createProject(params);
     dispatch({ type: "ADD_PROJECT", project });
     return project;
-  }, []);
+  }, [getCurrentConnector]);
 
   const deleteProject = useCallback(async (id: string) => {
-    if (!connectorRef.current) throw new Error("No connector");
-    await connectorRef.current.deleteProject(id);
+    const connector = getCurrentConnector();
+    if (!connector) throw new Error("No connector");
+    await connector.deleteProject(id);
     dispatch({ type: "REMOVE_PROJECT", id });
-  }, []);
+  }, [getCurrentConnector]);
 
   const startProject = useCallback(async (id: string) => {
-    if (!connectorRef.current) throw new Error("No connector");
-    await connectorRef.current.startProject(id);
+    const connector = getCurrentConnector();
+    if (!connector) throw new Error("No connector");
+    await connector.startProject(id);
     dispatch({ type: "UPDATE_PROJECT", id, patch: { phase: "running", lastActivity: new Date().toISOString() } });
-  }, []);
+  }, [getCurrentConnector]);
 
   const pauseProject = useCallback(async (id: string) => {
-    if (!connectorRef.current) throw new Error("No connector");
-    await connectorRef.current.pauseProject(id);
+    const connector = getCurrentConnector();
+    if (!connector) throw new Error("No connector");
+    await connector.pauseProject(id);
     dispatch({ type: "UPDATE_PROJECT", id, patch: { phase: "paused", lastActivity: new Date().toISOString() } });
-  }, []);
+  }, [getCurrentConnector]);
 
   const actions: RuntimeActions = {
     switchMode,

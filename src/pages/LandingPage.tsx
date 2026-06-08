@@ -1,15 +1,11 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Sparkles,
   ArrowRight,
-  Eye,
   Zap,
-  Package,
   UserCircle,
   Monitor,
   Cloud,
-  Check,
   Shield,
   FolderOpen,
   Cpu,
@@ -19,17 +15,14 @@ import {
   Users,
 } from "lucide-react";
 import { TypewriterText } from "../components/TypewriterText";
-import { useRuntimeState, useRuntimeActions } from "../stores/runtimeStore";
 
 /**
  * 落地页 —— "/"
- * 产品愿景 / 运行时模式选择（本地·云端）/ 核心价值点 / 优势卡片。
+ * 产品愿景 / 运行时模式介绍（本地·云端）/ 核心价值点 / 优势卡片。
+ * 模式选择下沉到任务执行时，首页仅做能力介绍。
  */
 export function LandingPage() {
   const navigate = useNavigate();
-  const runtimeState = useRuntimeState();
-  const runtimeActions = useRuntimeActions();
-  const [selectedRuntime, setSelectedRuntime] = useState<"local" | "cloud">(runtimeState.mode);
 
   return (
     <>
@@ -70,100 +63,55 @@ export function LandingPage() {
           </div>
         </section>
 
-        {/* ── SECTION 2: 运行时模式选择 ──────── */}
+        {/* ── SECTION 2: 运行时模式介绍 ──────── */}
         <section className="intro-runtime">
-
-          <div className="intro-runtime-cards" onClick={(e) => {
-              // 单击卡片切换选中
-              const card = (e.target as HTMLElement).closest('[data-runtime]');
-              if (!card) return;
-              const mode = card.getAttribute('data-runtime') as 'local' | 'cloud';
-              setSelectedRuntime(mode);
-
-              // 单击 CTA 按钮区进入
-              const cta = (e.target as HTMLElement).closest('.intro-runtime-cta');
-              if (cta) {
-                // 通过 runtime store 切换模式，确保全局状态一致
-                if (mode !== runtimeState.mode) {
-                  runtimeActions.switchMode(mode);
-                }
-                navigate("/dashboard");
-              }
-            }}
-          >
-            {/* Overlap wrapper for visual stacking */}
-
-            <div className={`intro-runtime-overlap-card ${selectedRuntime === "cloud" ? "selected" : "deselected"}`} data-runtime="cloud">
-              {/* 云端运行时 */}
-              <div className="intro-runtime-card cloud">
-                <div className="intro-runtime-card-header">
-                  <div className="intro-runtime-icon cloud-icon">
-                    <Cloud size={28} />
-                  </div>
-                  <Check size={16} className={`intro-runtime-check ${selectedRuntime === "cloud" ? "checked" : ""}`} />
-                </div>
-                <h3>云端 Agent 运行时</h3>
-                
-                <ul className="intro-runtime-features">
-                  <li>
-                    <Globe size={13} />
-                    7×24 在线
-                  </li>
-                  <li>
-                    <Layers size={13} />
-                    定时任务
-                  </li>
-                  <li>
-                    <Clock size={13} />
-                    远程执行
-                  </li>
-                  <li>
-                    <Users size={13} />
-                    协作共享
-                  </li>
-                </ul>
-                <span className="intro-runtime-cta">
-                  云端Agent，马上开始！
-                  <ArrowRight size={14} />
-                </span>
-              </div>
-            </div>
-            <div className={`intro-runtime-overlap-card ${selectedRuntime === "local" ? "selected" : "deselected"}`} data-runtime="local">
-              {/* 本地运行时 */}
+          <div className="intro-runtime-cards">
+            {/* 本地运行时 — 纯介绍 */}
+            <div className="intro-runtime-overlap-card">
               <div className="intro-runtime-card local">
                 <div className="intro-runtime-card-header">
                   <div className="intro-runtime-icon local-icon">
                     <Monitor size={28} />
                   </div>
-                  <Check size={16} className={`intro-runtime-check ${selectedRuntime === "local" ? "checked" : ""}`} />
                 </div>
                 <h3>本地 CLI Agent</h3>
                 <ul className="intro-runtime-features">
-                  <li>
-                    <Shield size={13} />
-                    快速响应
-                  </li>
-                  <li>
-                    <FolderOpen size={13} />
-                    文件系统
-                  </li>
-                  <li>
-                    <Cpu size={13} />
-                    本地工具
-                  </li>
-                  <li>
-                    <Zap size={13} />
-                    低延迟
-                  </li>
+                  <li><Shield size={13} />快速响应</li>
+                  <li><FolderOpen size={13} />文件系统</li>
+                  <li><Cpu size={13} />本地工具</li>
+                  <li><Zap size={13} />低延迟</li>
                 </ul>
-                <span className="intro-runtime-cta">
-                  本地CLI底座模式
-                  <ArrowRight size={14} />
-                </span>
               </div>
             </div>
 
+            {/* 云端运行时 — 纯介绍 */}
+            <div className="intro-runtime-overlap-card">
+              <div className="intro-runtime-card cloud">
+                <div className="intro-runtime-card-header">
+                  <div className="intro-runtime-icon cloud-icon">
+                    <Cloud size={28} />
+                  </div>
+                </div>
+                <h3>云端 Agent 运行时</h3>
+                <ul className="intro-runtime-features">
+                  <li><Globe size={13} />7×24 在线</li>
+                  <li><Layers size={13} />定时任务</li>
+                  <li><Clock size={13} />远程执行</li>
+                  <li><Users size={13} />协作共享</li>
+                </ul>
+              </div>
+            </div>
           </div>
+
+          {/* 立即开始按钮 */}
+          <button
+            className="intro-runtime-start-btn"
+            type="button"
+            onClick={() => navigate("/dashboard")}
+          >
+            立即开始！
+            <ArrowRight size={20} />
+          </button>
         </section>
 
         {/* ── SECTION 3: 用户核心价值点 ────── */}

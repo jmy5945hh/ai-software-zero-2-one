@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Folder, FolderOpen, File, ChevronRight, Home, Check, X, GitBranch, Globe } from "lucide-react";
+import { Folder, FolderOpen, File, ChevronRight, Home, Check, X, GitBranch, Globe, Monitor, Cloud, Check as CheckIcon } from "lucide-react";
 
 export type BrowseEntry = {
   name: string;
@@ -7,15 +7,17 @@ export type BrowseEntry = {
   path: string;
 };
 
+export type RuntimeMode = "local" | "cloud";
+
 type WorkspaceSelectorProps = {
-  onConfirm: (path: string) => void;
+  onConfirm: (path: string, mode: RuntimeMode) => void;
   onCancel: () => void;
   /** 浏览目录的回调（传入路径，返回条目列表） */
   onBrowse?: (dirPath: string) => Promise<BrowseEntry[]>;
   /** 初始路径 */
   initialPath?: string;
   /** 运行时模式：本地显示文件路径，云端显示 Git 仓库信息 */
-  mode?: "local" | "cloud";
+  mode?: RuntimeMode;
 };
 
 /**
@@ -37,6 +39,9 @@ export function WorkspaceSelector({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showBrowser, setShowBrowser] = useState(false);
+
+  // ── 内部模式状态（可切换） ──
+  const [internalMode, setInternalMode] = useState<RuntimeMode>(mode);
 
   // ── 云端模式状态 ──
   const [gitUrl, setGitUrl] = useState(initialPath && mode === "cloud" ? initialPath : "");
@@ -99,19 +104,20 @@ export function WorkspaceSelector({
     }
   };
 
+
+
+  const isCloud = internalMode === "cloud";
+
   const handleConfirm = () => {
-    if (mode === "cloud") {
+    if (internalMode === "cloud") {
       const url = gitUrl.trim();
       if (!url) return;
       const branch = gitBranch.trim() || "main";
-      // 编码为 url#branch 格式，后端可按 # 分割
-      onConfirm(`${url}#${branch}`);
+      onConfirm(`${url}#${branch}`, internalMode);
     } else {
-      onConfirm(currentPath);
+      onConfirm(currentPath, internalMode);
     }
   };
-
-  const isCloud = mode === "cloud";
 
   return (
     <div className="ws-selector-backdrop" onClick={onCancel}>
@@ -124,6 +130,28 @@ export function WorkspaceSelector({
           </div>
           <button className="ghost-button" type="button" onClick={onCancel}>
             <X size={16} />
+          </button>
+        </div>
+
+        {/* 模式切换器 */}
+        <div className="ws-selector-mode-switcher">
+          <button
+            className={`ws-mode-btn ${internalMode === "local" ? "active" : ""}`}
+            type="button"
+            onClick={() => setInternalMode("local")}
+          >
+            <Monitor size={15} />
+            本地
+            {internalMode === "local" && <CheckIcon size={13} className="ws-mode-check" />}
+          </button>
+          <button
+            className={`ws-mode-btn ${internalMode === "cloud" ? "active" : ""}`}
+            type="button"
+            onClick={() => setInternalMode("cloud")}
+          >
+            <Cloud size={15} />
+            云端
+            {internalMode === "cloud" && <CheckIcon size={13} className="ws-mode-check" />}
           </button>
         </div>
 

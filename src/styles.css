@@ -192,10 +192,10 @@ p {
 
 /* ── Home Shell ──────────────────────────── */
 .home-shell {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  min-height: 100vh;
-  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* ── Home Nav ─────────────────────────────── */
@@ -204,7 +204,8 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding-bottom: 12px;
+  flex-shrink: 0;
+  padding: 24px 32px 12px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -271,13 +272,38 @@ p {
 
 /* ── Home Hero ────────────────────────────── */
 .home-hero {
+  flex: 1;
   display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 32px;
-  width: min(1080px, 100%);
-  margin: 0 auto;
-  padding: 40px 0 40px;
+  grid-template-columns: 220px 1fr;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  align-items: start;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+/* ── Home Sidebar ────────────────────────── */
+.home-sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  padding: 32px 24px;
+  border-right: 1px solid var(--line);
+  background: var(--bg-soft);
+  min-height: 100%;
+}
+
+/* ── Home Content ────────────────────────── */
+.home-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  min-height: 100%;
 }
 
 .home-copy {
@@ -372,6 +398,54 @@ p {
 .launch-actions span {
   color: var(--muted-warm);
   font-size: 0.75rem;
+}
+
+/* ── Dashboard 模式切换控件（想法实现区域） ── */
+.launch-panel-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.dashboard-mode-switcher {
+  display: inline-flex;
+  gap: 0;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--bg-soft);
+  overflow: hidden;
+}
+
+.dashboard-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 14px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.dashboard-mode-btn:hover {
+  color: var(--text);
+  background: var(--primary-light);
+}
+
+.dashboard-mode-btn.active {
+  color: #F9F8F4;
+  background: var(--text);
+  font-weight: 600;
+}
+
+.dashboard-mode-check {
+  flex-shrink: 0;
 }
 
 /* ── Example Strip ────────────────────────── */
@@ -1686,29 +1760,28 @@ p {
 /* ── Home Tabs ───────────────────────────── */
 .home-tabs {
   display: flex;
-  gap: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  background: var(--panel);
-  box-shadow: var(--shadow-sm);
+  flex-direction: column;
+  gap: 4px;
 }
 
 .home-tab {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  gap: 10px;
   min-height: 44px;
-  padding: 0 28px;
+  width: 100%;
+  padding: 0 16px;
   border: 0;
+  border-radius: var(--radius-md);
   color: var(--muted);
   background: transparent;
   font-family: var(--font-heading);
   font-size: 0.9rem;
   font-weight: 500;
   letter-spacing: 0;
+  cursor: pointer;
   transition: all var(--duration-fast) var(--ease-gentle);
+  text-align: left;
 }
 
 .home-tab:hover {
@@ -1717,9 +1790,8 @@ p {
 }
 
 .home-tab.active {
-  color: #F9F8F4;
-  background: var(--text);
-  border-radius: var(--radius-full);
+  color: var(--text);
+  background: var(--panel);
   font-weight: 600;
   box-shadow: var(--shadow-sm);
 }
@@ -2402,10 +2474,6 @@ p {
     padding: 12px;
   }
 
-  .home-shell {
-    padding: 16px;
-  }
-
   .home-nav,
   .topbar,
   .guided-grid,
@@ -2488,14 +2556,54 @@ p {
     grid-template-columns: 1fr;
   }
 
+  .home-shell {
+    overflow: auto;
+    height: auto;
+  }
+
+  .home-nav,
+  .topbar {
+    flex: none;
+    padding: 16px 16px 12px;
+  }
+
+  .home-hero {
+    flex: none;
+    grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
+  }
+
+  .home-sidebar {
+    position: static;
+    height: auto;
+    min-height: auto;
+    padding: 16px 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .home-content {
+    min-height: auto;
+    height: auto;
+    overflow: visible;
+  }
+
   .home-tabs {
-    width: 100%;
+    flex-direction: row;
+    gap: 2px;
   }
 
   .home-tab {
-    flex: 1;
-    padding: 0 16px;
+    justify-content: center;
+    padding: 0 12px;
     font-size: 0.82rem;
+    width: auto;
+    min-height: 40px;
+  }
+
+  .home-content {
+    padding: 16px;
   }
 
   .preview-meta-grid {
@@ -4065,6 +4173,51 @@ p {
   font-weight: 600;
   line-height: 1.3;
   color: var(--text);
+}
+
+/* ── WorkspaceSelector 模式切换器 ── */
+.ws-selector-mode-switcher {
+  display: flex;
+  gap: 0;
+  margin-bottom: 24px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--bg-soft);
+  overflow: hidden;
+}
+
+.ws-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  justify-content: center;
+  min-height: 36px;
+  padding: 6px 16px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.ws-mode-btn:hover {
+  color: var(--text);
+  background: var(--primary-light);
+}
+
+.ws-mode-btn.active {
+  color: #F9F8F4;
+  background: var(--text);
+  font-weight: 600;
+}
+
+.ws-mode-check {
+  flex-shrink: 0;
 }
 
 .ws-selector-path-row {

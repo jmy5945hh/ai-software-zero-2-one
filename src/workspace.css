@@ -3816,3 +3816,99 @@
   height: 100%;
   overflow: auto;
 }
+
+
+/* ── 双端点状态指示器 ── */
+.dual-endpoint-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dual-endpoint-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  transition: all 0.3s ease;
+}
+
+.dual-endpoint-badge .endpoint-icon {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.7;
+}
+
+.dual-endpoint-badge .endpoint-label {
+  font-weight: 600;
+  color: var(--muted-warm);
+}
+
+.dual-endpoint-badge .endpoint-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.dual-endpoint-badge .endpoint-status-dot.connected {
+  background: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+.dual-endpoint-badge .endpoint-status-dot.error,
+.dual-endpoint-badge .endpoint-status-dot.disconnected {
+  background: var(--muted);
+  opacity: 0.5;
+}
+
+.dual-endpoint-badge .endpoint-status-text {
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.dual-endpoint-badge.connected {
+  border-color: rgba(76, 175, 80, 0.3);
+  background: rgba(76, 175, 80, 0.06);
+}
+
+.dual-endpoint-badge.connected .endpoint-status-text {
+  color: #388E3C;
+}
+
+.dual-endpoint-badge.connecting {
+  border-color: #f0c040;
+  background: #fef9e7;
+}
+
+.dual-endpoint-badge.connecting .endpoint-status-text {
+  color: #b7950b;
+}
+
+.dual-endpoint-badge.error {
+  border-color: var(--terracotta);
+  background: var(--terracotta-light);
+}
+
+.dual-endpoint-badge.error .endpoint-status-text {
+  color: var(--terracotta);
+}
+
+.dual-endpoint-badge .endpoint-latency {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 1px;
+  font-size: 0.6rem;
+  opacity: 0.7;
+  font-family: "SF Mono", monospace;
+}
+

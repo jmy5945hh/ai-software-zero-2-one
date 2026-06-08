@@ -13,6 +13,12 @@ export type ConnectionStatus =
   | "connected"
   | "error";
 
+/** 单端连接快照 */
+export type EndpointStatus = {
+  connectionStatus: ConnectionStatus;
+  latency: number;
+};
+
 /** 项目阶段 */
 export type ProjectPhase =
   | "draft"

@@ -632,7 +632,7 @@
 }
 
 /* ═══════════════════════════════════════════
-   Runtime Mode Selection
+   Runtime Mode Introduction (展示非选择)
    ═══════════════════════════════════════════ */
 
 .intro-runtime {
@@ -651,126 +651,50 @@
   margin-bottom: 36px;
 }
 
+/* ── 卡片并排展示（flex） ── */
 .intro-runtime-cards {
-  position: relative;
-  min-height: 410px;
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  align-items: stretch;
 }
 
-/* ── 重叠卡片容器 ────────────────────── */
+/* ── 卡片容器（不再定位重叠，正常流排列） ── */
 .intro-runtime-overlap-card {
-  position: absolute;
-  width: 75%;
+  flex: 1;
+  max-width: 420px;
   transition: all var(--duration-regular) var(--ease-out);
-  z-index: 1;
-}
-
-/* 卡片1（本地）：左上位置，默认选中 */
-.intro-runtime-overlap-card:first-child {
-  left: 0;
-  top: 0;
-}
-
-/* 卡片2（云端）：右下偏移，与卡片1右下~左上交叠 */
-.intro-runtime-overlap-card:last-child {
-  right: 0;
-  bottom: 0;
-}
-
-/* 选中态：上层覆盖 */
-.intro-runtime-overlap-card.selected {
-  z-index: 3;
-}
-
-.intro-runtime-overlap-card.deselected {
-  z-index: 1;
-}
-
-.intro-runtime-overlap-card.deselected:hover {
-  /* no hover effect when deselected */
 }
 
 .intro-runtime-card {
   position: relative;
   display: grid;
   gap: 12px;
-  padding: 28px 32px;
+  padding: 32px 32px;
   border: 1.5px solid var(--line);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  cursor: pointer;
+  box-shadow: var(--shadow-sm);
   text-align: left;
   transition: all var(--duration-regular) var(--ease-out);
   font-family: var(--font-body);
   color: var(--text);
   overflow: hidden;
   width: 100%;
+  cursor: default;
 }
 
 .intro-runtime-card.local {
-  background: linear-gradient(135deg, rgba(140, 154, 132, 0.08), var(--panel) 10%);
+  background: linear-gradient(135deg, rgba(140, 154, 132, 0.06), var(--panel) 10%);
 }
 
 .intro-runtime-card.cloud {
-  background: linear-gradient(135deg, rgba(124, 124, 154, 0.06), var(--panel) 10%);
-}
-
-.intro-runtime-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.12);
-}
-
-.intro-runtime-card.local:hover {
-  border-color: var(--primary);
-  background: linear-gradient(135deg, rgba(140, 154, 132, 0.14), var(--panel) 30%);
-  box-shadow: 0 20px 48px -12px rgba(140, 154, 132, 0.22);
-}
-
-.intro-runtime-card.cloud:hover {
-  border-color: #6C6C8A;
-  background: linear-gradient(135deg, rgba(124, 124, 154, 0.1), var(--panel) 30%);
-  box-shadow: 0 20px 48px -12px rgba(124, 124, 154, 0.2);
-}
-
-/* 选中态脉冲 */
-.intro-runtime-card:active {
-  transform: scale(0.97);
-}
-
-/* 选中卡片的高亮光环 */
-.intro-runtime-overlap-card.selected .intro-runtime-card::after {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  border-radius: calc(var(--radius-lg) + 2px);
-  border: 2px solid var(--primary);
-  opacity: 0.4;
-  pointer-events: none;
-  animation: runtimeSelectedPulse 2.5s ease-in-out infinite;
-}
-
-.intro-runtime-overlap-card.selected .intro-runtime-card.cloud::after {
-  border-color: #6C6C8A;
-}
-
-@keyframes runtimeSelectedPulse {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.7; }
-}
-
-/* 选中标记 */
-.intro-runtime-check {
-  opacity: 0.2;
-  transition: all var(--duration-fast) var(--ease-gentle);
-}
-
-.intro-runtime-check.checked {
-  opacity: 1;
+  background: linear-gradient(135deg, rgba(124, 124, 154, 0.04), var(--panel) 10%);
 }
 
 .intro-runtime-card-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .intro-runtime-icon {
@@ -779,7 +703,6 @@
   width: 60px;
   height: 60px;
   border-radius: var(--radius-md);
-  transition: all var(--duration-regular) var(--ease-out);
 }
 
 .intro-runtime-icon.local-icon {
@@ -794,16 +717,6 @@
   box-shadow: 0 0 0 6px rgba(124, 124, 154, 0.05);
 }
 
-.intro-runtime-card:hover .intro-runtime-icon.local-icon {
-  box-shadow: 0 0 0 10px rgba(140, 154, 132, 0.1);
-}
-
-.intro-runtime-card:hover .intro-runtime-icon.cloud-icon {
-  box-shadow: 0 0 0 10px rgba(124, 124, 154, 0.08);
-}
-
-
-
 .intro-runtime-card h3 {
   font-family: var(--font-heading);
   font-size: 1.3rem;
@@ -811,45 +724,6 @@
   color: var(--text);
   margin: 0;
   letter-spacing: -0.01em;
-}
-
-/* ── 卡片2（云端）：视觉中心右移 ───── */
-.intro-runtime-overlap-card:last-child .intro-runtime-card {
-  padding-right: 28px;
-}
-
-.intro-runtime-overlap-card:last-child .intro-runtime-card-header {
-  flex-direction: row-reverse;
-}
-
-.intro-runtime-overlap-card:last-child .intro-runtime-card h3 {
-  text-align: right;
-  padding-right: 12px;
-}
-
-.intro-runtime-overlap-card:last-child .intro-runtime-card > p {
-  text-align: right;
-}
-
-.intro-runtime-overlap-card:last-child .intro-runtime-features {
-  direction: rtl;
-  text-align: right;
-}
-
-.intro-runtime-overlap-card:last-child .intro-runtime-features li {
-  direction: ltr;
-  justify-content: flex-end;
-}
-
-.intro-runtime-overlap-card:last-child .intro-runtime-cta {
-  justify-self: end;
-}
-
-.intro-runtime-card > p {
-  color: var(--muted-warm);
-  font-size: 0.82rem;
-  line-height: 1.65;
-  margin: 0;
 }
 
 .intro-runtime-features {
@@ -877,44 +751,47 @@
   color: #6C6C8A;
 }
 
-.intro-runtime-cta {
+/* ── 立即开始按钮 ── */
+.intro-runtime-start-btn {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  justify-self: start;
-  margin-top: 6px;
-  padding: 10px 24px;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 36px;
+  padding: 14px 44px;
+  border: none;
   border-radius: var(--radius-full);
-  font-size: 0.76rem;
+  color: #F9F8F4;
+  background: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.92rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  transition: all var(--duration-fast) var(--ease-gentle);
+  letter-spacing: 0.1em;
   cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+  box-shadow: var(--shadow-md);
 }
 
-.intro-runtime-card.local .intro-runtime-cta {
-  color: #F9F8F4;
-  background: var(--primary);
+.intro-runtime-start-btn:hover {
+  background: var(--terracotta);
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+  gap: 16px;
 }
 
-.intro-runtime-card.cloud .intro-runtime-cta {
-  color: #F9F8F4;
-  background: #6C6C8A;
+.intro-runtime-start-btn:active {
+  transform: scale(0.97);
 }
 
-.intro-runtime-card:hover .intro-runtime-cta {
-  gap: 14px;
-}
-
-/* ── Responsive ──────────────────────────── */
+/* ── Responsive (intro-runtime) ─────────── */
 @media (max-width: 768px) {
-  .intro-runtime-overlap-card {
-    width: 90%;
+  .intro-runtime-cards {
+    flex-direction: column;
+    align-items: center;
   }
-  .intro-runtime-overlap-card:last-child {
-    right: 0;
-    bottom: 0;
+  .intro-runtime-overlap-card {
+    max-width: 100%;
   }
 }
 

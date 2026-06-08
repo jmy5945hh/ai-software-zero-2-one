@@ -13,13 +13,12 @@ import {
   UserCircle,
   FileText,
   History,
-  Wifi,
-  WifiOff,
-  Loader2,
   Monitor,
   Cloud,
+  Check,
   SignalHigh,
   SignalMedium,
+  Loader2,
 } from "lucide-react";
 
 import { HomeTaskBoard } from "../components/HomeTaskBoard";
@@ -57,6 +56,9 @@ export function DashboardPage() {
     [setState],
   );
 
+  // ── Dashboard 级别的模式选择（用于想法实现区域） ──
+  const [dashboardMode, setDashboardMode] = useState<"local" | "cloud">(runtimeState.mode);
+
   const requestStartTask = useCallback(
     (intent: string, notes: string, activeTaskCard: AppState["activeTaskCard"]) => {
       setDocsError(null);
@@ -70,17 +72,22 @@ export function DashboardPage() {
         activeTaskCard,
         createdAt: new Date().toISOString(),
         sessionId,
-        runtimeMode: runtimeState.mode,
+        runtimeMode: dashboardMode,
       }));
       setShowWorkspacePicker(true);
     },
-    [setState, runtimeState.mode],
+    [setState, dashboardMode],
   );
 
   const confirmWorkspace = useCallback(
-    async (path: string) => {
+    async (path: string, mode: "local" | "cloud") => {
       setDocsError(null);
-      const isCloud = runtimeState.mode === "cloud";
+      const isCloud = mode === "cloud";
+
+      // 同步 runtimeMode 到全局 store（用于连接器等）
+      if (mode !== runtimeState.mode) {
+        runtimeActions.switchMode(mode);
+      }
 
       if (isCloud) {
         // 云端模式：path 格式为 "url#branch"，解析为 gitRepo 配置
@@ -106,7 +113,7 @@ export function DashboardPage() {
             gitRepo: { url, branch },
             workspacePath: "",
             view: "workspace",
-            runtimeMode: "cloud",
+            runtimeMode: mode,
           }));
         } catch (err) {
           console.warn("[DashboardPage] Failed to persist cloud workspace:", err);
@@ -151,13 +158,14 @@ export function DashboardPage() {
           ...currentState,
           workspacePath: path,
           view: "workspace",
+          runtimeMode: mode,
         }));
       } catch (err) {
         console.warn("[DashboardPage] Failed to persist local workspace:", err);
       }
       navigate(`/task?sessionId=${state.sessionId}`);
     },
-    [setState, navigate, state, agentAvailable, agent, runtimeState.mode],
+    [setState, navigate, state, agentAvailable, agent, runtimeState.mode, runtimeActions],
   );
 
   const cancelWorkspacePicker = useCallback(() => {
@@ -235,35 +243,22 @@ export function DashboardPage() {
             </div>
           </div>
           <div className="home-nav-right">
-            {/* Agent 运行时状态徽章 */}
-            <div className={`agent-status-badge ${runtimeState.connectionStatus === "connected" ? "connected" : runtimeState.connectionStatus === "connecting" || runtimeState.connectionStatus === "error" ? "connecting" : "disconnected"}`}>
-              {runtimeState.mode === "local" ? <Monitor size={13} /> : <Cloud size={13} />}
-              <span className="agent-mode-label">{runtimeState.mode === "local" ? "本地" : "云端"}</span>
-              <span className="agent-mode-sep">·</span>
-              {runtimeState.connectionStatus === "connected" ? (
-                <>
-                  <Wifi size={11} />
-                  <span>已连接</span>
-                  {agent.connectionQuality.latency > 0 && (
-                    <span className="agent-latency">
-                      {agent.connectionQuality.latency < 150 ? <SignalHigh size={11} /> : <SignalMedium size={11} />}
-                      {agent.connectionQuality.latency < 100
-                        ? `${agent.connectionQuality.latency}ms`
-                        : `${Math.round(agent.connectionQuality.latency / 100) / 10}s`}
-                    </span>
-                  )}
-                </>
-              ) : runtimeState.connectionStatus === "connecting" ? (
-                <>
-                  <Loader2 size={11} className="agent-spin" />
-                  <span>连接中</span>
-                </>
-              ) : (
-                <>
-                  <WifiOff size={11} />
-                  <span className="agent-disconnected-text">未连接</span>
-                </>
-              )}
+            {/* Agent 运行时状态徽章 — 双端点 */}
+            <div className="dual-endpoint-status">
+              <EndpointBadge
+                label="本地"
+                icon={<Monitor size={12} />}
+                status={runtimeState.localEndpoint.connectionStatus}
+                latency={runtimeState.localEndpoint.latency}
+                disconnectedLabel="待启动"
+              />
+              <EndpointBadge
+                label="云端"
+                icon={<Cloud size={12} />}
+                status={runtimeState.cloudEndpoint.connectionStatus}
+                latency={runtimeState.cloudEndpoint.latency}
+                disconnectedLabel="无信号"
+              />
             </div>
             <div className="home-user-info">
               <UserCircle size={18} />
@@ -276,66 +271,91 @@ export function DashboardPage() {
         </header>
 
         <section className="home-hero">
+          <aside className="home-sidebar">
+            <nav className="home-tabs">
+              <button
+                className={`home-tab ${state.homeTab === "tasks" ? "active" : ""}`}
+                type="button"
+                onClick={() => updateHomeTab("tasks")}
+              >
+                <ListTodo size={18} />
+                任务交付
+              </button>
+              <button
+                className={`home-tab ${state.homeTab === "build" ? "active" : ""}`}
+                type="button"
+                onClick={() => updateHomeTab("build")}
+              >
+                <Sparkles size={18} />
+                想法实现
+              </button>
+              <button
+                className={`home-tab ${state.homeTab === "history" ? "active" : ""}`}
+                type="button"
+                onClick={() => updateHomeTab("history")}
+              >
+                <History size={18} />
+                历史会话
+              </button>
+            </nav>
+          </aside>
 
-          <div className="home-tabs">
-            <button
-              className={`home-tab ${state.homeTab === "tasks" ? "active" : ""}`}
-              type="button"
-              onClick={() => updateHomeTab("tasks")}
-            >
-              <ListTodo size={18} />
-              任务交付
-            </button>
-            <button
-              className={`home-tab ${state.homeTab === "build" ? "active" : ""}`}
-              type="button"
-              onClick={() => updateHomeTab("build")}
-            >
-              <Sparkles size={18} />
-              想法实现
-            </button>
-            <button
-              className={`home-tab ${state.homeTab === "history" ? "active" : ""}`}
-              type="button"
-              onClick={() => updateHomeTab("history")}
-            >
-              <History size={18} />
-              历史会话
-            </button>
-          </div>
-
-          {state.homeTab === "tasks" ? (
-            <HomeTaskBoard state={state} setState={setState} onPatch={patchState} onRequestStartTask={requestStartTask} onBrowseDir={agentAvailable ? agent.browseDir : undefined} />
-          ) : state.homeTab === "build" ? (
-            <div className="launch-panel">
-              <label htmlFor="intent">Hi, 今天想创造点什么？</label>
-              <textarea
-                id="intent"
-                value={state.intent}
-                onChange={(event) => patchState({ intent: event.target.value })}
-                rows={4}
-              />
-              <div className="launch-actions">
-                <button
-                  className="primary-action"
-                  type="button"
-                  onClick={startTaskFromIntent}
-                >
-                  <Play size={17} />
-                  开始
-                </button>
-                <span>状态会自动保存到浏览器 storage</span>
+          <div className="home-content">
+            {state.homeTab === "tasks" ? (
+              <HomeTaskBoard state={state} setState={setState} onPatch={patchState} onRequestStartTask={requestStartTask} onBrowseDir={agentAvailable ? agent.browseDir : undefined} />
+            ) : state.homeTab === "build" ? (
+              <div className="launch-panel">
+                <label htmlFor="intent">Hi, 今天想创造点什么？</label>
+                <div className="launch-panel-mode-row">
+                  <div className="dashboard-mode-switcher">
+                    <button
+                      className={`dashboard-mode-btn ${dashboardMode === "local" ? "active" : ""}`}
+                      type="button"
+                      onClick={() => setDashboardMode("local")}
+                    >
+                      <Monitor size={13} />
+                      本地
+                      {dashboardMode === "local" && <Check size={11} className="dashboard-mode-check" />}
+                    </button>
+                    <button
+                      className={`dashboard-mode-btn ${dashboardMode === "cloud" ? "active" : ""}`}
+                      type="button"
+                      onClick={() => setDashboardMode("cloud")}
+                    >
+                      <Cloud size={13} />
+                      云端
+                      {dashboardMode === "cloud" && <Check size={11} className="dashboard-mode-check" />}
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  id="intent"
+                  value={state.intent}
+                  onChange={(event) => patchState({ intent: event.target.value })}
+                  rows={4}
+                />
+                <div className="launch-actions">
+                  <button
+                    className="primary-action"
+                    type="button"
+                    onClick={startTaskFromIntent}
+                  >
+                    <Play size={17} />
+                    开始
+                  </button>
+                  <span>状态会自动保存到浏览器 storage</span>
+                </div>
               </div>
-            </div>
-          ) : (
-            <SessionHistoryPanel
-              records={sessionRecords.records}
-              loading={sessionRecords.loading}
-              onContinue={handleContinueFromHistory}
-              onDelete={sessionRecords.deleteRecord}
-              onRefresh={sessionRecords.refreshRecords}
-            />
-          )}
+            ) : (
+              <SessionHistoryPanel
+                records={sessionRecords.records}
+                loading={sessionRecords.loading}
+                onContinue={handleContinueFromHistory}
+                onDelete={sessionRecords.deleteRecord}
+                onRefresh={sessionRecords.refreshRecords}
+              />
+            )}
+          </div>
         </section>
       </main>
 
@@ -364,10 +384,60 @@ export function DashboardPage() {
             onCancel={cancelWorkspacePicker}
             onBrowse={agentAvailable ? agent.browseDir : undefined}
             initialPath={state.workspacePath || "~"}
-            mode={runtimeState.mode}
+            mode={state.runtimeMode || dashboardMode}
           />
         </>
       )}
     </>
+  );
+}
+
+// ── 端点状态徽章子组件 ──────────────────────
+
+function EndpointBadge({
+  label,
+  icon,
+  status,
+  latency,
+  disconnectedLabel,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  status: string;
+  latency: number;
+  disconnectedLabel: string;
+}) {
+  return (
+    <div className={`dual-endpoint-badge ${status}`}>
+      <span className="endpoint-icon">{icon}</span>
+      <span className="endpoint-label">{label}</span>
+      {status === "connected" ? (
+        <>
+          <span className="endpoint-status-dot connected" />
+          <span className="endpoint-status-text">已连接</span>
+          {latency > 0 && (
+            <span className="endpoint-latency">
+              {latency < 150 ? <SignalHigh size={10} /> : <SignalMedium size={10} />}
+              {latency < 100 ? `${latency}ms` : `${(latency / 1000).toFixed(1)}s`}
+            </span>
+          )}
+        </>
+      ) : status === "connecting" ? (
+        <>
+          <Loader2 size={10} className="agent-spin" />
+          <span className="endpoint-status-text">连接中</span>
+        </>
+      ) : status === "error" ? (
+        <>
+          <span className="endpoint-status-dot error" />
+          <span className="endpoint-status-text">{disconnectedLabel}</span>
+        </>
+      ) : (
+        <>
+          <span className="endpoint-status-dot disconnected" />
+          <span className="endpoint-status-text">{disconnectedLabel}</span>
+        </>
+      )}
+    </div>
   );
 }

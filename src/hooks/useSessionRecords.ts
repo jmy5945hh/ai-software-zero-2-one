@@ -3,7 +3,6 @@ import type { AppState } from "../data/types";
 import { AgentWebSocket } from "../agent/ws";
 import { buildAgentWsUrl } from "../agent/config";
 import type { RuntimeMode } from "../types/runtime";
-import { RUNTIME_MODE_KEY } from "../types/runtime";
 
 // ── 会话记录类型（与服务端 SessionStore 对齐） ──
 
@@ -95,50 +94,100 @@ export type SessionRecord = SessionMeta & {
 export function useSessionRecords() {
   const [records, setRecords] = useState<SessionMeta[]>([]);
   const [loading, setLoading] = useState(false);
-  const wsRef = useRef<AgentWebSocket | null>(null);
-  const connectedRef = useRef(false);
 
-  // ── 建立 WebSocket 连接 ──
+  // ── 双连接：本地和云端各自独立的 WebSocket ──
+  const wsLocalRef = useRef<AgentWebSocket | null>(null);
+  const wsCloudRef = useRef<AgentWebSocket | null>(null);
+  const localReadyRef = useRef(false);
+  const cloudReadyRef = useRef(false);
+
+  /** 获取指定模式的 WebSocket（用于写操作时路由到正确的连接） */
+  const getWsForMode = useCallback((mode: RuntimeMode): AgentWebSocket | null => {
+    return mode === "cloud" ? wsCloudRef.current : wsLocalRef.current;
+  }, []);
+
+  /** 检查指定模式的连接是否就绪 */
+  const isWsReady = useCallback((mode: RuntimeMode): boolean => {
+    return mode === "cloud" ? cloudReadyRef.current : localReadyRef.current;
+  }, []);
+
+  // ── 建立双 WebSocket 连接 ──
   useEffect(() => {
-    const runtimeMode = (localStorage.getItem(RUNTIME_MODE_KEY) as RuntimeMode) || "local";
-    const wsUrl = buildAgentWsUrl(runtimeMode);
-    const ws = new AgentWebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onOpen(() => {
-      connectedRef.current = true;
-      // 连接后自动加载记录列表
+    // 本地连接
+    const localUrl = buildAgentWsUrl("local");
+    const localWs = new AgentWebSocket(localUrl);
+    wsLocalRef.current = localWs;
+    localWs.onOpen(() => {
+      localReadyRef.current = true;
       refreshRecords();
     });
+    localWs.onClose(() => {
+      localReadyRef.current = false;
+    });
 
-    ws.onClose(() => {
-      connectedRef.current = false;
+    // 云端连接
+    const cloudUrl = buildAgentWsUrl("cloud");
+    const cloudWs = new AgentWebSocket(cloudUrl);
+    wsCloudRef.current = cloudWs;
+    cloudWs.onOpen(() => {
+      cloudReadyRef.current = true;
+      refreshRecords();
+    });
+    cloudWs.onClose(() => {
+      cloudReadyRef.current = false;
     });
 
     return () => {
-      ws.close();
-      wsRef.current = null;
-      connectedRef.current = false;
+      localWs.close();
+      cloudWs.close();
+      wsLocalRef.current = null;
+      wsCloudRef.current = null;
+      localReadyRef.current = false;
+      cloudReadyRef.current = false;
     };
   }, []);
 
-  /** 刷新会话记录列表 */
+  /** 刷新会话记录列表（分别查询本地和云端，合并后按时间降序） */
   const refreshRecords = useCallback(async () => {
-    if (!wsRef.current || !connectedRef.current) {
-      console.warn("[useSessionRecords] refreshRecords skip: ws not connected");
-      return;
-    }
     setLoading(true);
-    try {
-      const result = (await wsRef.current.request("session.listRecords", {})) as {
-        records: SessionMeta[];
-      };
-      setRecords(result.records || []);
-    } catch (err) {
-      console.error("[useSessionRecords] refreshRecords failed:", err);
-    } finally {
-      setLoading(false);
+    const allRecords: SessionMeta[] = [];
+
+    // 查询本地
+    if (wsLocalRef.current && localReadyRef.current) {
+      try {
+        const result = (await wsLocalRef.current.request("session.listRecords", {})) as {
+          records: SessionMeta[];
+        };
+        const localRecords = (result.records || []).map((r) => ({
+          ...r,
+          runtimeMode: r.runtimeMode || "local",
+        }));
+        allRecords.push(...localRecords);
+      } catch (err) {
+        console.error("[useSessionRecords] listRecords (local) failed:", err);
+      }
     }
+
+    // 查询云端
+    if (wsCloudRef.current && cloudReadyRef.current) {
+      try {
+        const result = (await wsCloudRef.current.request("session.listRecords", {})) as {
+          records: SessionMeta[];
+        };
+        const cloudRecords = (result.records || []).map((r) => ({
+          ...r,
+          runtimeMode: r.runtimeMode || "cloud",
+        }));
+        allRecords.push(...cloudRecords);
+      } catch (err) {
+        console.error("[useSessionRecords] listRecords (cloud) failed:", err);
+      }
+    }
+
+    // 按更新时间降序排列
+    allRecords.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    setRecords(allRecords);
+    setLoading(false);
   }, []);
 
   /** 保存队列，避免并发保存导致数据覆盖 */
@@ -149,11 +198,13 @@ export function useSessionRecords() {
    * 每次 agent 轮次完成时调用，确保每轮数据不遗漏。
    */
   const saveStep = useCallback(
-    async (sessionId: string, stepId: string, snapshot: StepSessionSnapshot) => {
-      if (!wsRef.current || !connectedRef.current) return;
+    async (sessionId: string, stepId: string, snapshot: StepSessionSnapshot, mode?: RuntimeMode) => {
+      const ws = mode ? getWsForMode(mode) : wsLocalRef.current;
+      const ready = mode ? isWsReady(mode) : localReadyRef.current;
+      if (!ws || !ready) return;
       saveQueueRef.current = saveQueueRef.current.then(async () => {
         try {
-          await wsRef.current!.request("session.saveStep", {
+          await ws.request("session.saveStep", {
             sessionId,
             stepId,
             snapshot,
@@ -164,7 +215,7 @@ export function useSessionRecords() {
       });
       await saveQueueRef.current;
     },
-    [],
+    [getWsForMode, isWsReady],
   );
 
   /**
@@ -173,10 +224,12 @@ export function useSessionRecords() {
    */
   const saveMeta = useCallback(
     async (sessionId: string, meta: SessionMeta) => {
-      if (!wsRef.current || !connectedRef.current) return;
+      const ws = getWsForMode(meta.runtimeMode || "local");
+      const ready = isWsReady(meta.runtimeMode || "local");
+      if (!ws || !ready) return;
       saveQueueRef.current = saveQueueRef.current.then(async () => {
         try {
-          await wsRef.current!.request("session.saveMeta", meta as unknown as Record<string, unknown>);
+          await ws.request("session.saveMeta", meta as unknown as Record<string, unknown>);
           await refreshRecords();
         } catch (err) {
           console.error("[useSessionRecords] saveMeta failed:", sessionId, err);
@@ -184,7 +237,7 @@ export function useSessionRecords() {
       });
       await saveQueueRef.current;
     },
-    [refreshRecords],
+    [refreshRecords, getWsForMode, isWsReady],
   );
 
   /** 保存当前 AppState 为会话记录（兼容旧接口，内部拆分为 meta + step 文件） */
@@ -220,8 +273,11 @@ export function useSessionRecords() {
       }>,
       restoredSessions?: Record<string, StepSessionSnapshot>,
     ) => {
-      if (!wsRef.current || !connectedRef.current) {
-        console.warn("[saveRecord] skip: ws not connected (wsRef=", !!wsRef.current, "connected=", connectedRef.current, ")");
+      const targetMode = state.runtimeMode || "local";
+      const ws = getWsForMode(targetMode);
+      const ready = isWsReady(targetMode);
+      if (!ws || !ready) {
+        console.warn("[saveRecord] skip: ws not connected for mode", targetMode);
         return;
       }
 
@@ -331,10 +387,10 @@ export function useSessionRecords() {
       saveQueueRef.current = saveQueueRef.current.then(async () => {
         try {
           // 保存元信息
-          await wsRef.current!.request("session.saveMeta", meta as unknown as Record<string, unknown>);
+          await ws.request("session.saveMeta", meta as unknown as Record<string, unknown>);
           // 逐个保存步骤会话快照
           for (const [stepId, snapshot] of Object.entries(stepSessions)) {
-            await wsRef.current!.request("session.saveStep", {
+            await ws.request("session.saveStep", {
               sessionId,
               stepId,
               snapshot,
@@ -347,15 +403,20 @@ export function useSessionRecords() {
       });
       await saveQueueRef.current;
     },
-    [refreshRecords],
+    [refreshRecords, getWsForMode, isWsReady],
   );
 
-  /** 按 sessionId 加载完整会话记录 */
+  /** 按 sessionId 加载完整会话记录（需要知道记录属于哪个模式） */
   const loadRecord = useCallback(
-    async (sessionId: string): Promise<SessionRecord | null> => {
-      if (!wsRef.current || !connectedRef.current) return null;
+    async (sessionId: string, mode?: RuntimeMode): Promise<SessionRecord | null> => {
+      // 尝试从现有 records 中查找该 session 的模式
+      const existing = records.find((r) => r.sessionId === sessionId);
+      const targetMode = mode || existing?.runtimeMode || "local";
+      const ws = getWsForMode(targetMode);
+      const ready = isWsReady(targetMode);
+      if (!ws || !ready) return null;
       try {
-        const result = (await wsRef.current.request("session.loadRecord", {
+        const result = (await ws.request("session.loadRecord", {
           sessionId,
         })) as { record: SessionRecord | null };
         return result.record;
@@ -364,15 +425,19 @@ export function useSessionRecords() {
         return null;
       }
     },
-    [],
+    [records, getWsForMode, isWsReady],
   );
 
   /** 按 sessionId 加载某步骤的会话快照 */
   const loadStep = useCallback(
-    async (sessionId: string, stepId: string): Promise<StepSessionSnapshot | null> => {
-      if (!wsRef.current || !connectedRef.current) return null;
+    async (sessionId: string, stepId: string, mode?: RuntimeMode): Promise<StepSessionSnapshot | null> => {
+      const existing = records.find((r) => r.sessionId === sessionId);
+      const targetMode = mode || existing?.runtimeMode || "local";
+      const ws = getWsForMode(targetMode);
+      const ready = isWsReady(targetMode);
+      if (!ws || !ready) return null;
       try {
-        const result = (await wsRef.current.request("session.loadStep", {
+        const result = (await ws.request("session.loadStep", {
           sessionId,
           stepId,
         })) as { snapshot: StepSessionSnapshot | null };
@@ -382,21 +447,25 @@ export function useSessionRecords() {
         return null;
       }
     },
-    [],
+    [records, getWsForMode, isWsReady],
   );
 
-  /** 删除会话记录 */
+  /** 删除会话记录（需要知道记录属于哪个模式） */
   const deleteRecord = useCallback(
-    async (sessionId: string) => {
-      if (!wsRef.current || !connectedRef.current) return;
+    async (sessionId: string, mode?: RuntimeMode) => {
+      const existing = records.find((r) => r.sessionId === sessionId);
+      const targetMode = mode || existing?.runtimeMode || "local";
+      const ws = getWsForMode(targetMode);
+      const ready = isWsReady(targetMode);
+      if (!ws || !ready) return;
       try {
-        await wsRef.current.request("session.deleteRecord", { sessionId });
+        await ws.request("session.deleteRecord", { sessionId });
         await refreshRecords();
       } catch (err) {
         console.error("[useSessionRecords] deleteRecord failed:", sessionId, err);
       }
     },
-    [refreshRecords],
+    [refreshRecords, records, getWsForMode, isWsReady],
   );
 
   return {
