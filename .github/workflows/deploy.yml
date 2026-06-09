@@ -8,11 +8,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: ⬇️ 拉取代码
         uses: actions/checkout@v4
 
-      - name: Deploy to server via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      - name: 🔐 配置 SSH
+        uses: appleboy/ssh-action@v2
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
