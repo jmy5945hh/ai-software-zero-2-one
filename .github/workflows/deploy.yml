@@ -12,14 +12,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🔐 配置 SSH
-        uses: appleboy/ssh-action@v2
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
           key: ${{ secrets.KEY }}
           port: ${{ secrets.PORT }}
           script: |
-            cd ~/code/ai-software-zero-2-one
+            cd /home/deploy/code/ai-software-zero-2-one
             git pull origin master
-            chmod +x deploy-agent-server.sh
-            ./deploy-agent-server.sh
+            pm2 restart agent-app
