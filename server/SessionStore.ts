@@ -179,22 +179,23 @@ export class SessionStore {
   }
 
   /** 保存某步骤的会话快照（主存储 + workspace 镜像） */
-  saveStep(sessionId: string, stepId: string, snapshot: StepSessionSnapshot): void {
-    // 主存储
-    const dir = this.sessionDir(sessionId);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(this.stepPath(sessionId, stepId), JSON.stringify(snapshot, null, 2), "utf-8");
+  saveStep(taskId: string, sessionId: string, stepId: string, snapshot: StepSessionSnapshot): void {
+    // 主存储：按 taskId 目录组织
+    const taskDir = path.join(this.baseDir, taskId);
+    fs.mkdirSync(taskDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(taskDir, `step-${stepId}.json`),
+      JSON.stringify(snapshot, null, 2),
+      "utf-8",
+    );
 
     // workspace 镜像
-    this.saveStepMirror(sessionId, stepId, snapshot);
+    this.saveStepMirror(taskId, stepId, snapshot);
   }
 
   /** 保存 step 到 workspace 镜像目录 */
-  private saveStepMirror(sessionId: string, stepId: string, snapshot: StepSessionSnapshot): void {
-    // 读取 meta 来获取 taskId
-    const meta = this.loadMeta(sessionId);
-    if (!meta) return;
-    const mirrorDir = this.workspaceSessionDir(meta);
+  private saveStepMirror(taskId: string, stepId: string, snapshot: StepSessionSnapshot): void {
+    const mirrorDir = this.workspaceManager?.getSessionDir(taskId);
     if (!mirrorDir) return;
     try {
       fs.mkdirSync(mirrorDir, { recursive: true });
@@ -204,7 +205,7 @@ export class SessionStore {
         "utf-8",
       );
     } catch (err) {
-      console.warn(`[SessionStore] Mirror save step failed for ${sessionId}/${stepId}:`, (err as Error).message);
+      console.warn(`[SessionStore] Mirror save step failed for ${taskId}/${stepId}:`, (err as Error).message);
     }
   }
 
@@ -213,7 +214,7 @@ export class SessionStore {
     const { stepSessions, ...meta } = record;
     this.saveMeta(meta);
     for (const [stepId, snapshot] of Object.entries(stepSessions || {})) {
-      this.saveStep(record.sessionId, stepId, snapshot);
+      this.saveStep(meta.taskId, record.sessionId, stepId, snapshot);
     }
   }
 

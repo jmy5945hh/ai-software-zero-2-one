@@ -27,24 +27,24 @@ export function TaskPage() {
   const [drawerContent, setDrawerContent] = useState<DrawerContent>(null);
   const [repoExplorerOpen, setRepoExplorerOpen] = useState(false);
 
-  // ── URL sessionId 恢复 ──
-  // 如果 URL 携带 sessionId 且与 localStorage 中的不一致，说明是刷新后首次加载，
+  // ── URL taskId 恢复 ──
+  // 如果 URL 携带 taskId 且与 localStorage 中的不一致，说明是刷新后首次加载，
   // 需要从服务端加载会话记录并恢复到 AppState
-  const urlSessionId = searchParams.get("sessionId");
+  const urlTaskId = searchParams.get("taskId");
   const restoreAttemptedRef = useRef(false);
 
   useEffect(() => {
-    // 仅执行一次：URL 有 sessionId，且尚未尝试恢复
-    if (!urlSessionId || restoreAttemptedRef.current) return;
+    // 仅执行一次：URL 有 taskId，且尚未尝试恢复
+    if (!urlTaskId || restoreAttemptedRef.current) return;
     restoreAttemptedRef.current = true;
 
     // 如果 localStorage 中的 sessionId 与 URL 一致，说明状态已就绪，无需恢复
-    if (state.sessionId === urlSessionId && state.workspacePath) {
+    if (state.sessionId === urlTaskId && state.workspacePath) {
       return;
     }
 
     // 从服务端加载会话记录
-    sessionRecords.loadRecord(urlSessionId).then((record) => {
+    sessionRecords.loadRecord(urlTaskId).then((record) => {
       if (!record) return;
 
       setState((previous) => ({
@@ -99,22 +99,18 @@ export function TaskPage() {
         view: "workspace",
       }));
     });
-  }, [urlSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [urlTaskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 如果状态中没有 workspacePath 或者不在 workspace 状态，跳回首页
   useEffect(() => {
-    // 如果没有 workspacePath 且没有待恢复的 URL sessionId，跳回首页
-    if (!state.workspacePath && !urlSessionId) {
+    // 如果没有 workspacePath 且没有待恢复的 URL taskId，跳回首页
+    if (!state.workspacePath && !urlTaskId) {
       navigate("/");
     }
-  }, [state.workspacePath, navigate, urlSessionId]);
+  }, [state.workspacePath, navigate, urlTaskId]);
 
-  const taskId = useMemo(() => {
-    if (state.createdAt) {
-      return `task-${new Date(state.createdAt).getTime()}`;
-    }
-    return null;
-  }, [state.createdAt]);
+  // 使用 state.sessionId 作为 taskId，确保与 /task/init 中的 taskId 一致
+  const taskId = state.sessionId || null;
 
   const agent = useAgent(taskId, state.workspacePath);
 

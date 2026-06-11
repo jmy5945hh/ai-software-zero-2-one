@@ -26,6 +26,7 @@ import { TypewriterText } from "../components/TypewriterText";
 import { WorkspaceSelector } from "../components/WorkspaceSelector";
 import { SessionHistoryPanel } from "../components/SessionHistoryPanel";
 import { useAgent } from "../agent";
+import { generateId } from "../utils/id";
 import { useRuntimeState, useRuntimeActions } from "../stores/runtimeStore";
 
 /**
@@ -44,8 +45,9 @@ export function DashboardPage() {
   const runtimeState = useRuntimeState();
   const runtimeActions = useRuntimeActions();
 
+  // 使用 state.sessionId 作为 taskId，确保与后续 TaskPage 中的 taskId 一致
   const taskIdForPicker = showWorkspacePicker && state.createdAt
-    ? `task-${new Date(state.createdAt).getTime()}`
+    ? state.sessionId
     : null;
   const agent = useAgent(taskIdForPicker, undefined, undefined, runtimeState.mode);
   const agentAvailable = agent.connectionStatus === "connected" || agent.connectionStatus === "reconnecting";
@@ -62,9 +64,7 @@ export function DashboardPage() {
   const requestStartTask = useCallback(
     (intent: string, notes: string, activeTaskCard: AppState["activeTaskCard"]) => {
       setDocsError(null);
-      const sessionId = Array.from({ length: 32 }, () =>
-        Math.floor(Math.random() * 16).toString(16)
-      ).join("");
+      const sessionId = generateId();
       setState((previous) => ({
         ...createDefaultState(),
         intent,
@@ -118,7 +118,21 @@ export function DashboardPage() {
         } catch (err) {
           console.warn("[DashboardPage] Failed to persist cloud workspace:", err);
         }
-        navigate(`/task?sessionId=${state.sessionId}`);
+
+        // 初始化任务环境（HTTP 接口，不依赖 WebSocket 连接）
+        agent.initTask({
+          intent: state.intent,
+          workspacePath: "",
+          runtimeMode: mode,
+          notes: state.notes,
+          scope: state.scope,
+          selectedModules: state.selectedModules,
+          todoAnswers: state.todoAnswers,
+          initialPrompts: state.initialPrompts,
+          gitRepo: state.gitRepo,
+        }).catch((err: Error) => console.warn("[DashboardPage] task.init failed:", err));
+
+        navigate(`/task?taskId=${state.sessionId}`);
         return;
       }
 
@@ -163,7 +177,20 @@ export function DashboardPage() {
       } catch (err) {
         console.warn("[DashboardPage] Failed to persist local workspace:", err);
       }
-      navigate(`/task?sessionId=${state.sessionId}`);
+
+      // 初始化任务环境（HTTP 接口，不依赖 WebSocket 连接）
+      agent.initTask({
+        intent: state.intent,
+        workspacePath: path,
+        runtimeMode: mode,
+        notes: state.notes,
+        scope: state.scope,
+        selectedModules: state.selectedModules,
+        todoAnswers: state.todoAnswers,
+        initialPrompts: state.initialPrompts,
+      }).catch((err: Error) => console.warn("[DashboardPage] task.init failed:", err));
+
+      navigate(`/task?taskId=${state.sessionId}`);
     },
     [setState, navigate, state, agentAvailable, agent, runtimeState.mode, runtimeActions],
   );

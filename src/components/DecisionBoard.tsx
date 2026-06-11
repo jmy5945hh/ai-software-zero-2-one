@@ -2544,16 +2544,8 @@ function useTimeline(
               toolCall: tc,
             });
           }
-          // 历史轮次中的 ask_user_question 回答
-          for (const tc of turn.toolCalls || []) {
-            if (tc.name === "ask_user_question" && tc.status === "done" && tc.result) {
-              events.push({
-                type: "user",
-                id: `restored-answer-${tc.id}`,
-                content: tc.result,
-              });
-            }
-          }
+          // ask_user_question 的回答已在 AskUserQuestionCard 中内联展示，
+          // 不再作为独立 user 事件插入，避免重复渲染。
           if (turn.textContent) {
             events.push({
               type: "message",

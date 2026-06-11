@@ -6,6 +6,7 @@ import { readSpecsTree, readRepoTree, readFileSafe, writeFileSafe, existsSync } 
 import { getRepoDiff, getRepoDiffFiles, execCommand } from "./utils/gitOps";
 import { SessionPool } from "./SessionPool";
 import { SessionStore } from "./SessionStore";
+import { WorkspaceManager } from "./WorkspaceManager";
 
 const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 
@@ -16,8 +17,20 @@ const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 export function handleHttpRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  deps: { pool: SessionPool; sessionStore: SessionStore },
+  deps: { pool: SessionPool; sessionStore: SessionStore; workspace: WorkspaceManager },
 ): boolean {
+  // ── CORS 头（允许前端跨域访问） ──
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  // 预检请求直接返回
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return true;
+  }
+
   // 健康检查端点（前端连通性验证）
   if (req.method === "GET" && req.url === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -145,6 +158,61 @@ export function handleHttpRequest(
       res.writeHead(404, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "File not found" }));
     }
+    return true;
+  }
+
+  // ── 初始化任务环境（HTTP 替代 WebSocket task.init） ──
+  if (req.method === "POST" && req.url === "/task/init") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const params = JSON.parse(body);
+        const now = new Date().toISOString();
+
+        // 根据运行模式初始化 workspace
+        const isCloud = params.runtimeMode === "cloud";
+        if (isCloud) {
+          if (!params.gitRepo) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "云端任务需要 gitRepo 参数" }));
+            return;
+          }
+          deps.workspace.initCloudWorkspace(params.taskId, params.gitRepo);
+        } else {
+          deps.workspace.setExternalWorkspace(params.taskId, params.workspacePath);
+        }
+
+        const meta = {
+          sessionId: params.taskId, // 复用 taskId 作为 sessionId
+          taskId: params.taskId,
+          intent: params.intent,
+          workspacePath: params.workspacePath,
+          runtimeMode: params.runtimeMode,
+          stepIndex: 0,
+          activeStage: "intent",
+          scope: params.scope || "mvp",
+          selectedModules: params.selectedModules || [],
+          notes: params.notes || "",
+          todoAnswers: params.todoAnswers || {},
+          initialPrompts: params.initialPrompts || {},
+          codeConfirmed: false,
+          fixApproved: false,
+          releaseApproved: false,
+          qualityPassed: false,
+          createdAt: now,
+          updatedAt: now,
+          status: "active",
+          stepSummaries: {},
+        } satisfies import("./SessionStore").SessionMeta;
+        deps.sessionStore.saveMeta(meta);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true }));
+      } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Init failed" }));
+      }
+    });
     return true;
   }
 

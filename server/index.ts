@@ -21,7 +21,7 @@ const sessionStore = new SessionStore(workspace);
 
 // ── HTTP 服务 ───────────────────────────────
 const server = http.createServer((req, res) => {
-  const handled = handleHttpRequest(req, res, { pool, sessionStore });
+  const handled = handleHttpRequest(req, res, { pool, sessionStore, workspace });
   if (!handled) {
     res.writeHead(404);
     res.end();

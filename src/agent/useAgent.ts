@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory, Turn, ConnectionQuality, SessionSnapshot } from "./types";
 import type { FileChange, AgentSummary } from "../data/types";
 import { AgentWebSocket } from "./ws";
-import { buildAgentWsUrl } from "./config";
+import { buildAgentWsUrl, getAgentWsOrigin } from "./config";
 import type { RuntimeMode } from "../types/runtime";
 
 // ── 工具函数 ─────────────────────────────────
@@ -204,6 +204,37 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   hookGitRepoRef.current = hookGitRepo;
   /** 记录需要重连恢复的 session（step → sessionId），WebSocket 重连后自动触发 reconnect */
   const pendingReconnectRef = useRef<Record<string, string>>({});
+
+  // ── 初始化任务环境（HTTP 接口） ──
+  const initTask = useCallback(
+    async (params: {
+      intent: string;
+      workspacePath: string;
+      runtimeMode: "local" | "cloud";
+      notes: string;
+      scope: string;
+      selectedModules: string[];
+      todoAnswers: Record<number, string | string[]>;
+      initialPrompts: Record<string, string>;
+      gitRepo?: { url: string; branch: string };
+    }) => {
+      if (!taskId) return;
+      const origin = getAgentWsOrigin(params.runtimeMode);
+      try {
+        const res = await fetch(`${origin}/task/init`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taskId, ...params }),
+        });
+        if (!res.ok) {
+          console.warn("[useAgent] initTask HTTP error:", res.status, await res.text());
+        }
+      } catch (err) {
+        console.warn("[useAgent] initTask failed:", err);
+      }
+    },
+    [taskId],
+  );
 
   // ── 创建 session ──
   const createSession = useCallback(
@@ -1321,6 +1352,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     connectionStatus,
     connectionQuality,
     createSession,
+    initTask,
     prompt,
     steer,
     abort,

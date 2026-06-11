@@ -223,6 +223,7 @@ export function useSessionRecords() {
             sessionId,
             stepId,
             snapshot,
+            taskId,
           });
         } catch (err) {
           console.error("[useSessionRecords] saveStep failed:", sessionId, stepId, err);
@@ -439,6 +440,7 @@ export function useSessionRecords() {
               sessionId,
               stepId,
               snapshot,
+              taskId,
             });
           }
           await refreshRecords();
@@ -492,8 +494,7 @@ export function useSessionRecords() {
           return null;
         }
         const data = await res.json() as { snapshot: StepSessionSnapshot | null };
-        return data.snapshot;ull };
-        return result.snapshot;
+        return data.snapshot;
       } catch (err) {
         console.error("[useSessionRecords] loadStep failed:", sessionId, stepId, err);
         return null;
