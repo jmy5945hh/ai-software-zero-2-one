@@ -65,6 +65,37 @@ export function TaskPage() {
         createdAt: record.createdAt,
         sessionId: record.sessionId,
         restoredSessions: record.stepSessions || {},
+        // 从 step-quality.json 恢复 QA 完整数据，meta 中仅存简略状态
+        qaReview: (() => {
+          const qualityStep = record.stepSessions?.["quality"];
+          const metaStatus = record.qaReview?.status;
+          if (qualityStep && (qualityStep as any).qaStatus) {
+            const qs = qualityStep as any;
+            return {
+              status: qs.qaStatus === "running" ? "idle" as const : qs.qaStatus,
+              outputLines: qs.qaOutputLines || [],
+              resultFilePath: qs.qaResultFilePath || "",
+              resultContent: qs.qaResultContent || "",
+              error: qs.qaError || undefined,
+            };
+          }
+          // fallback: 从 meta 恢复（兼容旧数据）
+          if (record.qaReview) {
+            return {
+              ...record.qaReview,
+              status: record.qaReview.status === "running" ? "idle" as const : record.qaReview.status,
+              outputLines: (record.qaReview as any).outputLines || [],
+              resultFilePath: (record.qaReview as any).resultFilePath || "",
+              resultContent: (record.qaReview as any).resultContent || "",
+            };
+          }
+          return {
+            status: "idle" as const,
+            outputLines: [],
+            resultFilePath: "",
+            resultContent: "",
+          };
+        })(),
         view: "workspace",
       }));
     });
@@ -206,6 +237,7 @@ export function TaskPage() {
     state.fixApproved,
     state.releaseApproved,
     state.qualityPassed,
+    state.qaReview,
     state.workspacePath,
     taskId,
     stepSummaries,
@@ -238,6 +270,25 @@ export function TaskPage() {
     [],
   );
   const closeDrawer = useCallback(() => setDrawerContent(null), []);
+
+  // ── QA 质量审查：一键修复 ──
+  const handleFixQaIssues = useCallback(
+    (report: string) => {
+      if (!isAgentConnected) return;
+      // 先推进到 verify 阶段
+      const verifyIndex = workflow.findIndex((s) => s.id === "verify");
+      patchState({
+        stepIndex: verifyIndex,
+        activeStage: "verify",
+      });
+      // 创建 verify session 并触发 Agent 执行修复
+      const fixPrompt = `请根据以下质量审查报告修复代码中的问题：\n\n${report}`;
+      agent.createSession("verify", state.intent, state.workspacePath).then(() => {
+        agent.prompt("verify", fixPrompt);
+      });
+    },
+    [isAgentConnected, agent, state.intent, state.workspacePath, patchState],
+  );
 
   // ── Agent session 生命周期 ──
   const sessionInitRef = useRef(false);
@@ -274,7 +325,8 @@ export function TaskPage() {
     const nextIndex = Math.min(state.stepIndex + 1, workflow.length - 1);
     const nextStep = workflow[nextIndex];
 
-    if (isAgentConnected && taskId) {
+    if (isAgentConnected && taskId && nextStep.id !== "quality") {
+      // quality 阶段不走 Agent session 逻辑，直接触发 CLI 命令
       const promptText = getStepPrompt(
         nextStep.id,
         state.intent,
@@ -291,18 +343,39 @@ export function TaskPage() {
       });
     }
 
+    console.log("[TaskPage] continueTask", { nextIndex, nextStepId: nextStep.id, isQuality: nextStep.id === "quality" });
+
     patchState({
       stepIndex: nextIndex,
       activeStage: nextStep.id,
       codeConfirmed: state.codeConfirmed || state.stepIndex >= 2,
+      // 进入 quality 阶段时重置 QA 审查状态
+      ...(nextStep.id === "quality" ? {
+        qaReview: {
+          status: "idle" as const,
+          outputLines: [],
+          resultFilePath: "",
+          resultContent: "",
+        },
+      } : {}),
     });
     window.scrollTo({ top: 0 });
   }, [state.stepIndex, state.intent, state.scope, state.selectedModules, state.initialPrompts, isAgentConnected, taskId, agent, patchState, state.codeConfirmed]);
 
   const handleStepClick = (index: number) => {
+    const targetStage = workflow[index].id;
     patchState({
       stepIndex: index,
-      activeStage: workflow[index].id,
+      activeStage: targetStage,
+      // 点击 quality 阶段且不是当前步骤时重置 QA 审查状态
+      ...(targetStage === "quality" && index !== state.stepIndex ? {
+        qaReview: {
+          status: "idle" as const,
+          outputLines: [],
+          resultFilePath: "",
+          resultContent: "",
+        },
+      } : {}),
     });
     window.scrollTo({ top: 0 });
   };
@@ -433,6 +506,7 @@ export function TaskPage() {
                   sessionRecords.saveRecord(state, taskId, stepSummaries, updatedSessions, state.restoredSessions);
                 }
               }}
+              onFixIssues={handleFixQaIssues}
             />
           </div>
 

@@ -27,6 +27,7 @@ import {
   File,
   Folder,
   Code2,
+  AlertTriangle,
 } from "lucide-react";
 import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
 import { useStepKey } from "../hooks";
@@ -94,6 +95,8 @@ type DecisionBoardProps = {
   onOpenRepoExplorer?: () => void;
   /** 编译数据持久化回调 */
   onBuildUpdate?: (stepId: string, command: string, result: import("../data/types").BuildResult) => void;
+  /** QA 一键修复回调 */
+  onFixIssues?: (report: string) => void;
 };
 
 export function DecisionBoard({
@@ -116,6 +119,7 @@ export function DecisionBoard({
   taskId,
   onOpenRepoExplorer,
   onBuildUpdate,
+  onFixIssues,
 }: DecisionBoardProps) {
   const step = workflow[state.stepIndex];
   const stepKey = useStepKey(state.stepIndex);
@@ -202,6 +206,7 @@ export function DecisionBoard({
             restoredSession={restoredSessions[step.id]}
             onOpenRepoExplorer={onOpenRepoExplorer}
             onBuildUpdate={handleBuildUpdate}
+            onFixIssues={onFixIssues}
           />
         )}
         {activeTab === "trajectory" && (
@@ -286,6 +291,7 @@ function DeliveryCollabTab({
   restoredSession,
   onOpenRepoExplorer,
   onBuildUpdate,
+  onFixIssues,
 }: {
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
@@ -334,6 +340,7 @@ function DeliveryCollabTab({
   } | null;
   onOpenRepoExplorer?: () => void;
   onBuildUpdate?: (command: string, result: import("../data/types").BuildResult) => void;
+  onFixIssues?: (report: string) => void;
 }) {
   const agentCompleted = isAgentConnected && agentSession?.completed && !agentSession?.isStreaming;
   const agentWorking = isAgentConnected && agentSession && !agentCompleted;
@@ -575,6 +582,7 @@ function DeliveryCollabTab({
                 agentSteer={agentSteer}
                 onContinue={onContinue}
                 stepIndex={state.stepIndex}
+                agentSession={agentSession}
               />
             </>
           )}
@@ -623,6 +631,7 @@ function DeliveryCollabTab({
                 agentSteer={agentSteer}
                 onContinue={onContinue}
                 stepIndex={state.stepIndex}
+                agentSession={undefined}
               />
             </>
           )}
@@ -700,6 +709,21 @@ function DeliveryCollabTab({
         content={modalContent}
         onClose={() => setModalContent(null)}
       />
+
+      {/* quality 阶段：独立于 agent session 状态，始终展示 QA 审查 */}
+      {stepId === "quality" && (
+        <QaReviewSection
+          qaReview={state.qaReview}
+          sessionId={state.sessionId}
+          workspacePath={state.workspacePath}
+          onPatch={onPatch}
+          onFixIssues={onFixIssues}
+          onContinue={onContinue}
+          agentSteer={agentSteer}
+          stepId={stepId}
+          onSwitchToTrajectory={onSwitchToTrajectory}
+        />
+      )}
     </div>
   );
 }
@@ -1037,6 +1061,389 @@ function BuildSection({
   );
 }
 
+// ── QA 质量审查 ─────────────────────────────
+function QaReviewSection({
+  qaReview,
+  sessionId,
+  workspacePath,
+  onPatch,
+  onFixIssues,
+  onContinue,
+  agentSteer,
+  stepId,
+  onSwitchToTrajectory,
+}: {
+  qaReview: import("../data/types").QaReviewState;
+  sessionId: string;
+  workspacePath: string;
+  onPatch: (patch: Partial<AppState>) => void;
+  onFixIssues?: (report: string) => void;
+  onContinue?: () => void;
+  agentSteer?: (step: string, text: string, intent?: string, workspacePath?: string) => void;
+  stepId?: string;
+  onSwitchToTrajectory?: (msg?: string, roundIndex?: number) => void;
+}) {
+  const [outputExpanded, setOutputExpanded] = useState(true);
+  const outputEndRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const startedRef = useRef(false);
+  const outputLinesRef = useRef<string[]>([]);
+
+  console.log("[QaReviewSection] render", { status: qaReview.status, outputLines: qaReview.outputLines.length, resultContent: qaReview.resultContent?.length });
+
+  // 自动滚动到输出底部
+  useEffect(() => {
+    if (outputExpanded && outputEndRef.current) {
+      outputEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [qaReview.outputLines.length, outputExpanded]);
+
+  // ── 手动触发 qa-review CLI ──
+  const startQaReview = useCallback(() => {
+    if (!workspacePath || !sessionId) return;
+    if (startedRef.current) return;
+
+    console.log("[QaReviewSection] 手动触发 qa-review CLI", { workspacePath, sessionId });
+    startedRef.current = true;
+    outputLinesRef.current = [];
+
+    const outputDir = `~/.aiNativeDevPlatform/sessions/${sessionId}`;
+    const outputFile = `${outputDir}/quality_result.toml`;
+
+    // 先设为 running 状态
+    onPatch({
+      qaReview: {
+        status: "running",
+        outputLines: [],
+        resultFilePath: outputFile,
+        resultContent: "",
+      },
+    });
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    // 通过后端 API 执行 CLI 命令并流式返回
+    fetch(`/qa-review?path=${encodeURIComponent(workspacePath)}&sessionId=${encodeURIComponent(sessionId)}`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        console.log("[QaReviewSection] fetch 响应", { status: response.status, ok: response.ok });
+        if (!response.ok) {
+          onPatch({
+            qaReview: {
+              status: "error",
+              outputLines: [],
+              resultFilePath: outputFile,
+              resultContent: "",
+              error: `HTTP ${response.status}`,
+            },
+          });
+          return;
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) {
+          onPatch({
+            qaReview: {
+              status: "error",
+              outputLines: [],
+              resultFilePath: outputFile,
+              resultContent: "",
+              error: "无法读取响应流",
+            },
+          });
+          return;
+        }
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            console.log("[QaReviewSection] SSE 流读取完毕");
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
+              console.log("[QaReviewSection] SSE 事件", data.type, data);
+              switch (data.type) {
+                case "output":
+                  outputLinesRef.current = [...outputLinesRef.current, data.line];
+                  onPatch({
+                    qaReview: {
+                      status: "running",
+                      outputLines: outputLinesRef.current,
+                      resultFilePath: outputFile,
+                      resultContent: "",
+                    },
+                  });
+                  break;
+                case "complete":
+                  // 命令执行完毕，直接使用服务端返回的 resultContent
+                  if (data.exitCode === 0) {
+                    onPatch({
+                      qaReview: {
+                        status: "done",
+                        outputLines: outputLinesRef.current,
+                        resultFilePath: outputFile,
+                        resultContent: data.resultContent || "",
+                      },
+                    });
+                  } else {
+                    onPatch({
+                      qaReview: {
+                        status: "error",
+                        outputLines: outputLinesRef.current,
+                        resultFilePath: outputFile,
+                        resultContent: data.resultContent || "",
+                        error: `qa-review 退出码: ${data.exitCode}`,
+                      },
+                    });
+                  }
+                  break;
+                case "error":
+                  onPatch({
+                    qaReview: {
+                      status: "error",
+                      outputLines: outputLinesRef.current,
+                      resultFilePath: outputFile,
+                      resultContent: "",
+                      error: data.message,
+                    },
+                  });
+                  break;
+              }
+            } catch {
+              // JSON 解析失败，忽略
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.log("[QaReviewSection] fetch 错误", err);
+        if (err.name === "AbortError") return;
+        onPatch({
+          qaReview: {
+            status: "error",
+            outputLines: outputLinesRef.current,
+            resultFilePath: outputFile,
+            resultContent: "",
+            error: err.message,
+          },
+        });
+      });
+  }, [workspacePath, sessionId, onPatch]);
+
+  const isRunning = qaReview.status === "running";
+  const isDone = qaReview.status === "done";
+  const isError = qaReview.status === "error";
+  const isIdle = qaReview.status === "idle";
+
+  // 解析 TOML 结果，判断是否存在问题
+  const hasIssues = useMemo(() => {
+    if (!isDone || !qaReview.resultContent) return false;
+    // 简单判断：如果结果中包含 issues/errors/failures 等关键词，认为存在问题
+    const lower = qaReview.resultContent.toLowerCase();
+    return (
+      lower.includes("issue") ||
+      lower.includes("error") ||
+      lower.includes("fail") ||
+      lower.includes("problem") ||
+      lower.includes("warning")
+    );
+  }, [isDone, qaReview.resultContent]);
+
+  return (
+    <div className="summary-section qa-review-section">
+      <div className="summary-section-header">
+        <Terminal size={15} />
+        <span>质量 QA 审查</span>
+        {isRunning && (
+          <span className="build-badge build-badge-running">
+            <Loader2 size={11} className="spin-icon" /> 审查中
+          </span>
+        )}
+        {isDone && (
+          <span className="build-badge build-badge-success">✓ 完成</span>
+        )}
+        {isError && (
+          <span className="build-badge build-badge-failure">✗ 失败</span>
+        )}
+      </div>
+
+      {/* 空闲状态：等待用户手动触发 */}
+      {isIdle && (
+        <div className="qa-review-idle">
+          <div className="qa-review-command-line">
+            <span className="qa-review-prompt">$</span>
+            <span className="qa-review-command">qa-review --output ~/.aiNativeDevPlatform/sessions/{sessionId}/quality_result.toml</span>
+          </div>
+          <p className="qa-review-idle-text">点击下方按钮开始质量审查</p>
+          <div className="build-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              className="todo-submit-btn"
+              type="button"
+              onClick={startQaReview}
+            >
+              <Play size={14} /> 开始质量审查
+            </button>
+            <button
+              className="todo-submit-btn"
+              type="button"
+              style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+              onClick={() => onContinue?.()}
+            >
+              <CheckCircle2 size={14} /> 跳过审查，进入下一阶段
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 运行中 / 已完成：显示 CLI 输出终端 */}
+      {(isRunning || isDone || isError) && (
+        <>
+          {/* 执行的命令 */}
+          <div className="qa-review-command-line" style={{ margin: "0 0 8px 0", padding: "6px 10px", background: "#1e1e2e", borderRadius: 6, fontSize: 12 }}>
+            <span className="qa-review-prompt">$</span>
+            <span className="qa-review-command">qa-review --output ~/.aiNativeDevPlatform/sessions/{sessionId}/quality_result.toml</span>
+          </div>
+
+          {/* CLI 输出终端 */}
+          <div className="qa-review-output">
+            <div
+              className="build-output-header build-output-header-clickable"
+              onClick={() => setOutputExpanded(!outputExpanded)}
+            >
+              <span>命令行输出</span>
+              <span className="build-output-header-right">
+                <span className="build-output-meta">{qaReview.outputLines.length} 行</span>
+                <span className="build-expand-icon">
+                  {outputExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                </span>
+              </span>
+            </div>
+            {outputExpanded && (
+              <div className="qa-review-terminal">
+                {qaReview.outputLines.map((line, i) => (
+                  <div key={i} className="qa-review-line">
+                    <span className="qa-review-line-num">{i + 1}</span>
+                    <span className="qa-review-line-text">{line}</span>
+                  </div>
+                ))}
+                {isRunning && (
+                  <div className="qa-review-line qa-review-line-cursor">
+                    <span className="qa-review-line-num">{qaReview.outputLines.length + 1}</span>
+                    <span className="qa-review-line-text"><span className="cursor-blink">▋</span></span>
+                  </div>
+                )}
+                <div ref={outputEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* 运行中提示 */}
+          {isRunning && (
+            <div className="qa-review-running-hint">
+              <Loader2 size={13} className="spin-icon" />
+              <span>本地 QA Agent 正在执行，请稍候...</span>
+            </div>
+          )}
+
+          {/* 结果文件路径 */}
+          {qaReview.resultFilePath && (
+            <div className="build-command">
+              <span className="build-command-label">结果文件：</span>
+              <code>{qaReview.resultFilePath}</code>
+            </div>
+          )}
+
+          {/* 错误信息 */}
+          {isError && qaReview.error && (
+            <div className="build-status build-failure">
+              ❌ {qaReview.error}
+            </div>
+          )}
+
+          {/* 失败时重试按钮 */}
+          {isError && (
+            <div className="build-actions">
+              <button
+                className="todo-submit-btn"
+                type="button"
+                onClick={() => {
+                  startedRef.current = false;
+                  startQaReview();
+                }}
+              >
+                <Play size={14} /> 重新执行 QA 审查
+              </button>
+            </div>
+          )}
+
+          {/* 结果内容展示 */}
+          {isDone && qaReview.resultContent && (
+            <div className="qa-review-result">
+              <div className="summary-section-header" style={{ padding: "8px 0", margin: 0 }}>
+                <FileText size={14} />
+                <span>审查结果</span>
+              </div>
+              <pre className="qa-review-result-pre"><code>{qaReview.resultContent}</code></pre>
+            </div>
+          )}
+
+          {/* 操作按钮 — 所有状态下都支持进入下一阶段 */}
+          {(isRunning || isDone || isError) && (
+            <>
+              <div className="build-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {isDone && hasIssues && onFixIssues ? (
+                  <button
+                    className="todo-submit-btn"
+                    type="button"
+                    onClick={() => onFixIssues(qaReview.resultContent)}
+                  >
+                    <Wrench size={14} /> 一键修复质量问题
+                  </button>
+                ) : null}
+                {(isDone || isError) && (
+                  <button
+                    className="todo-submit-btn"
+                    type="button"
+                    style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+                    onClick={() => {
+                      startedRef.current = false;
+                      startQaReview();
+                    }}
+                  >
+                    <Play size={14} /> 重新执行 QA 审查
+                  </button>
+                )}
+              </div>
+              <div className="build-actions" style={{ marginTop: 8 }}>
+                <button
+                  className="todo-submit-btn"
+                  type="button"
+                  onClick={() => onContinue?.()}
+                >
+                  <CheckCircle2 size={14} /> 进入下一阶段
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── 文件变更按钮 ─────────────────────────────
 function FileChangesButton({ files, onOpenRepoExplorer }: { files: FileChange[]; onOpenRepoExplorer?: () => void }) {
   if (files.length === 0) return null;
@@ -1243,6 +1650,7 @@ function TodoSection({
   agentSteer,
   onContinue,
   stepIndex,
+  agentSession,
 }: {
   todos: TodoItem[];
   todoAnswers: Record<number, string | string[]>;
@@ -1252,6 +1660,7 @@ function TodoSection({
   agentSteer: (step: string, text: string, intent?: string) => void;
   onContinue: () => void;
   stepIndex: number;
+  agentSession?: { id: string; completed?: boolean; isStreaming?: boolean };
 }) {
   if (todos.length === 0) return null;
 
@@ -1265,6 +1674,7 @@ function TodoSection({
     return answer !== undefined && (typeof answer === "string" ? answer.trim() !== "" : answer.length > 0);
   });
   const [submitting, setSubmitting] = useState(false);
+  const [qaUncheckedWarning, setQaUncheckedWarning] = useState(false);
 
   const handleSubmit = async () => {
     if (!allAnswered || submitting) return;
@@ -1280,6 +1690,16 @@ function TodoSection({
         const selected = Array.isArray(answer) ? answer : [answer];
         return selected.some((opt) => opt.includes("进入下一阶段"));
       });
+
+      // quality 阶段：若 quality session 不存在或未完成（未运行），阻止进入下一阶段并显示警告
+      if (stepId === "quality" && allChoiceAdvance) {
+        const qualitySessionExists = agentSession && agentSession.id;
+        const qualitySessionRunning = qualitySessionExists && !agentSession.completed;
+        if (!qualitySessionRunning) {
+          setQaUncheckedWarning(true);
+          return;
+        }
+      }
 
       // 如果有补充的业务背景，先通过 agentSteer 发送，然后继续对话（不进入下一阶段）
       const contextText = contextValue.trim();
@@ -1353,6 +1773,14 @@ function TodoSection({
           rows={2}
         />
       </div>
+
+      {/* quality 阶段 QA 未检查警告 */}
+      {qaUncheckedWarning && (
+        <div className="qa-unchecked-warning">
+          <AlertTriangle size={14} />
+          <span>质量 QA 审查尚未执行，请先完成质量审查后再进入下一阶段</span>
+        </div>
+      )}
 
       {allAnswered && (
         <div className="todo-submit-row">

@@ -30,6 +30,9 @@ export default defineConfig({
       "/project-build": {
         target: "http://localhost:3100",
       },
+      "/qa-review": {
+        target: "http://localhost:3100",
+      },
     },
   },
 });

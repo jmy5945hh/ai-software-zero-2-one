@@ -233,6 +233,12 @@ export function createDefaultState(): AppState {
     activeTaskCard: null,
     todoAnswers: {},
     initialPrompts: {},
+    qaReview: {
+      status: "idle",
+      outputLines: [],
+      resultFilePath: "",
+      resultContent: "",
+    },
     restoredSessions: {},
   };
 }

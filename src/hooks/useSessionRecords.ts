@@ -46,6 +46,17 @@ export type StepSessionSnapshot = {
   summarizationStatus?: "idle" | "pending" | "loading" | "done" | "error";
   /** 项目编译状态 */
   buildStatus?: "idle" | "pending" | "detecting" | "loading" | "done" | "error";
+  // ── QA 审查数据（仅 quality 步骤有值） ──
+  /** QA 审查执行状态 */
+  qaStatus?: "idle" | "running" | "done" | "error";
+  /** CLI 实时输出行 */
+  qaOutputLines?: string[];
+  /** 最终结果文件路径 */
+  qaResultFilePath?: string;
+  /** 结果文件内容（TOML 格式） */
+  qaResultContent?: string;
+  /** 错误信息 */
+  qaError?: string;
 };
 
 /** 任务元信息（不含对话数据，与服务端 SessionMeta 对齐） */
@@ -72,6 +83,10 @@ export type SessionMeta = {
   status: "active" | "completed";
   /** 各步骤的 Agent 总结摘要（stepId → brief） */
   stepSummaries: Record<string, string>;
+  /** QA 质量审查状态（仅存简略状态，完整数据在 step-quality.json） */
+  qaReview?: {
+    status: "idle" | "running" | "done" | "error";
+  };
 };
 
 /** 完整的会话记录（元信息 + 各步骤对话数据） */
@@ -357,7 +372,33 @@ export function useSessionRecords() {
         }
       }
 
-      // 构建元信息
+      // 将 QA 审查完整数据写入 step-quality.json
+      const qualitySnapshot: StepSessionSnapshot | undefined = state.qaReview.status !== "idle"
+        ? {
+            messages: [],
+            turns: [],
+            summary: "",
+            qaStatus: state.qaReview.status === "running" ? "idle" as const : state.qaReview.status,
+            qaOutputLines: state.qaReview.outputLines,
+            qaResultFilePath: state.qaReview.resultFilePath,
+            qaResultContent: state.qaReview.resultContent,
+            qaError: state.qaReview.error,
+          }
+        : undefined;
+
+      if (qualitySnapshot) {
+        // 合并已有的 quality step 数据（如果有 Agent 对话）
+        const existingQuality = stepSessions["quality"];
+        if (existingQuality) {
+          qualitySnapshot.messages = existingQuality.messages;
+          qualitySnapshot.turns = existingQuality.turns;
+          qualitySnapshot.summary = existingQuality.summary;
+          qualitySnapshot.summarizationResult = existingQuality.summarizationResult;
+        }
+        stepSessions["quality"] = qualitySnapshot;
+      }
+
+      // 构建元信息（仅存简略状态）
       const meta: SessionMeta = {
         sessionId,
         taskId,
@@ -379,6 +420,10 @@ export function useSessionRecords() {
         updatedAt: new Date().toISOString(),
         status: "active",
         stepSummaries: stepSummaries || {},
+        // meta 中仅存简略状态
+        qaReview: {
+          status: state.qaReview.status === "running" ? "idle" as const : state.qaReview.status,
+        },
       };
 
       console.log("[saveRecord] final stepSessions keys:", Object.keys(stepSessions));
@@ -428,7 +473,7 @@ export function useSessionRecords() {
     [records, getWsForMode, isWsReady],
   );
 
-  /** 按 sessionId 加载某步骤的会话快照 */
+  /** 按 sessionId 加载某步骤的会话快照（通过 HTTP，不依赖 WebSocket） */
   const loadStep = useCallback(
     async (sessionId: string, stepId: string, mode?: RuntimeMode): Promise<StepSessionSnapshot | null> => {
       const existing = records.find((r) => r.sessionId === sessionId);
@@ -437,10 +482,17 @@ export function useSessionRecords() {
       const ready = isWsReady(targetMode);
       if (!ws || !ready) return null;
       try {
-        const result = (await ws.request("session.loadStep", {
-          sessionId,
-          stepId,
-        })) as { snapshot: StepSessionSnapshot | null };
+        const { getAgentWsOrigin } = await import("../agent/config");
+        const runtimeMode = (localStorage.getItem(RUNTIME_MODE_KEY) as RuntimeMode) || "local";
+        const origin = getAgentWsOrigin(runtimeMode);
+        const url = `${origin}/step-snapshot?sessionId=${encodeURIComponent(sessionId)}&stepId=${encodeURIComponent(stepId)}`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          console.error("[useSessionRecords] loadStep HTTP failed:", res.status);
+          return null;
+        }
+        const data = await res.json() as { snapshot: StepSessionSnapshot | null };
+        return data.snapshot;ull };
         return result.snapshot;
       } catch (err) {
         console.error("[useSessionRecords] loadStep failed:", sessionId, stepId, err);
@@ -473,7 +525,6 @@ export function useSessionRecords() {
     loading,
     refreshRecords,
     saveRecord,
-    saveStep,
     saveMeta,
     loadRecord,
     loadStep,

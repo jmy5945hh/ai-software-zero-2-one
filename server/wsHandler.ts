@@ -208,8 +208,45 @@ function mapSdkEvent(raw: unknown): AgentEvent | null {
 }
 
 /**
+ * 从 session 中提取 StepSessionSnapshot（用于持久化）。
+ * 复用 session.reconnect 中的提取逻辑。
+ */
+function buildStepSnapshot(session: unknown): import("./SessionStore").StepSessionSnapshot {
+  const messages = (session as any).agent?.state?.messages || [];
+  const mappedMessages = messages
+    .filter((m: any) => m.role === "user" || m.role === "assistant")
+    .map((m: any) => ({
+      role: m.role as "user" | "assistant",
+      content: typeof m.content === "string" ? m.content : "",
+    }));
+
+  const turns: import("./SessionStore").StepSessionSnapshot["turns"] = [];
+  let turnIndex = 0;
+  for (const msg of messages) {
+    if (msg.role === "assistant") {
+      const content = typeof msg.content === "string" ? msg.content : "";
+      turns.push({
+        id: `turn-${turnIndex}`,
+        index: turnIndex++,
+        status: "done",
+        textContent: content,
+        thinking: "",
+        toolCalls: [],
+      });
+    }
+  }
+
+  return {
+    messages: mappedMessages,
+    turns,
+    summary: extractAgentSummary(messages),
+  };
+}
+
+/**
  * 确保 session 的事件订阅指向当前 WebSocket 连接。
  * WebSocket 重连后，旧的订阅会失效，需要重新注册。
+ * 在 turn_end / agent_end 时自动保存步骤快照到 sessionStore。
  */
 function ensureSubscription(
   pool: SessionPool,
@@ -217,6 +254,7 @@ function ensureSubscription(
   step: string,
   ws: WebSocket,
   msgId: string,
+  sessionStore?: SessionStore,
 ): void {
   pool.clearUnsub(taskId, step);
   const session = pool.get(taskId, step);
@@ -225,6 +263,12 @@ function ensureSubscription(
     const event = mapSdkEvent(sdkEvent);
     if (!event) return;
     ws.send(JSON.stringify({ type: "event", id: msgId, event }));
+
+    // 每轮 turn 或 agent 结束时，自动保存步骤快照
+    if (sessionStore && (event.type === "turn_end" || event.type === "agent_end")) {
+      const snapshot = buildStepSnapshot(session);
+      sessionStore.saveStep((session as any).sessionId as string, step, snapshot);
+    }
   });
   pool.setUnsub(taskId, step, unsub);
 }
@@ -292,6 +336,12 @@ export async function handleWsMessage(
           const event = mapSdkEvent(sdkEvent);
           if (!event) return;
           ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
+
+          // 每轮 turn 或 agent 结束时，自动保存步骤快照
+          if (event.type === "turn_end" || event.type === "agent_end") {
+            const snapshot = buildStepSnapshot(session);
+            sessionStore.saveStep(session.sessionId, step, snapshot);
+          }
         });
         pool.setUnsub(taskId, step, unsub);
 
@@ -315,7 +365,7 @@ export async function handleWsMessage(
         const session = pool.get(taskId, step);
         if (!session) throw new Error(`Session not found: ${taskId}:${step}`);
 
-        ensureSubscription(pool, taskId, step, ws, msg.id);
+        ensureSubscription(pool, taskId, step, ws, msg.id, sessionStore);
 
         console.log(`[session.prompt] isStreaming=${session.isStreaming} step=${step}`);
         if (session.isStreaming) {
@@ -355,7 +405,7 @@ export async function handleWsMessage(
           pool.set(taskId, step, session);
         }
 
-        ensureSubscription(pool, taskId, step, ws, msg.id);
+        ensureSubscription(pool, taskId, step, ws, msg.id, sessionStore);
 
         // 关键修复：session.steer() 仅入队，不触发模型执行。
         // 当 agent 空闲时，入队的消息永远不会被处理。
@@ -403,7 +453,7 @@ export async function handleWsMessage(
           pool.set(taskId, step, session);
         }
 
-        ensureSubscription(pool, taskId, step, ws, msg.id);
+        ensureSubscription(pool, taskId, step, ws, msg.id, sessionStore);
 
         // 同 steer：followUp() 仅入队，空闲时需用 prompt() 触发执行
 
@@ -455,7 +505,7 @@ export async function handleWsMessage(
         const { taskId, step, session } = found;
 
         // 重新绑定事件订阅到当前 WebSocket
-        ensureSubscription(pool, taskId, step, ws, msg.id);
+        ensureSubscription(pool, taskId, step, ws, msg.id, sessionStore);
 
         // 从 session 中提取当前消息列表
         const messages = (session as any).agent?.state?.messages || [];
@@ -544,6 +594,12 @@ export async function handleWsMessage(
           const event = mapSdkEvent(sdkEvent);
           if (!event) return;
           ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
+
+          // 每轮 turn 或 agent 结束时，自动保存步骤快照
+          if (event.type === "turn_end" || event.type === "agent_end") {
+            const snapshot = buildStepSnapshot(session);
+            sessionStore.saveStep(session.sessionId, step, snapshot);
+          }
         });
         pool.setUnsub(taskId, step, unsub);
 
@@ -596,6 +652,12 @@ export async function handleWsMessage(
           const event = mapSdkEvent(sdkEvent);
           if (!event) return;
           ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
+
+          // 每轮 turn 或 agent 结束时，自动保存步骤快照
+          if (event.type === "turn_end" || event.type === "agent_end") {
+            const snapshot = buildStepSnapshot(newSession);
+            sessionStore.saveStep(newSession.sessionId, step, snapshot);
+          }
         });
         pool.setUnsub(taskId, step, unsub);
 
@@ -663,6 +725,12 @@ export async function handleWsMessage(
           const event = mapSdkEvent(sdkEvent);
           if (!event) return;
           ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
+
+          // 每轮 turn 或 agent 结束时，自动保存步骤快照
+          if (event.type === "turn_end" || event.type === "agent_end") {
+            const snapshot = buildStepSnapshot(session);
+            sessionStore.saveStep(session.sessionId, step, snapshot);
+          }
         });
         pool.setUnsub(taskId, step, unsub);
 
@@ -851,6 +919,12 @@ export async function handleWsMessage(
           const event = mapSdkEvent(sdkEvent);
           if (!event) return;
           ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
+
+          // 每轮 turn 或 agent 结束时，自动保存步骤快照
+          if (event.type === "turn_end" || event.type === "agent_end") {
+            const snapshot = buildStepSnapshot(fixSession);
+            sessionStore.saveStep(fixSession.sessionId, step, snapshot);
+          }
         });
 
         ws.send(
@@ -923,27 +997,6 @@ export async function handleWsMessage(
       }
 
       // ── 按步骤独立存储 ────────────────
-      case "session.saveStep": {
-        const { sessionId, stepId, snapshot } = msg.params as {
-          sessionId: string;
-          stepId: string;
-          snapshot: import("./SessionStore").StepSessionSnapshot;
-        };
-        sessionStore.saveStep(sessionId, stepId, snapshot);
-        ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
-        break;
-      }
-
-      case "session.loadStep": {
-        const { sessionId, stepId } = msg.params as {
-          sessionId: string;
-          stepId: string;
-        };
-        const snapshot = sessionStore.loadStep(sessionId, stepId);
-        ws.send(JSON.stringify({ type: "response", id: msg.id, result: { snapshot } }));
-        break;
-      }
-
       case "session.saveMeta": {
         const meta = msg.params as Record<string, unknown>;
         sessionStore.saveMeta(meta as import("./SessionStore").SessionMeta);

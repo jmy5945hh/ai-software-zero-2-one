@@ -117,6 +117,8 @@ export type AppState = {
   todoAnswers: Record<number, string | string[]>;
   /** 各步骤的初始提示词（用于重试时复用 user prompt） */
   initialPrompts: Record<string, string>;
+  /** QA 质量审查状态 */
+  qaReview: QaReviewState;
   /** 从历史记录恢复的会话快照（stepId → 会话数据），用于继续执行时恢复上下文 */
   restoredSessions: Record<string, {
     messages: Array<{ role: "user" | "assistant"; content: string }>;
@@ -221,4 +223,23 @@ export type FileChange = {
   deletions?: number;
   /** diff 原文（modify）或完整文件内容（create），用于 Drawer 展示 */
   diffContent?: string;
+};
+
+// ── QA 质量审查 ─────────────────────────────
+
+/** QA 审查执行状态 */
+export type QaReviewStatus = "idle" | "running" | "done" | "error";
+
+/** QA 审查状态 */
+export type QaReviewState = {
+  /** 执行状态 */
+  status: QaReviewStatus;
+  /** CLI 实时输出行 */
+  outputLines: string[];
+  /** 最终结果文件路径 */
+  resultFilePath: string;
+  /** 结果文件内容（TOML 格式） */
+  resultContent: string;
+  /** 错误信息 */
+  error?: string;
 };

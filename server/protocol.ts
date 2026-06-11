@@ -24,8 +24,6 @@ export type AgentMethod =
   | "session.listRecords"
   | "session.deleteRecord"
   // ── 按步骤独立存储 ──
-  | "session.saveStep"
-  | "session.loadStep"
   | "session.saveMeta"
   | "session.loadMeta"
   // ── 项目编译 ──

@@ -1,5 +1,7 @@
 import http from "http";
 import path from "path";
+import fs from "fs";
+import { spawn } from "child_process";
 import { readSpecsTree, readRepoTree, readFileSafe, writeFileSafe, existsSync } from "./utils/fileOps";
 import { getRepoDiff, getRepoDiffFiles, execCommand } from "./utils/gitOps";
 import { SessionPool } from "./SessionPool";
@@ -146,6 +148,27 @@ export function handleHttpRequest(
     return true;
   }
 
+  // ── 读取步骤会话快照（HTTP 替代 WebSocket session.loadStep） ──
+  if (req.method === "GET" && req.url?.startsWith("/step-snapshot")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const sessionId = url.searchParams.get("sessionId");
+    const stepId = url.searchParams.get("stepId");
+    if (!sessionId || !stepId) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'sessionId' or 'stepId' query parameter" }));
+      return true;
+    }
+    try {
+      const snapshot = deps.sessionStore.loadStep(sessionId, stepId);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ snapshot }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Load failed" }));
+    }
+    return true;
+  }
+
   // 获取按文件拆分的 git diff（必须放在 /repo-diff 之前，避免路由被先匹配）
   if (req.method === "GET" && req.url?.startsWith("/repo-diff-files")) {
     const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -223,6 +246,126 @@ export function handleHttpRequest(
         command: customCommand,
       }));
     }
+    return true;
+  }
+
+  // ── 读取文件内容（供前端 fetchResultFile 使用） ──
+  if (req.method === "GET" && req.url?.startsWith("/read-file")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const filePath = url.searchParams.get("file") || "";
+    const resolvedPath = filePath.replace(/^~/, process.env.HOME || process.env.USERPROFILE || "");
+    try {
+      const content = fs.readFileSync(resolvedPath, "utf-8");
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ content }));
+    } catch (err: any) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: `文件读取失败: ${err.message}` }));
+    }
+    return true;
+  }
+
+  // ── QA 质量审查：执行本地 CLI 命令并 SSE 流式输出 ──
+  if (req.method === "GET" && req.url?.startsWith("/qa-review")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const projectPath = url.searchParams.get("path");
+    const sessionId = url.searchParams.get("sessionId");
+
+    if (!projectPath || !sessionId) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'path' or 'sessionId' query parameter" }));
+      return true;
+    }
+
+    // 构建输出目录
+    const outputDir = path.join(
+      process.env.HOME || process.env.USERPROFILE || "~",
+      ".aiNativeDevPlatform",
+      "sessions",
+      sessionId,
+    );
+
+    // 确保输出目录存在
+    try {
+      fs.mkdirSync(outputDir, { recursive: true });
+    } catch {
+      // ignore
+    }
+
+    const outputFile = path.join(outputDir, "quality_result.toml");
+
+    // SSE 响应头
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+    });
+
+    // 发送初始事件
+    res.write(`data: ${JSON.stringify({ type: "start", message: "QA 审查开始执行...", outputFile })}\n\n`);
+
+    const cliCommand = `qa-review --output ${outputFile}`;
+
+    // 在项目目录下执行 CLI 命令
+    const child = spawn("sh", ["-c", cliCommand], {
+      cwd: projectPath,
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: false,
+    });
+
+    let fullOutput = "";
+
+    child.stdout.on("data", (data: Buffer) => {
+      const text = data.toString();
+      fullOutput += text;
+      // 逐行发送
+      const lines = text.split("\n").filter(Boolean);
+      for (const line of lines) {
+        res.write(`data: ${JSON.stringify({ type: "output", line })}\n\n`);
+      }
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      const text = data.toString();
+      fullOutput += text;
+      const lines = text.split("\n").filter(Boolean);
+      for (const line of lines) {
+        res.write(`data: ${JSON.stringify({ type: "output", line })}\n\n`);
+      }
+    });
+
+    child.on("close", async (code: number | null) => {
+      // 尝试读取结果文件
+      let resultContent = "";
+      try {
+        if (fs.existsSync(outputFile)) {
+          resultContent = fs.readFileSync(outputFile, "utf-8");
+        }
+      } catch {
+        // 读取失败
+      }
+
+      res.write(`data: ${JSON.stringify({
+        type: "complete",
+        exitCode: code,
+        outputFile,
+        resultContent,
+        fullOutput,
+      })}\n\n`);
+      res.end();
+    });
+
+    child.on("error", (err: Error) => {
+      res.write(`data: ${JSON.stringify({ type: "error", message: err.message })}\n\n`);
+      res.end();
+    });
+
+    // 客户端断开连接时终止子进程
+    req.on("close", () => {
+      child.kill();
+    });
+
     return true;
   }
 

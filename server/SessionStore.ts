@@ -55,6 +55,17 @@ export type StepSessionSnapshot = {
   summarizationStatus?: "idle" | "pending" | "loading" | "done" | "error";
   /** 项目编译状态 */
   buildStatus?: "idle" | "pending" | "detecting" | "loading" | "done" | "error";
+  // ── QA 审查数据（仅 quality 步骤有值） ──
+  /** QA 审查执行状态 */
+  qaStatus?: "idle" | "running" | "done" | "error";
+  /** CLI 实时输出行 */
+  qaOutputLines?: string[];
+  /** 最终结果文件路径 */
+  qaResultFilePath?: string;
+  /** 结果文件内容（TOML 格式） */
+  qaResultContent?: string;
+  /** 错误信息 */
+  qaError?: string;
 };
 
 /** 任务元信息（不含对话数据） */
@@ -81,6 +92,10 @@ export type SessionMeta = {
   status: "active" | "completed";
   /** 各步骤的 Agent 总结摘要（stepId → brief） */
   stepSummaries: Record<string, string>;
+  /** QA 质量审查状态（仅存简略状态，完整数据在 step-quality.json） */
+  qaReview?: {
+    status: "idle" | "running" | "done" | "error";
+  };
 };
 
 /** 完整的会话记录（元信息 + 各步骤对话数据） */
