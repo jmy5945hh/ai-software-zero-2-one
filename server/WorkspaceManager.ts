@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { spawnSync } from "child_process";
+import { spawn, spawnSync } from "child_process";
 
 export type FileNode = {
   name: string;
@@ -22,26 +22,44 @@ export type GitRepoConfig = {
   subdirectory?: string;
 };
 
+/** Workspace 初始化状态 */
+export type WorkspaceInitStatus = {
+  stage: "idle" | "cloning" | "ready" | "error";
+  progress?: string;  // git clone 的实时输出行
+  error?: string;
+  startedAt?: number;
+};
+
 /**
  * Workspace 文件系统管理器 — 为每个 taskId 维护隔离的工作目录。
  *
  * 根目录：~/workspaces/（可通过 WORKSPACE_ROOT 环境变量覆盖）
  *
  * 支持三种模式：
- * 1. 托管模式：在 root 下创建 taskId 子目录（含 AGENTS.md / package.json）
+ * 1. 托管模式：在 root 下创建 taskId 子目录
  * 2. 云端模式：从 git 克隆仓库到 root/{taskId}/repo/
  * 3. 外部模式：直接使用用户指定的现有目录（本地 Git 项目等）
  *
- * 每个任务的工作目录结构：
+ * 分层目录结构（云端/托管模式）：
  *   ~/workspaces/{taskId}/
- *     repo/              ← git clone 的仓库（云端模式）或托管代码（本地托管模式）
+ *     repo/              ← git clone 的仓库（Agent 工作目录 cwd）
+ *     deliverables/       ← Agent 交付物（specs、plans、reports 等）
+ *       specs/
+ *       plans/
+ *       reports/
  *     session/           ← 对话轨迹持久化目录
  *       meta.json
  *       step-{workflowId}.json
+ *     logs/              ← 编译日志、Agent 运行日志
+ *
+ * 外部模式：
+ *   直接使用用户指定的目录作为 repo 目录，不在其下创建额外子目录。
  */
 export class WorkspaceManager {
-  /** 外部工作空间映射 taskId → 绝对路径 */
+  /** 外部工作空间映射 taskId → 绝对路径（该路径即 repo 目录） */
   private externalDirs = new Map<string, string>();
+  /** Workspace 初始化状态跟踪（云端模式 git clone 进度） */
+  private initStatuses = new Map<string, WorkspaceInitStatus>();
 
   constructor(private root: string) {
     // 自动创建根目录
@@ -57,14 +75,62 @@ export class WorkspaceManager {
       || path.join(os.homedir(), "workspaces");
   }
 
-  /** 初始化托管 workspace 目录结构，写入 AGENTS.md */
-  initWorkspace(taskId: string, intent: string): string {
-    const dir = this.dir(taskId);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.mkdirSync(path.join(dir, "src"), { recursive: true });
+  /** 获取 Agent 工作目录（项目代码所在位置） */
+  getRepoDir(taskId: string): string {
+    const external = this.externalDirs.get(taskId);
+    if (external) return external;
+    return path.join(this.root, taskId, "repo");
+  }
 
+  /** 获取 Agent 交付物目录（specs、plans、reports） */
+  getDeliverablesDir(taskId: string): string {
+    const external = this.externalDirs.get(taskId);
+    if (external) return external; // 外部模式下不创建额外子目录
+    return path.join(this.root, taskId, "deliverables");
+  }
+
+  /** 获取日志目录 */
+  getLogsDir(taskId: string): string {
+    const external = this.externalDirs.get(taskId);
+    if (external) return external; // 外部模式下不创建额外子目录
+    return path.join(this.root, taskId, "logs");
+  }
+
+  /** 获取任务 workspace 下的 session 目录路径 */
+  getSessionDir(taskId: string): string {
+    const external = this.externalDirs.get(taskId);
+    if (external) return path.join(external, "session");
+    return path.join(this.root, taskId, "session");
+  }
+
+  /** 获取 workspace 根目录（taskId 顶层目录） */
+  getDir(taskId: string): string {
+    return this.dir(taskId);
+  }
+
+  /** 获取根目录路径 */
+  getRoot(): string {
+    return this.root;
+  }
+
+  /** 初始化托管 workspace 目录结构 */
+  initWorkspace(taskId: string, intent: string): string {
+    const taskDir = path.join(this.root, taskId);
+    const repoDir = path.join(taskDir, "repo");
+    const deliverablesDir = path.join(taskDir, "deliverables");
+    const specsDir = path.join(deliverablesDir, "specs");
+    const plansDir = path.join(deliverablesDir, "plans");
+    const reportsDir = path.join(deliverablesDir, "reports");
+
+    // 创建分层目录结构
+    fs.mkdirSync(repoDir, { recursive: true });
+    fs.mkdirSync(specsDir, { recursive: true });
+    fs.mkdirSync(plansDir, { recursive: true });
+    fs.mkdirSync(reportsDir, { recursive: true });
+
+    // AGENTS.md 放在 deliverables 目录（不在 repo 中污染项目代码）
     fs.writeFileSync(
-      path.join(dir, "AGENTS.md"),
+      path.join(deliverablesDir, "AGENTS.md"),
       [
         `# ${taskId}`,
         "",
@@ -80,27 +146,50 @@ export class WorkspaceManager {
       ].join("\n"),
     );
 
-    fs.writeFileSync(
-      path.join(dir, "package.json"),
-      JSON.stringify({ name: taskId, private: true, type: "module" }, null, 2),
-    );
-
-    return dir;
+    console.log(`[WorkspaceManager] Managed workspace ready: ${repoDir}`);
+    return repoDir;
   }
 
-  /** 云端模式：从 Git 仓库克隆代码到 workspace */
+  /** 获取 workspace 初始化状态 */
+  getInitStatus(taskId: string): WorkspaceInitStatus {
+    return this.initStatuses.get(taskId) || { stage: "idle" };
+  }
+
+  /**
+   * 云端模式：从 Git 仓库克隆代码到 workspace 的 repo/ 子目录。
+   *
+   * - 如果 repo 已存在（含 .git），直接返回已有路径（幂等）
+   * - 如果正在克隆中，返回 "cloning" 状态
+   * - 否则启动异步克隆，返回 repoDir 路径并设置状态为 "cloning"
+   *
+   * 调用方应在克隆完成后检查 initStatus 确认状态为 "ready"。
+   */
   initCloudWorkspace(taskId: string, gitRepo: GitRepoConfig): string {
     const taskDir = path.join(this.root, taskId);
     const repoDir = path.join(taskDir, "repo");
 
-    // 如果 repo 目录已存在（可能是重试），先清理
+    // 如果 repo 已存在且有 .git 目录，说明已克隆成功，直接复用
+    if (fs.existsSync(repoDir) && fs.existsSync(path.join(repoDir, ".git"))) {
+      const effectiveDir = gitRepo.subdirectory
+        ? path.join(repoDir, gitRepo.subdirectory)
+        : repoDir;
+      if (!gitRepo.subdirectory || fs.existsSync(effectiveDir)) {
+        this.initStatuses.set(taskId, { stage: "ready", startedAt: Date.now() });
+        return effectiveDir;
+      }
+    }
+
+    // 检查是否正在克隆中
+    const currentStatus = this.initStatuses.get(taskId);
+    if (currentStatus?.stage === "cloning") {
+      // 仍在克隆中，调用方应等待
+      return repoDir;
+    }
+
+    // 如果 repo 目录存在但没有 .git（之前克隆失败），清理
     if (fs.existsSync(repoDir)) {
       fs.rmSync(repoDir, { recursive: true, force: true });
     }
-
-    fs.mkdirSync(repoDir, { recursive: true });
-
-    console.log(`[WorkspaceManager] Cloning ${gitRepo.url}#${gitRepo.branch} into ${repoDir}`);
 
     // 输入校验：防止 shell 注入
     const urlPattern = /^(https?:\/\/|git@|git:\/\/)/;
@@ -115,41 +204,68 @@ export class WorkspaceManager {
       throw new Error(`子目录路径包含非法字符: ${gitRepo.subdirectory}`);
     }
 
-    try {
-      const result = spawnSync("git", [
-        "clone", "--depth", "1", "--branch", gitRepo.branch, gitRepo.url, repoDir,
-      ], {
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-        timeout: 120_000, // 2 分钟超时
-      });
+    // 创建父目录
+    fs.mkdirSync(repoDir, { recursive: true });
 
-      if (result.error) {
-        throw new Error(`Git clone 执行失败: ${result.error.message}`);
+    // 创建 deliverables 和 logs 目录（提前创建，不依赖 clone 完成）
+    const deliverablesDir = path.join(taskDir, "deliverables");
+    const specsDir = path.join(deliverablesDir, "specs");
+    const plansDir = path.join(deliverablesDir, "plans");
+    const reportsDir = path.join(deliverablesDir, "reports");
+    const logsDir = path.join(taskDir, "logs");
+    fs.mkdirSync(specsDir, { recursive: true });
+    fs.mkdirSync(plansDir, { recursive: true });
+    fs.mkdirSync(reportsDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+
+    // 设置状态为 "cloning"
+    this.initStatuses.set(taskId, { stage: "cloning", startedAt: Date.now(), progress: "准备克隆..." });
+
+    console.log(`[WorkspaceManager] Starting async clone: ${gitRepo.url}#${gitRepo.branch} → ${repoDir}`);
+
+    // 异步克隆
+    const child = spawn("git", [
+      "clone", "--depth", "1", "--branch", gitRepo.branch, gitRepo.url, repoDir,
+    ], {
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 120_000,
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      const text = data.toString().trim();
+      if (text) {
+        this.initStatuses.set(taskId, {
+          stage: "cloning",
+          progress: text,
+          startedAt: Date.now(),
+        });
       }
-      if (result.status !== 0) {
-        throw new Error(`Git clone 失败: ${result.stderr?.trim() || "unknown error"}`);
-      }
-    } catch (err) {
-      // 克隆失败时清理并抛出
+    });
+
+    child.on("error", (err) => {
+      console.error(`[WorkspaceManager] Clone error for ${taskId}:`, err.message);
+      this.initStatuses.set(taskId, { stage: "error", error: err.message, startedAt: Date.now() });
       try { fs.rmSync(repoDir, { recursive: true, force: true }); } catch { /* ignore */ }
-      throw new Error(`Git 仓库克隆失败: ${(err as Error).message}`);
-    }
+    });
 
-    // 如果指定了子目录，调整工作空间根目录指向子目录
-    const effectiveDir = gitRepo.subdirectory
+    child.on("close", (code) => {
+      if (code === 0) {
+        console.log(`[WorkspaceManager] Clone complete for ${taskId}`);
+        this.initStatuses.set(taskId, { stage: "ready", startedAt: Date.now() });
+      } else {
+        const errMsg = `Git clone 失败 (exit code ${code})`;
+        console.error(`[WorkspaceManager] ${errMsg} for ${taskId}`);
+        this.initStatuses.set(taskId, { stage: "error", error: errMsg, startedAt: Date.now() });
+        try { fs.rmSync(repoDir, { recursive: true, force: true }); } catch { /* ignore */ }
+      }
+    });
+
+    // 如果指定了子目录，返回子目录路径
+    const effectiveRepoDir = gitRepo.subdirectory
       ? path.join(repoDir, gitRepo.subdirectory)
       : repoDir;
 
-    if (gitRepo.subdirectory && !fs.existsSync(effectiveDir)) {
-      throw new Error(`仓库子目录不存在: ${gitRepo.subdirectory}`);
-    }
-
-    // 设置为外部目录（Agent 直接操作此目录）
-    this.externalDirs.set(taskId, effectiveDir);
-
-    console.log(`[WorkspaceManager] Cloud workspace ready: ${effectiveDir}`);
-    return effectiveDir;
+    return effectiveRepoDir;
   }
 
   /** 设置外部工作空间目录（用户指定的本地 Git 项目等） */
@@ -165,9 +281,9 @@ export class WorkspaceManager {
     return resolved;
   }
 
-  /** 获取 workspace 文件树 */
+  /** 获取 workspace 文件树（默认展示 repo 目录） */
   getFileTree(taskId: string): FileNode[] {
-    const dir = this.dir(taskId);
+    const dir = this.getRepoDir(taskId);
     if (!fs.existsSync(dir)) return [];
     return this.scanDir(dir, dir);
   }
@@ -193,10 +309,11 @@ export class WorkspaceManager {
     return path.resolve(this.expandHome(p));
   }
 
-  /** 解析 workspace 相对路径，防止路径遍历 */
+  /** 解析 workspace 相对路径（相对于 repo 目录），防止路径遍历 */
   private resolveWorkspace(taskId: string, filePath: string): string {
-    const full = path.resolve(this.dir(taskId), filePath);
-    if (!full.startsWith(path.resolve(this.dir(taskId)))) {
+    const repoDir = this.getRepoDir(taskId);
+    const full = path.resolve(repoDir, filePath);
+    if (!full.startsWith(path.resolve(repoDir))) {
       throw new Error("Path traversal detected");
     }
     return full;
@@ -253,11 +370,6 @@ export class WorkspaceManager {
     }
   }
 
-  /** 获取任务 workspace 下的 session 目录路径 */
-  getSessionDir(taskId: string): string {
-    return path.join(this.root, taskId, "session");
-  }
-
   /** 列出所有 workspace 下的任务目录 */
   listTaskDirs(): string[] {
     try {
@@ -268,16 +380,6 @@ export class WorkspaceManager {
     } catch {
       return [];
     }
-  }
-
-  /** 获取 workspace 根目录 */
-  getDir(taskId: string): string {
-    return this.dir(taskId);
-  }
-
-  /** 获取根目录路径 */
-  getRoot(): string {
-    return this.root;
   }
 
   private dir(taskId: string): string {

@@ -1,4 +1,5 @@
 import { Sparkles, GitBranch, Copy, Check } from "lucide-react";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 import { useState, useCallback } from "react";
 import type { TaskCard } from "../data/types";
 import { categoryMeta, priorityLabel } from "../data";
@@ -123,9 +124,9 @@ function TaskCardResident({
           </div>
           <div className="story-resident-detail">
             <span className="story-resident-detail-label">任务详情</span>
-            <p className="story-resident-detail-value" title={intent || taskCard.summary}>
-              {(intent || taskCard.summary).length > 20 ? (intent || taskCard.summary).slice(0, 20) + "…" : (intent || taskCard.summary)}
-            </p>
+            <div className="story-resident-detail-value">
+              <MarkdownRenderer>{intent || taskCard.summary}</MarkdownRenderer>
+            </div>
           </div>
           <div className="story-resident-meta">
             <span className={`priority-tag ${taskCard.priority}`}>

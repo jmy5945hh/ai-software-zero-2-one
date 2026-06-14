@@ -99,6 +99,55 @@ function buildDetectCommandPrompt(): string {
 3. 如果找不到任何构建配置，输出 npm run build 作为默认值`;
 }
 
+// ── 统一 workspace 路径解析 ──────────────────
+/** 根据参数决定 Agent 工作目录（repo 目录），支持 gitRepo / workspacePath / 已初始化 workspace */
+function resolveWorkspaceDir(
+  workspace: WorkspaceManager,
+  taskId: string,
+  opts: {
+    gitRepo?: { url: string; branch: string };
+    workspacePath?: string;
+    intent?: string;
+  },
+): { workspaceDir: string; needsWait: boolean } {
+  const { gitRepo, workspacePath, intent } = opts;
+
+  if (gitRepo?.url) {
+    const status = workspace.getInitStatus(taskId);
+    if (status.stage === "ready") {
+      // 已克隆完成，直接使用
+      return { workspaceDir: workspace.getRepoDir(taskId), needsWait: false };
+    }
+    if (status.stage === "cloning") {
+      // 正在克隆中，返回 repo 路径但标记需要等待
+      return { workspaceDir: workspace.getRepoDir(taskId), needsWait: true };
+    }
+    // 首次初始化：启动异步克隆
+    const dir = workspace.initCloudWorkspace(taskId, gitRepo);
+    return { workspaceDir: dir, needsWait: true };
+  }
+
+  if (workspacePath) {
+    // 本地模式：使用外部目录
+    return { workspaceDir: workspace.setExternalWorkspace(taskId, workspacePath), needsWait: false };
+  }
+
+  // 检查是否已有云端 workspace 初始化过
+  const repoDir = workspace.getRepoDir(taskId);
+  if (fs.existsSync(repoDir)) {
+    return { workspaceDir: repoDir, needsWait: false };
+  }
+
+  // 检查是否已有外部 workspace 映射
+  const existingDir = workspace.getDir(taskId);
+  if (fs.existsSync(existingDir)) {
+    return { workspaceDir: existingDir, needsWait: false };
+  }
+
+  // 全新托管模式
+  return { workspaceDir: workspace.initWorkspace(taskId, intent || ""), needsWait: false };
+}
+
 // ── SDK 事件映射 ────────────────────────────
 /** 从 AgentToolResult 的 content 数组中提取文本 */
 function extractTextFromContent(result: Record<string, unknown> | undefined): string {
@@ -319,16 +368,29 @@ export async function handleWsMessage(
         const intent = (msg.params as { intent?: string }).intent || "";
         const extPath = (msg.params as { workspacePath?: string }).workspacePath;
         const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
-        let workspaceDir: string;
+        const { workspaceDir, needsWait } = resolveWorkspaceDir(workspace, taskId, {
+          gitRepo,
+          workspacePath: extPath,
+          intent,
+        });
 
-        if (gitRepo?.url) {
-          // todo 后续仅做目录存在性校验，云端模式：克隆仓库到 workspace
-          workspaceDir = workspace.initCloudWorkspace(taskId, gitRepo);
-        } else if (extPath) {
-          workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
-        } else {
-          workspaceDir = workspace.initWorkspace(taskId, intent);
+        // 如果 workspace 正在初始化（git clone 进行中），返回状态让前端等待
+        if (needsWait) {
+          const status = workspace.getInitStatus(taskId);
+          ws.send(
+            JSON.stringify({
+              type: "response",
+              id: msg.id,
+              result: {
+                status: "workspace_initializing",
+                initStatus: status,
+                workspaceDir,
+              },
+            }),
+          );
+          break;
         }
+
         const session = await runner.createSession(taskId, step, workspaceDir);
         pool.set(taskId, step, session);
 
@@ -391,15 +453,16 @@ export async function handleWsMessage(
         if (!session) {
           const intent = (msg.params as { intent?: string }).intent || "";
           const extPath = (msg.params as { workspacePath?: string }).workspacePath;
-          let workspaceDir: string;
-          if (extPath) {
-            workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
-          } else {
-            // 优先使用已映射的外部目录（云端模式 git clone 后已设置），否则创建新 workspace
-            workspaceDir = workspace.getDir(taskId);
-            if (!fs.existsSync(workspaceDir)) {
-              workspaceDir = workspace.initWorkspace(taskId, intent);
-            }
+          const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
+          const { workspaceDir, needsWait } = resolveWorkspaceDir(workspace, taskId, {
+            gitRepo,
+            workspacePath: extPath,
+            intent,
+          });
+          if (needsWait) {
+            const status = workspace.getInitStatus(taskId);
+            ws.send(JSON.stringify({ type: "response", id: msg.id, result: { status: "workspace_initializing", initStatus: status } }));
+            break;
           }
           session = await runner.createSession(taskId, step, workspaceDir);
           pool.set(taskId, step, session);
@@ -439,15 +502,16 @@ export async function handleWsMessage(
         if (!session) {
           const intent = (msg.params as { intent?: string }).intent || "";
           const extPath = (msg.params as { workspacePath?: string }).workspacePath;
-          let workspaceDir: string;
-          if (extPath) {
-            workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
-          } else {
-            // 优先使用已映射的外部目录（云端模式 git clone 后已设置），否则创建新 workspace
-            workspaceDir = workspace.getDir(taskId);
-            if (!fs.existsSync(workspaceDir)) {
-              workspaceDir = workspace.initWorkspace(taskId, intent);
-            }
+          const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
+          const { workspaceDir, needsWait } = resolveWorkspaceDir(workspace, taskId, {
+            gitRepo,
+            workspacePath: extPath,
+            intent,
+          });
+          if (needsWait) {
+            const status = workspace.getInitStatus(taskId);
+            ws.send(JSON.stringify({ type: "response", id: msg.id, result: { status: "workspace_initializing", initStatus: status } }));
+            break;
           }
           session = await runner.createSession(taskId, step, workspaceDir);
           pool.set(taskId, step, session);
@@ -574,14 +638,17 @@ export async function handleWsMessage(
 
         const intent = (msg.params as { intent?: string }).intent || "";
         const extPath = (msg.params as { workspacePath?: string }).workspacePath;
-        let workspaceDir: string;
-        if (extPath) {
-          workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
-        } else {
-          workspaceDir = workspace.getDir(taskId);
-          if (!fs.existsSync(workspaceDir)) {
-            workspaceDir = workspace.initWorkspace(taskId, intent);
-          }
+        const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
+        const { workspaceDir, needsWait } = resolveWorkspaceDir(workspace, taskId, {
+          gitRepo,
+          workspacePath: extPath,
+          intent,
+        });
+
+        if (needsWait) {
+          const status = workspace.getInitStatus(taskId);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: { status: "workspace_initializing", initStatus: status } }));
+          break;
         }
 
         // 如果已有 session，先销毁
@@ -635,16 +702,19 @@ export async function handleWsMessage(
 
         const intent = (msg.params as { intent?: string }).intent || "";
         const extPath = (msg.params as { workspacePath?: string }).workspacePath;
-        let workspaceDir: string;
-        if (extPath) {
-          workspaceDir = workspace.setExternalWorkspace(taskId, extPath);
-        } else {
-          // 优先使用已映射的外部目录（云端模式 git clone 后已设置），否则创建新 workspace
-          workspaceDir = workspace.getDir(taskId);
-          if (!fs.existsSync(workspaceDir)) {
-            workspaceDir = workspace.initWorkspace(taskId, intent);
-          }
+        const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
+        const { workspaceDir, needsWait } = resolveWorkspaceDir(workspace, taskId, {
+          gitRepo,
+          workspacePath: extPath,
+          intent,
+        });
+
+        if (needsWait) {
+          const status = workspace.getInitStatus(taskId);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: { status: "workspace_initializing", initStatus: status } }));
+          break;
         }
+
         const newSession = await runner.createSession(taskId, step, workspaceDir, text);
         pool.set(taskId, step, newSession);
 
@@ -712,16 +782,19 @@ export async function handleWsMessage(
         // 清理旧 session 遗留的 pending question（新 session 会通过 resumePrompt 直接获得回答）
         rejectQuestion(taskId, step, new Error("Session resumed, old question superseded"));
 
-        let workspaceDir: string;
-        if (workspacePath) {
-          workspaceDir = workspace.setExternalWorkspace(taskId, workspacePath);
-        } else {
-          // 优先使用已映射的外部目录（云端模式 git clone 后已设置），否则创建新 workspace
-          workspaceDir = workspace.getDir(taskId);
-          if (!fs.existsSync(workspaceDir)) {
-            workspaceDir = workspace.initWorkspace(taskId, intent || "");
-          }
+        const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
+        const { workspaceDir, needsWait } = resolveWorkspaceDir(workspace, taskId, {
+          gitRepo,
+          workspacePath,
+          intent,
+        });
+
+        if (needsWait) {
+          const status = workspace.getInitStatus(taskId);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: { status: "workspace_initializing", initStatus: status } }));
+          break;
         }
+
         const session = await runner.createSession(taskId, step, workspaceDir);
         pool.set(taskId, step, session);
 
@@ -769,7 +842,7 @@ export async function handleWsMessage(
         if (!saved) {
           throw new Error(`No summary saved for ${taskId}:${step}`);
         }
-        const workspaceDir = workspace.getDir(taskId);
+        const workspaceDir = workspace.getRepoDir(taskId);
         const session = await runner.createSummarizationSession(workspaceDir);
 
         const unsub = session.subscribe((sdkEvent) => {
@@ -800,8 +873,11 @@ export async function handleWsMessage(
 
       // ── 编译命令检测 ──────────────────
       case "build.detectCommand": {
-        const { workspacePath } = msg.params as { workspacePath: string };
-        const workspaceDir = workspacePath;
+        const { workspacePath, taskId } = msg.params as { workspacePath: string; taskId?: string };
+        // 优先使用 taskId 解析 workspace（云端模式），否则回退到传入的 workspacePath
+        const workspaceDir = taskId
+          ? workspace.getRepoDir(taskId)
+          : (workspacePath || workspace.getRepoDir(taskId));
         const session = await runner.createBuildCommandSession(workspaceDir);
 
         let fullOutput = "";
@@ -858,7 +934,7 @@ export async function handleWsMessage(
             timestamp: string;
           };
         };
-        const workspaceDir = workspace.getDir(taskId);
+        const workspaceDir = workspace.getRepoDir(taskId);
         const session = await runner.createBuildSession(workspaceDir);
 
         const unsub = session.subscribe((sdkEvent) => {
@@ -912,12 +988,20 @@ export async function handleWsMessage(
           buildOutput: string;
           workspacePath?: string;
         };
-        let workspaceDir: string;
-        if (workspacePath) {
-          workspaceDir = workspace.setExternalWorkspace(taskId, workspacePath);
-        } else {
-          workspaceDir = workspace.getDir(taskId);
+        const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
+        const intent = (msg.params as { intent?: string }).intent || "";
+        const { workspaceDir, needsWait } = resolveWorkspaceDir(workspace, taskId, {
+          gitRepo,
+          workspacePath,
+          intent,
+        });
+
+        if (needsWait) {
+          const status = workspace.getInitStatus(taskId);
+          ws.send(JSON.stringify({ type: "response", id: msg.id, result: { status: "workspace_initializing", initStatus: status } }));
+          break;
         }
+
         const fixSession = await runner.createSession(taskId, step, workspaceDir);
 
         const unsub = fixSession.subscribe((sdkEvent) => {
@@ -960,6 +1044,15 @@ export async function handleWsMessage(
         const content = workspace.readFile(taskId, filePath);
         ws.send(
           JSON.stringify({ type: "response", id: msg.id, result: { content } }),
+        );
+        break;
+      }
+
+      case "workspace.initStatus": {
+        const { taskId } = msg.params as { taskId: string };
+        const status = workspace.getInitStatus(taskId);
+        ws.send(
+          JSON.stringify({ type: "response", id: msg.id, result: { initStatus: status } }),
         );
         break;
       }

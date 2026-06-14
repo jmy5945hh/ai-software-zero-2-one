@@ -97,6 +97,8 @@ type DecisionBoardProps = {
   onBuildUpdate?: (stepId: string, command: string, result: import("../data/types").BuildResult) => void;
   /** QA 一键修复回调 */
   onFixIssues?: (report: string) => void;
+  /** Workspace 初始化状态（云端模式 git clone 进度） */
+  workspaceInitStatus?: { stage: string; progress?: string; error?: string };
 };
 
 export function DecisionBoard({
@@ -120,6 +122,7 @@ export function DecisionBoard({
   onOpenRepoExplorer,
   onBuildUpdate,
   onFixIssues,
+  workspaceInitStatus,
 }: DecisionBoardProps) {
   const step = workflow[state.stepIndex];
   const stepKey = useStepKey(state.stepIndex);
@@ -2203,10 +2206,24 @@ function TrajectoryChatTab({
               <p>连接 Agent 后将在此展示实时工作轨迹</p>
             </div>
           )}
-          {displayTurns.length === 0 && timeline.length === 0 && isAgentConnected && (
+          {displayTurns.length === 0 && timeline.length === 0 && isAgentConnected && workspaceInitStatus?.stage === "cloning" && (
+            <div className="trajectory-waiting">
+              <Loader2 size={20} className="spin-icon" />
+              <p>正在克隆 Git 仓库...</p>
+              {workspaceInitStatus.progress && (
+                <p className="trajectory-progress">{workspaceInitStatus.progress}</p>
+              )}
+            </div>
+          )}
+          {displayTurns.length === 0 && timeline.length === 0 && isAgentConnected && workspaceInitStatus?.stage !== "cloning" && (
             <div className="trajectory-waiting">
               <Loader2 size={20} className="spin-icon" />
               <p>等待 Agent 开始工作...</p>
+            </div>
+          )}
+          {displayTurns.length === 0 && timeline.length === 0 && isAgentConnected && workspaceInitStatus?.stage === "error" && (
+            <div className="trajectory-waiting" style={{ color: "var(--danger)" }}>
+              <p>仓库克隆失败: {workspaceInitStatus.error || "未知错误"}</p>
             </div>
           )}
 

@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Play, Eye, Rocket, ChevronDown, ChevronUp, FileText, FolderOpen, File, ChevronRight, ArrowLeft } from "lucide-react";
+import { useState, useRef } from "react";
+import { Play, Eye, Rocket, ChevronDown, ChevronUp, FileText, X, Paperclip } from "lucide-react";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { AppState, TaskCard, TaskCategory } from "../data/types";
 import type { BrowseEntry } from "./WorkspaceSelector";
 import { taskCards, categoryMeta, priorityLabel } from "../data";
@@ -31,14 +32,10 @@ export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask, on
   // 展开/收起控制：默认每类只展示前3张卡片
   const [expandedCategories, setExpandedCategories] = useState<Set<TaskCategory>>(new Set());
 
-  // 预览弹窗中 docs 文件浏览器
-  const [docsBrowserOpen, setDocsBrowserOpen] = useState(false);
-  const [docsBrowserPath, setDocsBrowserPath] = useState("~");
-  const [docsBrowserEntries, setDocsBrowserEntries] = useState<BrowseEntry[]>([]);
-  const [docsBrowserLoading, setDocsBrowserLoading] = useState(false);
-  const [docsBrowserError, setDocsBrowserError] = useState<string | null>(null);
-  // 用户在预览弹窗中编辑/选择的 docs 路径
-  const [editedDocsPath, setEditedDocsPath] = useState<string | null>(null);
+  // 已选择的 Markdown 附件
+  const [selectedFile, setSelectedFile] = useState<{ name: string; content: string } | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleCategory = (cat: TaskCategory) => {
     setExpandedCategories((prev) => {
@@ -49,64 +46,51 @@ export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask, on
   };
 
   const startTaskFromCard = (card: TaskCard) => {
-    onRequestStartTask(`${card.title}：${card.summary}`, state.notes.trim(), card);
+    let intent = `${card.title}：${card.summary}`;
+    if (selectedFile?.content) {
+      intent += `\n\n--- 需求文档: ${selectedFile.name} ---\n${selectedFile.content}`;
+    }
+    onRequestStartTask(intent, state.notes.trim(), card);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFileError(null);
+
+    // 只允许 .md 文件
+    if (!file.name.endsWith(".md")) {
+      setFileError("仅支持 Markdown (.md) 文件");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const content = reader.result as string;
+      if (!content || !content.trim()) {
+        setFileError("文件内容为空");
+        return;
+      }
+      setSelectedFile({ name: file.name, content });
+    };
+    reader.onerror = () => {
+      setFileError("文件读取失败");
+    };
+    reader.readAsText(file);
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setFileError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const previewTask = state.previewTaskId
     ? taskCards.find((t) => t.id === state.previewTaskId) ?? null
     : null;
-
-  // ── docs 文件浏览器 ──
-  const openDocsBrowser = async () => {
-    const current = editedDocsPath || previewTask?.docs || "~";
-    const baseDir = current.includes("/") ? current.split("/").slice(0, -1).join("/") || "/" : current;
-    setDocsBrowserPath(baseDir);
-    setDocsBrowserOpen(true);
-    setDocsBrowserError(null);
-    await loadDocsDir(baseDir);
-  };
-
-  const loadDocsDir = async (dirPath: string) => {
-    if (!onBrowseDir) return;
-    setDocsBrowserLoading(true);
-    setDocsBrowserError(null);
-    try {
-      const entries = await onBrowseDir(dirPath);
-      setDocsBrowserEntries(entries);
-    } catch (err) {
-      setDocsBrowserError((err as Error).message || "无法读取目录");
-      setDocsBrowserEntries([]);
-    } finally {
-      setDocsBrowserLoading(false);
-    }
-  };
-
-  const enterDocsDir = (entry: BrowseEntry) => {
-    if (entry.type === "dir") {
-      setDocsBrowserPath(entry.path);
-      loadDocsDir(entry.path);
-    }
-  };
-
-  const selectDocsFile = (entry: BrowseEntry) => {
-    if (entry.type === "file") {
-      setEditedDocsPath(entry.path);
-      setDocsBrowserOpen(false);
-    }
-  };
-
-  const docsParentPath = docsBrowserPath === "/" ? null
-    : docsBrowserPath.split("/").slice(0, -1).join("/") || "/";
-
-  const goDocsUp = () => {
-    if (docsParentPath) {
-      setDocsBrowserPath(docsParentPath);
-      loadDocsDir(docsParentPath);
-    }
-  };
-
-  // 当前生效的 docs 路径（优先用户编辑的）
-  const getEffectiveDocs = (card: TaskCard) => editedDocsPath ?? card.docs;
 
   return (
     <>
@@ -168,7 +152,8 @@ export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask, on
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setEditedDocsPath(null);
+                            setSelectedFile(null);
+                            setFileError(null);
                             onPatch({ previewTaskId: card.id });
                           }}
                         >
@@ -209,7 +194,7 @@ export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask, on
       {previewTask && (
         <div
           className="preview-backdrop"
-          onClick={() => { onPatch({ previewTaskId: null }); setDocsBrowserOpen(false); }}
+          onClick={() => { onPatch({ previewTaskId: null }); setSelectedFile(null); setFileError(null); }}
         >
           <div
             className="preview-modal"
@@ -225,7 +210,7 @@ export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask, on
               <button
                 className="ghost-button"
                 type="button"
-                onClick={() => { onPatch({ previewTaskId: null }); setDocsBrowserOpen(false); }}
+                onClick={() => { onPatch({ previewTaskId: null }); setSelectedFile(null); setFileError(null); }}
               >
                 Esc
               </button>
@@ -251,80 +236,68 @@ export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask, on
               </div>
               <div className="preview-desc">
                 <span>任务描述</span>
-                <p>{previewTask.summary}</p>
+                <MarkdownRenderer>{previewTask.summary}</MarkdownRenderer>
               </div>
 
-              {/* ── Docs 文档字段 ── */}
+              {/* ── 需求文档附件 ── */}
               <div className="preview-docs">
                 <span>
                   <FileText size={14} />
-                  需求文档（可选）
+                  需求文档（可选，仅 .md）
                 </span>
-                <div className="preview-docs-row">
-                  <input
-                    className="preview-docs-input"
-                    type="text"
-                    value={getEffectiveDocs(previewTask) || ""}
-                    onChange={(e) => setEditedDocsPath(e.target.value)}
-                    placeholder="选择或输入文档路径（如 ~/docs/prd.md）"
-                  />
-                  {onBrowseDir && (
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      onClick={openDocsBrowser}
-                    >
-                      <FolderOpen size={14} />
-                      浏览
-                    </button>
-                  )}
-                </div>
 
-                {/* 内联文件浏览器 */}
-                {docsBrowserOpen && (
-                  <div className="preview-docs-browser">
-                    <div className="preview-docs-breadcrumb">
+                {/* 隐藏的本地文件选择器 */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".md,.markdown"
+                  style={{ display: "none" }}
+                  onChange={handleFileChange}
+                />
+
+                {!selectedFile ? (
+                  <button
+                    className="preview-docs-upload-btn"
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip size={16} />
+                    选择 Markdown 文件
+                  </button>
+                ) : (
+                  <div className="preview-docs-attachment">
+                    <div className="preview-docs-attachment-card">
+                      <FileText size={18} className="preview-docs-attachment-icon" />
+                      <div className="preview-docs-attachment-info">
+                        <span className="preview-docs-attachment-name">{selectedFile.name}</span>
+                        <span className="preview-docs-attachment-meta">
+                          Markdown · {selectedFile.content.split("\n").length} 行
+                        </span>
+                      </div>
                       <button
-                        className="preview-docs-back-btn"
+                        className="preview-docs-attachment-remove"
                         type="button"
-                        onClick={goDocsUp}
-                        disabled={!docsParentPath}
-                        title={docsParentPath ? `返回 ${docsParentPath}` : "已是根目录"}
+                        onClick={clearSelectedFile}
+                        title="移除附件"
                       >
-                        <ArrowLeft size={13} />
+                        <X size={14} />
                       </button>
-                      <span className="preview-docs-breadcrumb-path">
-                        {docsBrowserPath}
-                      </span>
                     </div>
-                    <div className="preview-docs-entry-list">
-                      {docsBrowserLoading ? (
-                        <div className="preview-docs-status">加载中…</div>
-                      ) : docsBrowserError ? (
-                        <div className="preview-docs-status error">{docsBrowserError}</div>
-                      ) : docsBrowserEntries.length === 0 ? (
-                        <div className="preview-docs-status">此目录为空</div>
-                      ) : (
-                        docsBrowserEntries.map((entry) => (
-                          <button
-                            key={entry.path}
-                            className={`preview-docs-entry ${entry.type === "dir" ? "is-dir" : ""}`}
-                            type="button"
-                            onClick={() => entry.type === "dir" ? enterDocsDir(entry) : selectDocsFile(entry)}
-                          >
-                            {entry.type === "dir" ? (
-                              <FolderOpen size={14} />
-                            ) : (
-                              <File size={14} />
-                            )}
-                            <span>{entry.name}</span>
-                            {entry.type === "dir" && (
-                              <ChevronRight size={12} className="preview-docs-entry-arrow" />
-                            )}
-                          </button>
-                        ))
-                      )}
+                    {/* 文档内容预览 */}
+                    <div className="preview-docs-content">
+                      <div className="preview-docs-content-header">
+                        <span>内容预览</span>
+                      </div>
+                      <div className="preview-docs-content-body">
+                        <MarkdownRenderer>{selectedFile.content}</MarkdownRenderer>
+                      </div>
                     </div>
+                  </div>
+                )}
+
+                {fileError && (
+                  <div className="preview-docs-content-error">
+                    {fileError}
                   </div>
                 )}
               </div>
@@ -346,9 +319,7 @@ export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask, on
                 className="primary-action wide"
                 type="button"
                 onClick={() => {
-                  const effectiveDocs = getEffectiveDocs(previewTask);
-                  const card = effectiveDocs ? { ...previewTask, docs: effectiveDocs } : previewTask;
-                  startTaskFromCard(card);
+                  startTaskFromCard(previewTask);
                 }}
               >
                 <Rocket size={16} />

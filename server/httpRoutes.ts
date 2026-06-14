@@ -47,12 +47,18 @@ export function handleHttpRequest(
   if (req.method === "GET" && req.url?.startsWith("/specs-tree")) {
     const url = new URL(req.url, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
-    if (!projectPath) {
+    const taskId = url.searchParams.get("taskId");
+    // 云端模式：优先使用 taskId 解析 workspace repo 路径
+    let resolvedPath = projectPath;
+    if (!resolvedPath && taskId) {
+      resolvedPath = deps.workspace.getRepoDir(taskId);
+    }
+    if (!resolvedPath) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Missing 'path' query parameter" }));
+      res.end(JSON.stringify({ error: "Missing 'path' or 'taskId' query parameter" }));
       return true;
     }
-    const specsDir = path.join(projectPath, "specs");
+    const specsDir = path.join(resolvedPath, "specs");
     try {
       const result = readSpecsTree(specsDir);
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -69,13 +75,18 @@ export function handleHttpRequest(
     const url = new URL(req.url, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
     const filePath = url.searchParams.get("file");
-    if (!projectPath || !filePath) {
+    const taskId = url.searchParams.get("taskId");
+    let resolvedPath = projectPath;
+    if (!resolvedPath && taskId) {
+      resolvedPath = deps.workspace.getRepoDir(taskId);
+    }
+    if (!resolvedPath || !filePath) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Missing 'path' or 'file' query parameter" }));
+      res.end(JSON.stringify({ error: "Missing 'path'/'taskId' or 'file' query parameter" }));
       return true;
     }
     try {
-      const content = readFileSafe(path.join(projectPath, "specs"), filePath);
+      const content = readFileSafe(path.join(resolvedPath, "specs"), filePath);
       const isMarkdown = /\.md$/i.test(filePath);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ content, isMarkdown }));
@@ -92,14 +103,18 @@ export function handleHttpRequest(
     req.on("data", (chunk) => { body += chunk; });
     req.on("end", () => {
       try {
-        const { path: projectPath, file: filePath, content } = JSON.parse(body);
-        if (!projectPath || !filePath || content === undefined) {
+        const { path: projectPath, file: filePath, content, taskId } = JSON.parse(body);
+        let resolvedPath = projectPath;
+        if (!resolvedPath && taskId) {
+          resolvedPath = deps.workspace.getRepoDir(taskId);
+        }
+        if (!resolvedPath || !filePath || content === undefined) {
           res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "Missing 'path', 'file', or 'content'" }));
+          res.end(JSON.stringify({ error: "Missing 'path'/'taskId', 'file', or 'content'" }));
           return;
         }
         try {
-          writeFileSafe(path.join(projectPath, "specs"), filePath, content);
+          writeFileSafe(path.join(resolvedPath, "specs"), filePath, content);
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ success: true }));
         } catch (err) {
@@ -118,18 +133,23 @@ export function handleHttpRequest(
   if (req.method === "GET" && req.url?.startsWith("/repo-tree")) {
     const url = new URL(req.url, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
-    if (!projectPath) {
+    const taskId = url.searchParams.get("taskId");
+    let resolvedPath = projectPath;
+    if (!resolvedPath && taskId) {
+      resolvedPath = deps.workspace.getRepoDir(taskId);
+    }
+    if (!resolvedPath) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Missing 'path' query parameter" }));
+      res.end(JSON.stringify({ error: "Missing 'path' or 'taskId' query parameter" }));
       return true;
     }
     try {
-      if (!existsSync(projectPath)) {
+      if (!existsSync(resolvedPath)) {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify([]));
         return true;
       }
-      const result = readRepoTree(projectPath);
+      const result = readRepoTree(resolvedPath);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -145,13 +165,18 @@ export function handleHttpRequest(
     const url = new URL(req.url, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
     const filePath = url.searchParams.get("file");
-    if (!projectPath || !filePath) {
+    const taskId = url.searchParams.get("taskId");
+    let resolvedPath = projectPath;
+    if (!resolvedPath && taskId) {
+      resolvedPath = deps.workspace.getRepoDir(taskId);
+    }
+    if (!resolvedPath || !filePath) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Missing 'path' or 'file' query parameter" }));
+      res.end(JSON.stringify({ error: "Missing 'path'/'taskId' or 'file' query parameter" }));
       return true;
     }
     try {
-      const content = readFileSafe(projectPath, filePath);
+      const content = readFileSafe(resolvedPath, filePath);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ content }));
     } catch {
@@ -172,23 +197,26 @@ export function handleHttpRequest(
 
         // 根据运行模式初始化 workspace
         const isCloud = params.runtimeMode === "cloud";
+        let resolvedWorkspacePath: string;
         if (isCloud) {
           if (!params.gitRepo) {
             res.writeHead(400, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "云端任务需要 gitRepo 参数" }));
             return;
           }
-          deps.workspace.initCloudWorkspace(params.taskId, params.gitRepo);
+          // 异步克隆（不阻塞 HTTP 响应）
+          resolvedWorkspacePath = deps.workspace.initCloudWorkspace(params.taskId, params.gitRepo);
         } else {
-          deps.workspace.setExternalWorkspace(params.taskId, params.workspacePath);
+          resolvedWorkspacePath = deps.workspace.setExternalWorkspace(params.taskId, params.workspacePath);
         }
 
         const meta = {
-          sessionId: params.taskId, // 复用 taskId 作为 sessionId
+          sessionId: params.taskId,
           taskId: params.taskId,
           intent: params.intent,
-          workspacePath: params.workspacePath,
+          workspacePath: resolvedWorkspacePath,
           runtimeMode: params.runtimeMode,
+          gitRepo: params.gitRepo || undefined,
           stepIndex: 0,
           activeStage: "intent",
           scope: params.scope || "mvp",
@@ -241,13 +269,18 @@ export function handleHttpRequest(
   if (req.method === "GET" && req.url?.startsWith("/repo-diff-files")) {
     const url = new URL(req.url, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
-    if (!projectPath) {
+    const taskId = url.searchParams.get("taskId");
+    let resolvedPath = projectPath;
+    if (!resolvedPath && taskId) {
+      resolvedPath = deps.workspace.getRepoDir(taskId);
+    }
+    if (!resolvedPath) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Missing 'path' query parameter" }));
+      res.end(JSON.stringify({ error: "Missing 'path' or 'taskId' query parameter" }));
       return true;
     }
     try {
-      const result = getRepoDiffFiles(projectPath);
+      const result = getRepoDiffFiles(resolvedPath);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(result));
     } catch (err) {
@@ -261,13 +294,18 @@ export function handleHttpRequest(
   if (req.method === "GET" && req.url?.startsWith("/repo-diff")) {
     const url = new URL(req.url, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
-    if (!projectPath) {
+    const taskId = url.searchParams.get("taskId");
+    let resolvedPath = projectPath;
+    if (!resolvedPath && taskId) {
+      resolvedPath = deps.workspace.getRepoDir(taskId);
+    }
+    if (!resolvedPath) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Missing 'path' query parameter" }));
+      res.end(JSON.stringify({ error: "Missing 'path' or 'taskId' query parameter" }));
       return true;
     }
     try {
-      const diff = getRepoDiff(projectPath);
+      const diff = getRepoDiff(resolvedPath);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ diff }));
     } catch (err) {
@@ -282,14 +320,22 @@ export function handleHttpRequest(
     const url = new URL(req.url, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
     const customCommand = url.searchParams.get("command");
-    console.log("[project-build] path=%s command=%s", projectPath, customCommand);
-    if (!projectPath) {
+    const taskId = url.searchParams.get("taskId");
+    console.log("[project-build] path=%s command=%s taskId=%s", projectPath, customCommand, taskId);
+
+    // 云端模式：优先使用 taskId 解析 workspace repo 路径
+    let resolvedPath = projectPath;
+    if (!resolvedPath && taskId) {
+      resolvedPath = deps.workspace.getRepoDir(taskId);
+    }
+    if (!resolvedPath) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Missing 'path' query parameter" }));
+      res.end(JSON.stringify({ error: "Missing 'path' or 'taskId' query parameter" }));
       return true;
     }
+
     try {
-      if (!existsSync(projectPath)) {
+      if (!existsSync(resolvedPath)) {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ success: false, output: "// 目录不存在", command: "" }));
         return true;
@@ -302,7 +348,7 @@ export function handleHttpRequest(
         return true;
       }
 
-      const output = execCommand(command, projectPath);
+      const output = execCommand(command, resolvedPath);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ success: true, output, command }));
     } catch (err: any) {
@@ -338,10 +384,15 @@ export function handleHttpRequest(
     const url = new URL(req.url, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
     const sessionId = url.searchParams.get("sessionId");
+    const taskId = url.searchParams.get("taskId");
 
-    if (!projectPath || !sessionId) {
+    let resolvedPath = projectPath;
+    if (!resolvedPath && taskId) {
+      resolvedPath = deps.workspace.getRepoDir(taskId);
+    }
+    if (!resolvedPath || !sessionId) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Missing 'path' or 'sessionId' query parameter" }));
+      res.end(JSON.stringify({ error: "Missing 'path'/'taskId' or 'sessionId' query parameter" }));
       return true;
     }
 
@@ -377,7 +428,7 @@ export function handleHttpRequest(
 
     // 在项目目录下执行 CLI 命令
     const child = spawn("sh", ["-c", cliCommand], {
-      cwd: projectPath,
+      cwd: resolvedPath,
       stdio: ["ignore", "pipe", "pipe"],
       shell: false,
     });

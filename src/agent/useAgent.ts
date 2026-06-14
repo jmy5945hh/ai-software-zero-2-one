@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory, Turn, ConnectionQuality, SessionSnapshot } from "./types";
 import type { FileChange, AgentSummary } from "../data/types";
 import { AgentWebSocket } from "./ws";
-import { buildAgentWsUrl, getAgentWsOrigin } from "./config";
+import { buildAgentWsUrl, getAgentWsOrigin, getAgentHttpOrigin } from "./config";
 import type { RuntimeMode } from "../types/runtime";
 
 // ── 工具函数 ─────────────────────────────────
@@ -193,6 +193,12 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   const buildStepRef = useRef<string | null>(null);
   /** 外部注册的轮次完成回调（接收 step 和最新的 sessions 快照） */
   const onSessionCompleteRef = useRef<((step: string, sessions: Record<string, SessionState>) => void) | null>(null);
+  /** Workspace 初始化状态（云端模式 git clone 进度） */
+  const [workspaceInitStatus, setWorkspaceInitStatus] = useState<{
+    stage: "idle" | "cloning" | "ready" | "error";
+    progress?: string;
+    error?: string;
+  }>({ stage: "idle" });
   /** 记录每个 step 的 steer 输入（ref 方式，不受 React 批处理影响） */
   const steerInputsRef = useRef<Record<string, string[]>>({});
   /** 记录每个 step 的 steer 输入及对应的 turn 索引 */
@@ -202,6 +208,9 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   /** 保存 hook 级别的 gitRepo，避免闭包陈旧 */
   const hookGitRepoRef = useRef(hookGitRepo);
   hookGitRepoRef.current = hookGitRepo;
+  /** 保存 hook 级别的 mode，避免闭包陈旧 */
+  const hookModeRef = useRef(mode);
+  hookModeRef.current = mode;
   /** 记录需要重连恢复的 session（step → sessionId），WebSocket 重连后自动触发 reconnect */
   const pendingReconnectRef = useRef<Record<string, string>>({});
 
@@ -254,11 +263,29 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       if (effectiveGitRepo?.url) {
         params.gitRepo = effectiveGitRepo;
       }
-      const result = (await wsRef.current.request("session.create", params)) as { sessionId: string; workspaceDir?: string };
+      const result = (await wsRef.current.request("session.create", params)) as {
+        sessionId?: string;
+        workspaceDir?: string;
+        status?: string;
+        initStatus?: { stage: string; progress?: string; error?: string };
+      };
+
+      // 如果 workspace 正在初始化（git clone 进行中），更新状态并返回
+      if (result.status === "workspace_initializing") {
+        setWorkspaceInitStatus(result.initStatus || { stage: "cloning" });
+        // 自动轮询：稍后重试
+        setTimeout(() => getWorkspaceInitStatus(), 2000);
+        return;
+      }
 
       // 云端模式：记录 workspace 目录路径（用于后续保存到 session meta）
       if (result.workspaceDir && onWorkspaceDirRef.current) {
         onWorkspaceDirRef.current(result.workspaceDir);
+      }
+
+      if (!result.sessionId) {
+        console.warn("[useAgent] createSession: no sessionId returned");
+        return;
       }
 
       setSessions((prev) => ({
@@ -320,7 +347,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
 
   // ── 流式修正 ──
   const steer = useCallback(
-    (step: string, text: string, intent?: string, workspacePath?: string) => {
+    (step: string, text: string, intent?: string, workspacePath?: string, gitRepo?: { url: string; branch: string }) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
       // 记录到 ref（不受 React 批处理影响），同时记录当前 turn 数量
@@ -358,7 +385,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
           },
         };
       });
-      wsRef.current.request("session.steer", { taskId, step, text, intent, workspacePath });
+      wsRef.current.request("session.steer", { taskId, step, text, intent, workspacePath, gitRepo });
     },
     [taskId],
   );
@@ -439,7 +466,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
 
   // ── 从历史恢复后继续问答（重建 session 并发送已存储的回答）──
   const resumeQuestion = useCallback(
-    async (step: string, answer: string, intent?: string, workspacePath?: string) => {
+    async (step: string, answer: string, intent?: string, workspacePath?: string, gitRepo?: { url: string; branch: string }) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
 
@@ -452,12 +479,14 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
         },
       }));
 
+      const effectiveGitRepo = gitRepo || hookGitRepoRef.current;
       const result = await wsRef.current.request("session.resumeQuestion", {
         taskId,
         step,
         answer,
         intent,
         workspacePath,
+        gitRepo: effectiveGitRepo,
       }) as { sessionId: string };
 
       // 记录 sessionId，用于 WebSocket 重连后自动恢复
@@ -474,7 +503,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
 
   // ── 重试整个 Agent 流程 ──
   const retrySession = useCallback(
-    async (step: string, text: string, initialPrompt?: string) => {
+    async (step: string, text: string, initialPrompt?: string, gitRepo?: { url: string; branch: string }) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
 
@@ -491,7 +520,8 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       // 清除该 step 的总结标记，允许重新触发总结
       summarizingRef.current.delete(step);
 
-      const result = await wsRef.current.request("session.retry", { taskId, step, text, initialPrompt }) as { sessionId: string };
+      const effectiveGitRepo = gitRepo || hookGitRepoRef.current;
+      const result = await wsRef.current.request("session.retry", { taskId, step, text, initialPrompt, gitRepo: effectiveGitRepo }) as { sessionId: string };
 
       // 更新 sessionId，用于 WebSocket 重连后自动恢复
       if (result?.sessionId) {
@@ -529,9 +559,11 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       messages: Array<{ role: "user" | "assistant"; content: string }>,
       intent?: string,
       workspacePath?: string,
+      gitRepo?: { url: string; branch: string },
     ): Promise<string | undefined> => {
       if (!taskId || !wsRef.current) return undefined;
       activeStepRef.current = step;
+      const effectiveGitRepo = gitRepo || hookGitRepoRef.current;
       try {
         const result = (await wsRef.current.request("session.restore", {
           taskId,
@@ -539,6 +571,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
           messages,
           intent,
           workspacePath,
+          gitRepo: effectiveGitRepo,
         })) as { sessionId: string };
 
         // 记录 sessionId，用于 WebSocket 重连后自动恢复
@@ -588,6 +621,20 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     },
     [],
   );
+
+  // ── 查询 workspace 初始化状态（云端模式 git clone 进度） ──
+  const getWorkspaceInitStatus = useCallback(async () => {
+    if (!taskId || !wsRef.current) return;
+    try {
+      const result = await wsRef.current.request("workspace.initStatus", {
+        taskId,
+      }) as { initStatus: { stage: string; progress?: string; error?: string } };
+      setWorkspaceInitStatus(result.initStatus);
+      return result.initStatus;
+    } catch {
+      return undefined;
+    }
+  }, [taskId]);
 
   // ── WebSocket 生命周期 ──
   useEffect(() => {
@@ -1212,12 +1259,16 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
 
   // ── 项目编译 ──
   const triggerBuild = useCallback(
-    async (workspacePath: string, command?: string): Promise<{ success: boolean; output: string; command: string }> => {
+    async (workspacePath: string, command?: string, mode?: RuntimeMode): Promise<{ success: boolean; output: string; command: string }> => {
       if (!command) {
         return { success: false, output: "// 错误：模型未提供编译命令", command: "" };
       }
+      const effectiveMode = mode || hookModeRef.current || "local";
       try {
-        const url = `/project-build?path=${encodeURIComponent(workspacePath)}&command=${encodeURIComponent(command)}`;
+        // 云端模式使用绝对 URL（绕过 Vite 代理），本地模式使用相对 URL（经过 Vite 代理）
+        const baseUrl = effectiveMode === "cloud" ? getAgentHttpOrigin("cloud") : "";
+        const taskIdParam = taskId ? `&taskId=${encodeURIComponent(taskId)}` : "";
+        const url = `${baseUrl}/project-build?path=${encodeURIComponent(workspacePath)}&command=${encodeURIComponent(command)}${taskIdParam}`;
         console.log("[triggerBuild] url:", url);
         const res = await fetch(url);
         return await res.json();
@@ -1225,7 +1276,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
         return { success: false, output: "// 编译请求失败", command: "" };
       }
     },
-    [],
+    [taskId],
   );
 
   /** 通过模型检测编译命令 */
@@ -1233,13 +1284,13 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     async (workspacePath: string): Promise<string> => {
       if (!wsRef.current) return "";
       try {
-        const result = await wsRef.current.request("build.detectCommand", { workspacePath }) as { command: string };
+        const result = await wsRef.current.request("build.detectCommand", { workspacePath, taskId }) as { command: string };
         return result.command?.trim() || "";
       } catch {
         return "";
       }
     },
-    [],
+    [taskId],
   );
 
   // ── 自动触发独立编译 ──
@@ -1256,7 +1307,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
 
         // 如果已有编译命令（从历史恢复），跳过检测直接执行
         if (session.buildCommand) {
-          triggerBuild(workspacePath || "", session.buildCommand)
+          triggerBuild(workspacePath || "", session.buildCommand, hookModeRef.current)
             .then((buildResult) => {
               setSessions((prev) => ({
                 ...prev,
@@ -1309,7 +1360,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
             }));
 
             // Step 2: 执行编译
-            return triggerBuild(workspacePath || "", command);
+            return triggerBuild(workspacePath || "", command, hookModeRef.current);
           })
           .then((buildResult) => {
             // Step 3: 触发独立编译 session（让 LLM 分析编译结果）
@@ -1432,5 +1483,9 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     setOnWorkspaceDir: (cb: ((dir: string) => void) | null) => {
       onWorkspaceDirRef.current = cb;
     },
+    /** Workspace 初始化状态（云端模式 git clone 进度） */
+    workspaceInitStatus,
+    /** 主动查询 workspace 初始化状态 */
+    getWorkspaceInitStatus,
   } as const;
 }

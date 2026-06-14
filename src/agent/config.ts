@@ -25,6 +25,11 @@ export function buildAgentWsUrl(mode: RuntimeMode): string {
   return base;
 }
 
+/** 获取指定模式的 HTTP API origin（用于 REST 调用） */
+export function getAgentHttpOrigin(mode: RuntimeMode): string {
+  return getAgentWsOrigin(mode);
+}
+
 // ── 内部辅助 ──────────────────────────────────
 
 function getWsUrl(mode: RuntimeMode): string {

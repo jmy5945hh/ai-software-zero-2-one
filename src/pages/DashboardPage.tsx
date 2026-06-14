@@ -94,11 +94,12 @@ export function DashboardPage() {
         const hashIndex = path.lastIndexOf("#");
         const url = hashIndex > 0 ? path.slice(0, hashIndex) : path;
         const branch = hashIndex > 0 ? path.slice(hashIndex + 1) : "main";
+        const gitRepoConfig = { url, branch };
 
         setState((previous) => ({
           ...previous,
           workspacePath: "",
-          gitRepo: { url, branch },
+          gitRepo: gitRepoConfig,
           view: "workspace",
         }));
         setShowWorkspacePicker(false);
@@ -110,7 +111,7 @@ export function DashboardPage() {
           );
           localStorage.setItem(STORAGE_KEY, JSON.stringify({
             ...currentState,
-            gitRepo: { url, branch },
+            gitRepo: gitRepoConfig,
             workspacePath: "",
             view: "workspace",
             runtimeMode: mode,
@@ -129,7 +130,7 @@ export function DashboardPage() {
           selectedModules: state.selectedModules,
           todoAnswers: state.todoAnswers,
           initialPrompts: state.initialPrompts,
-          gitRepo: state.gitRepo,
+          gitRepo: gitRepoConfig,
         }).catch((err: Error) => console.warn("[DashboardPage] task.init failed:", err));
 
         navigate(`/task?taskId=${state.sessionId}`);
@@ -137,32 +138,12 @@ export function DashboardPage() {
       }
 
       // 本地模式：path 为本地目录路径
-      const docsPath = state.activeTaskCard?.docs;
-      if (docsPath && agentAvailable) {
-        try {
-          const docsContent = await agent.readFile(docsPath);
-          if (!docsContent) {
-            setDocsError(`文档文件为空: ${docsPath}`);
-            return;
-          }
-          setState((previous) => ({
-            ...previous,
-            workspacePath: path,
-            intent: `${previous.intent}\n\n--- 需求文档: ${docsPath} ---\n${docsContent}`,
-            view: "workspace",
-          }));
-        } catch (err) {
-          const msg = (err as Error).message || "未知错误";
-          setDocsError(`读取文档失败: ${docsPath}\n${msg}`);
-          return;
-        }
-      } else {
-        setState((previous) => ({
-          ...previous,
-          workspacePath: path,
-          view: "workspace",
-        }));
-      }
+      // 需求文档内容已由 HomeTaskBoard 在预览时读取并融入 intent，无需再次读取
+      setState((previous) => ({
+        ...previous,
+        workspacePath: path,
+        view: "workspace",
+      }));
       setShowWorkspacePicker(false);
       try {
         const currentState = JSON.parse(
@@ -231,6 +212,7 @@ export function DashboardPage() {
           : fullRecord.intent,
         workspacePath: fullRecord.workspacePath,
         runtimeMode: fullRecord.runtimeMode || "local",
+        gitRepo: (fullRecord as any).gitRepo,
         stepIndex: fullRecord.stepIndex,
         activeStage: fullRecord.activeStage as AppState["activeStage"],
         scope: fullRecord.scope as AppState["scope"],

@@ -51,6 +51,8 @@ export function TaskPage() {
         ...previous,
         intent: record.intent,
         workspacePath: record.workspacePath,
+        runtimeMode: (record as any).runtimeMode || "local",
+        gitRepo: (record as any).gitRepo,
         stepIndex: record.stepIndex,
         activeStage: record.activeStage as AppState["activeStage"],
         scope: record.scope as AppState["scope"],
@@ -112,7 +114,7 @@ export function TaskPage() {
   // 使用 state.sessionId 作为 taskId，确保与 /task/init 中的 taskId 一致
   const taskId = state.sessionId || null;
 
-  const agent = useAgent(taskId, state.workspacePath);
+  const agent = useAgent(taskId, state.workspacePath, state.gitRepo, state.runtimeMode);
 
   // ── 从历史恢复 session 状态到 agent ──
   // 当 restoredSessions 加载完成后，将各步骤的状态注入 agent sessions，
@@ -140,6 +142,7 @@ export function TaskPage() {
             snapshot.messages,
             state.intent,
             state.workspacePath,
+            state.gitRepo,
           );
         }
       }
@@ -279,11 +282,11 @@ export function TaskPage() {
       });
       // 创建 verify session 并触发 Agent 执行修复
       const fixPrompt = `请根据以下质量审查报告修复代码中的问题：\n\n${report}`;
-      agent.createSession("verify", state.intent, state.workspacePath).then(() => {
+      agent.createSession("verify", state.intent, state.workspacePath, state.gitRepo).then(() => {
         agent.prompt("verify", fixPrompt);
       });
     },
-    [isAgentConnected, agent, state.intent, state.workspacePath, patchState],
+    [isAgentConnected, agent, state.intent, state.workspacePath, state.gitRepo, patchState],
   );
 
   // ── Agent session 生命周期 ──
@@ -305,7 +308,32 @@ export function TaskPage() {
       });
 
       const startIntent = async () => {
-        await agent.createSession("intent", state.intent, state.workspacePath);
+        // 云端模式：先检查 workspace 初始化状态
+        if (state.runtimeMode === "cloud" && agent.getWorkspaceInitStatus) {
+          const status = await agent.getWorkspaceInitStatus();
+          if (status?.stage === "cloning") {
+            // 正在克隆中，轮询等待
+            const pollInterval = setInterval(async () => {
+              const s = await agent.getWorkspaceInitStatus();
+              if (!s || s.stage === "ready" || s.stage === "error") {
+                clearInterval(pollInterval);
+                if (s?.stage === "ready") {
+                  // 创建 session
+                  await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo);
+                  if (taskId && state.intent) {
+                    sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
+                  }
+                  await agent.prompt("intent", intentPrompt);
+                  agent.getFileTree();
+                }
+              }
+            }, 2000);
+            return;
+          }
+        }
+
+        // 本地模式或云端已就绪
+        await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo);
         // 首次 session 创建后立即保存，确保初始状态不丢失
         if (taskId && state.intent) {
           sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
@@ -315,7 +343,7 @@ export function TaskPage() {
       };
       startIntent();
     }
-  }, [isAgentConnected, state.stepIndex, state.intent, state.initialPrompts, patchState]);
+  }, [isAgentConnected, state.stepIndex, state.intent, state.initialPrompts, patchState, state.runtimeMode]);
 
   const continueTask = useCallback(async () => {
     const nextIndex = Math.min(state.stepIndex + 1, workflow.length - 1);
@@ -333,7 +361,7 @@ export function TaskPage() {
       patchState({
         initialPrompts: { ...state.initialPrompts, [nextStep.id]: promptText },
       });
-      agent.createSession(nextStep.id, state.intent, state.workspacePath).then(() => {
+      agent.createSession(nextStep.id, state.intent, state.workspacePath, state.gitRepo).then(() => {
         agent.prompt(nextStep.id, promptText);
         agent.getFileTree();
       });
@@ -503,6 +531,7 @@ export function TaskPage() {
                 }
               }}
               onFixIssues={handleFixQaIssues}
+              workspaceInitStatus={agent.workspaceInitStatus}
             />
           </div>
 
