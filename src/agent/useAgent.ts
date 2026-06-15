@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory, Turn, ConnectionQuality, SessionSnapshot } from "./types";
+import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory, Turn, ConnectionQuality, SessionSnapshot, WorkspaceInitStatus } from "./types";
 import type { FileChange, AgentSummary } from "../data/types";
 import { AgentWebSocket } from "./ws";
 import { buildAgentWsUrl, getAgentWsOrigin, getAgentHttpOrigin } from "./config";
@@ -194,11 +194,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   /** 外部注册的轮次完成回调（接收 step 和最新的 sessions 快照） */
   const onSessionCompleteRef = useRef<((step: string, sessions: Record<string, SessionState>) => void) | null>(null);
   /** Workspace 初始化状态（云端模式 git clone 进度） */
-  const [workspaceInitStatus, setWorkspaceInitStatus] = useState<{
-    stage: "idle" | "cloning" | "ready" | "error";
-    progress?: string;
-    error?: string;
-  }>({ stage: "idle" });
+  const [workspaceInitStatus, setWorkspaceInitStatus] = useState<WorkspaceInitStatus>({ stage: "idle" });
   /** 记录每个 step 的 steer 输入（ref 方式，不受 React 批处理影响） */
   const steerInputsRef = useRef<Record<string, string[]>>({});
   /** 记录每个 step 的 steer 输入及对应的 turn 索引 */
@@ -213,6 +209,8 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   hookModeRef.current = mode;
   /** 记录需要重连恢复的 session（step → sessionId），WebSocket 重连后自动触发 reconnect */
   const pendingReconnectRef = useRef<Record<string, string>>({});
+  /** 克隆状态轮询定时器，用于清理 */
+  const clonePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── 初始化任务环境（HTTP 接口） ──
   const initTask = useCallback(
@@ -270,9 +268,49 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
 
       // 如果 workspace 正在初始化（git clone 进行中），更新状态并返回
       if (result.status === "workspace_initializing") {
-        setWorkspaceInitStatus(result.initStatus || { stage: "cloning" });
-        // 自动轮询：稍后重试
-        setTimeout(() => getWorkspaceInitStatus(), 2000);
+        const initStatus = result.initStatus as WorkspaceInitStatus | undefined;
+        setWorkspaceInitStatus(initStatus || { stage: "cloning" });
+
+        // 清除旧轮询定时器（如果存在）
+        if (clonePollRef.current) clearInterval(clonePollRef.current);
+
+        // 持续轮询直到克隆完成或失败
+        clonePollRef.current = setInterval(async () => {
+          if (!wsRef.current?.isConnected()) {
+            // WebSocket 已断开，等待重连后 onOpen 恢复轮询
+            return;
+          }
+          try {
+            const s = await getWorkspaceInitStatus();
+            if (!s || s.stage === "ready" || s.stage === "error") {
+              if (clonePollRef.current) {
+                clearInterval(clonePollRef.current);
+                clonePollRef.current = null;
+              }
+              if (s?.stage === "ready") {
+                // 克隆完成 — 自动重新调用 session.create 创建 session
+                const retryResult = await wsRef.current!.request("session.create", params) as {
+                  sessionId?: string;
+                  workspaceDir?: string;
+                };
+                if (retryResult.sessionId) {
+                  if (retryResult.workspaceDir && onWorkspaceDirRef.current) {
+                    onWorkspaceDirRef.current(retryResult.workspaceDir);
+                  }
+                  setSessions((prev) => ({
+                    ...prev,
+                    [step]: { ...defaultSession(), id: retryResult.sessionId },
+                  }));
+                  pendingReconnectRef.current[step] = retryResult.sessionId;
+                }
+              }
+              // 如果是 error，状态已在 getWorkspaceInitStatus 中更新，UI 会显示错误 + 重试按钮
+            }
+          } catch {
+            // 暂时错误不停止轮询，等待 WebSocket 恢复
+          }
+        }, 2000);
+
         return;
       }
 
@@ -626,13 +664,65 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     try {
       const result = await wsRef.current.request("workspace.initStatus", {
         taskId,
-      }) as { initStatus: { stage: string; progress?: string; error?: string } };
+      }) as { initStatus: WorkspaceInitStatus };
       setWorkspaceInitStatus(result.initStatus);
       return result.initStatus;
     } catch {
       return undefined;
     }
   }, [taskId]);
+
+  /** 重试云端 workspace 初始化（git clone 失败后） */
+  const retryWorkspaceInit = useCallback(async (gitRepo?: { url: string; branch: string }) => {
+    if (!taskId || !wsRef.current) return;
+    const effectiveGitRepo = gitRepo || hookGitRepoRef.current;
+    if (!effectiveGitRepo?.url) return;
+
+    // 清除旧轮询
+    if (clonePollRef.current) {
+      clearInterval(clonePollRef.current);
+      clonePollRef.current = null;
+    }
+
+    // UI 立即进入 cloning 状态
+    setWorkspaceInitStatus({ stage: "cloning", progress: "正在重试克隆..." });
+
+    try {
+      const result = await wsRef.current.request("workspace.retryClone", {
+        taskId,
+        gitRepo: effectiveGitRepo,
+      }) as { repoDir: string; initStatus: WorkspaceInitStatus };
+
+      setWorkspaceInitStatus(result.initStatus);
+
+      // 如果已完成（小仓库秒克隆），直接返回
+      if (result.initStatus.stage === "ready" || result.initStatus.stage === "error") {
+        return;
+      }
+
+      // 否则启动持续轮询
+      clonePollRef.current = setInterval(async () => {
+        if (!wsRef.current?.isConnected()) return;
+        try {
+          const s = await getWorkspaceInitStatus();
+          if (!s || s.stage === "ready" || s.stage === "error") {
+            if (clonePollRef.current) {
+              clearInterval(clonePollRef.current);
+              clonePollRef.current = null;
+            }
+          }
+        } catch {
+          // 暂时错误不停止轮询
+        }
+      }, 2000);
+    } catch (err) {
+      setWorkspaceInitStatus({
+        stage: "error",
+        error: err instanceof Error ? err.message : "重试克隆失败",
+        errorType: "unknown",
+      });
+    }
+  }, [taskId, getWorkspaceInitStatus]);
 
   // ── WebSocket 生命周期 ──
   useEffect(() => {
@@ -674,6 +764,38 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
             delete pendingReconnectRef.current[step];
           }
         }
+      }
+
+      // 如果之前 workspace 正在克隆中，重连后恢复轮询
+      try {
+        const cloneStatus = await (async () => {
+          if (!taskId || !wsRef.current) return undefined;
+          const r = await wsRef.current.request("workspace.initStatus", { taskId }) as { initStatus: WorkspaceInitStatus };
+          return r.initStatus;
+        })();
+        if (cloneStatus?.stage === "cloning") {
+          console.log("[useAgent] onOpen — resuming clone polling");
+          setWorkspaceInitStatus(cloneStatus);
+          // 清除旧轮询（如果有的话）
+          if (clonePollRef.current) clearInterval(clonePollRef.current);
+          // 恢复持续轮询
+          clonePollRef.current = setInterval(async () => {
+            if (!wsRef.current?.isConnected()) return;
+            try {
+              const s = await getWorkspaceInitStatus();
+              if (!s || s.stage === "ready" || s.stage === "error") {
+                if (clonePollRef.current) {
+                  clearInterval(clonePollRef.current);
+                  clonePollRef.current = null;
+                }
+              }
+            } catch {
+              // 暂时错误不停止轮询
+            }
+          }, 2000);
+        }
+      } catch {
+        // 获取克隆状态失败，忽略
       }
     });
     ws.onClose(() => {
@@ -1198,6 +1320,10 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     });
 
     return () => {
+      if (clonePollRef.current) {
+        clearInterval(clonePollRef.current);
+        clonePollRef.current = null;
+      }
       ws.close();
       wsRef.current = null;
     };
@@ -1485,5 +1611,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     workspaceInitStatus,
     /** 主动查询 workspace 初始化状态 */
     getWorkspaceInitStatus,
+    /** 重试云端 workspace 初始化（git clone 失败后） */
+    retryWorkspaceInit,
   } as const;
 }

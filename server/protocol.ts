@@ -18,6 +18,8 @@ export type AgentMethod =
   | "workspace.tree"
   | "workspace.readFile"
   | "workspace.browse"
+  | "workspace.initStatus"
+  | "workspace.retryClone"
   // ── 会话记录 ──
   | "session.saveRecord"
   | "session.loadRecord"

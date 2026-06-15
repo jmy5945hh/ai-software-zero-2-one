@@ -138,3 +138,14 @@ export type ConnectionQuality = {
   /** 重连尝试次数 */
   reconnectAttempt: number;
 };
+
+/** Workspace 初始化状态（云端模式 git clone 进度） */
+export type WorkspaceInitStatus = {
+  stage: "idle" | "cloning" | "ready" | "error";
+  progress?: string;
+  error?: string;
+  errorType?: "auth" | "network" | "branch_not_found" | "timeout" | "not_found" | "unknown";
+  startedAt?: number;
+  elapsedMs?: number;
+  retryCount?: number;
+};

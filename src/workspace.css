@@ -2599,6 +2599,25 @@
   white-space: nowrap;
 }
 
+.trajectory-clone-error {
+  color: var(--danger);
+}
+
+.trajectory-clone-error svg {
+  color: var(--danger);
+  opacity: 0.7;
+}
+
+.trajectory-clone-error .trajectory-progress {
+  color: var(--danger);
+  opacity: 0.7;
+  font-family: inherit;
+}
+
+.trajectory-clone-error button {
+  margin-top: 4px;
+}
+
 .trajectory-round {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);

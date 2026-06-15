@@ -26,8 +26,14 @@ export type GitRepoConfig = {
 export type WorkspaceInitStatus = {
   stage: "idle" | "cloning" | "ready" | "error";
   progress?: string;  // git clone 的实时输出行
-  error?: string;
+  error?: string;     // 人类可读错误信息
+  /** 错误分类，用于前端展示差异化提示和重试建议 */
+  errorType?: "auth" | "network" | "branch_not_found" | "timeout" | "not_found" | "unknown";
   startedAt?: number;
+  /** 克隆耗时（ms），完成或失败时填充 */
+  elapsedMs?: number;
+  /** 已重试次数（0 表示首次尝试） */
+  retryCount?: number;
 };
 
 /**
@@ -55,6 +61,45 @@ export type WorkspaceInitStatus = {
  * 外部模式：
  *   直接使用用户指定的目录作为 repo 目录，不在其下创建额外子目录。
  */
+// ── Git 错误分类与用户提示 ──────────────────
+
+/** 根据 git 错误信息分类 */
+function categorizeGitError(message: string): WorkspaceInitStatus["errorType"] {
+  const lower = message.toLowerCase();
+  if (lower.includes("authentication") || lower.includes("permission") || lower.includes("could not read from remote repository")) return "auth";
+  if (lower.includes("could not resolve host") || lower.includes("connection") || lower.includes("timed out") || lower.includes("network") || lower.includes("unable to access")) return "network";
+  if (lower.includes("not found") || lower.includes("does not exist") || lower.includes("remote: not found") || lower.includes("repository not found")) return "not_found";
+  if (lower.includes("killed") || lower.includes("signal") || lower.includes("timeout")) return "timeout";
+  return "unknown";
+}
+
+/** 将错误分类转为中文用户提示 */
+function buildUserFriendlyError(errorType: WorkspaceInitStatus["errorType"], rawMessage: string): string {
+  switch (errorType) {
+    case "auth":
+      return "Git 仓库认证失败，请检查仓库地址或凭证配置是否正确";
+    case "network":
+      return "网络连接失败，请检查网络状态后重试";
+    case "not_found":
+      return "Git 仓库不存在或地址不正确，请检查仓库 URL";
+    case "timeout":
+      return "Git 克隆超时（超过 120 秒），请检查网络状态或尝试使用更小的仓库";
+    case "branch_not_found":
+      return "指定的分支不存在，请检查分支名称";
+    default:
+      return `Git 克隆失败: ${rawMessage}`;
+  }
+}
+
+/** 格式化毫秒为 "X分Y秒" */
+function formatDuration(ms: number): string {
+  const totalSec = Math.round(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (min > 0) return `${min}分${sec}秒`;
+  return `${sec}秒`;
+}
+
 export class WorkspaceManager {
   /** 外部工作空间映射 taskId → 绝对路径（该路径即 repo 目录） */
   private externalDirs = new Map<string, string>();
@@ -167,6 +212,9 @@ export class WorkspaceManager {
   initCloudWorkspace(taskId: string, gitRepo: GitRepoConfig): string {
     const taskDir = path.join(this.root, taskId);
     const repoDir = path.join(taskDir, "repo");
+    const logPrefix = `[WorkspaceManager][${taskId}]`;
+    const startTime = Date.now();
+    const retryCount = this.initStatuses.get(taskId)?.retryCount ?? 0;
 
     // 如果 repo 已存在且有 .git 目录，说明已克隆成功，直接复用
     if (fs.existsSync(repoDir) && fs.existsSync(path.join(repoDir, ".git"))) {
@@ -174,7 +222,8 @@ export class WorkspaceManager {
         ? path.join(repoDir, gitRepo.subdirectory)
         : repoDir;
       if (!gitRepo.subdirectory || fs.existsSync(effectiveDir)) {
-        this.initStatuses.set(taskId, { stage: "ready", startedAt: Date.now() });
+        console.log(`${logPrefix} Clone cache hit — reusing existing repo: ${repoDir}`);
+        this.initStatuses.set(taskId, { stage: "ready", startedAt: startTime, retryCount });
         return effectiveDir;
       }
     }
@@ -183,11 +232,13 @@ export class WorkspaceManager {
     const currentStatus = this.initStatuses.get(taskId);
     if (currentStatus?.stage === "cloning") {
       // 仍在克隆中，调用方应等待
+      console.log(`${logPrefix} Clone already in progress, returning repoDir for wait`);
       return repoDir;
     }
 
     // 如果 repo 目录存在但没有 .git（之前克隆失败），清理
     if (fs.existsSync(repoDir)) {
+      console.log(`${logPrefix} Cleaning up stale repo directory: ${repoDir}`);
       fs.rmSync(repoDir, { recursive: true, force: true });
     }
 
@@ -219,9 +270,17 @@ export class WorkspaceManager {
     fs.mkdirSync(logsDir, { recursive: true });
 
     // 设置状态为 "cloning"
-    this.initStatuses.set(taskId, { stage: "cloning", startedAt: Date.now(), progress: "准备克隆..." });
+    this.initStatuses.set(taskId, { stage: "cloning", startedAt: startTime, progress: "准备克隆...", retryCount });
 
-    console.log(`[WorkspaceManager] Starting async clone: ${gitRepo.url}#${gitRepo.branch} → ${repoDir}`);
+    // ── 详细日志：克隆开始 ──
+    console.log(`${logPrefix} ═══ Git Clone Started ═══`);
+    console.log(`${logPrefix}   Timestamp: ${new Date(startTime).toISOString()}`);
+    console.log(`${logPrefix}   URL:       ${gitRepo.url}`);
+    console.log(`${logPrefix}   Branch:    ${gitRepo.branch}`);
+    console.log(`${logPrefix}   Target:    ${repoDir}`);
+    console.log(`${logPrefix}   Subdir:    ${gitRepo.subdirectory || "(none)"}`);
+    if (retryCount > 0) console.log(`${logPrefix}   Retry:     #${retryCount}`);
+    console.log(`${logPrefix} ═══════════════════════════`);
 
     // 异步克隆
     const child = spawn("git", [
@@ -231,31 +290,88 @@ export class WorkspaceManager {
       timeout: 120_000,
     });
 
+    // 收集 stderr 完整内容（用于失败时输出完整日志）
+    let stderrFull = "";
+    let lastProgressLogTime = 0;
+
     child.stderr.on("data", (data: Buffer) => {
       const text = data.toString().trim();
       if (text) {
+        stderrFull += text + "\n";
+        const now = Date.now();
+        // 每 5 秒打印一次进度（避免日志刷屏）
+        if (now - lastProgressLogTime >= 5000) {
+          console.log(`${logPrefix} [progress] ${text}`);
+          lastProgressLogTime = now;
+        }
         this.initStatuses.set(taskId, {
           stage: "cloning",
           progress: text,
-          startedAt: Date.now(),
+          startedAt: startTime,
+          retryCount,
         });
       }
     });
 
     child.on("error", (err) => {
-      console.error(`[WorkspaceManager] Clone error for ${taskId}:`, err.message);
-      this.initStatuses.set(taskId, { stage: "error", error: err.message, startedAt: Date.now() });
+      const elapsed = Date.now() - startTime;
+      const errorType = categorizeGitError(err.message);
+      const userMsg = buildUserFriendlyError(errorType, err.message);
+      console.error(`${logPrefix} ═══ Git Clone ERROR ═══`);
+      console.error(`${logPrefix}   Elapsed:    ${formatDuration(elapsed)} (${elapsed}ms)`);
+      console.error(`${logPrefix}   Error type: ${errorType}`);
+      console.error(`${logPrefix}   Message:    ${err.message}`);
+      console.error(`${logPrefix}   Code:       ${(err as NodeJS.ErrnoException).code || "none"}`);
+      console.error(`${logPrefix} ═══════════════════════════`);
+      this.initStatuses.set(taskId, {
+        stage: "error",
+        error: userMsg,
+        errorType,
+        startedAt: startTime,
+        elapsedMs: elapsed,
+        retryCount,
+      });
       try { fs.rmSync(repoDir, { recursive: true, force: true }); } catch { /* ignore */ }
     });
 
-    child.on("close", (code) => {
+    child.on("close", (code, signal) => {
+      const elapsed = Date.now() - startTime;
       if (code === 0) {
-        console.log(`[WorkspaceManager] Clone complete for ${taskId}`);
-        this.initStatuses.set(taskId, { stage: "ready", startedAt: Date.now() });
+        console.log(`${logPrefix} ═══ Git Clone SUCCESS ═══`);
+        console.log(`${logPrefix}   Elapsed: ${formatDuration(elapsed)} (${elapsed}ms)`);
+        console.log(`${logPrefix} ═══════════════════════════`);
+        this.initStatuses.set(taskId, {
+          stage: "ready",
+          startedAt: startTime,
+          elapsedMs: elapsed,
+          retryCount,
+        });
       } else {
-        const errMsg = `Git clone 失败 (exit code ${code})`;
-        console.error(`[WorkspaceManager] ${errMsg} for ${taskId}`);
-        this.initStatuses.set(taskId, { stage: "error", error: errMsg, startedAt: Date.now() });
+        // 解析 stderr 判断错误类型
+        const combinedMsg = stderrFull || `exit code ${code}${signal ? `, signal ${signal}` : ""}`;
+        const errorType = code === 128
+          ? categorizeGitError(stderrFull) || "branch_not_found"
+          : categorizeGitError(stderrFull);
+        const userMsg = code === 128
+          ? (stderrFull.includes("not found") || stderrFull.includes("does not exist")
+              ? buildUserFriendlyError("branch_not_found", `分支 "${gitRepo.branch}" 不存在，请检查分支名称`)
+              : buildUserFriendlyError(errorType, combinedMsg))
+          : buildUserFriendlyError(errorType, combinedMsg);
+        console.error(`${logPrefix} ═══ Git Clone FAILED ═══`);
+        console.error(`${logPrefix}   Elapsed:    ${formatDuration(elapsed)} (${elapsed}ms)`);
+        console.error(`${logPrefix}   Exit code:  ${code}${signal ? `, signal: ${signal}` : ""}`);
+        console.error(`${logPrefix}   Error type: ${errorType}`);
+        console.error(`${logPrefix}   User msg:   ${userMsg}`);
+        if (stderrFull) console.error(`${logPrefix}   Stderr:\n${stderrFull.trim()}`);
+        console.error(`${logPrefix} ═══════════════════════════`);
+        this.initStatuses.set(taskId, {
+          stage: "error",
+          error: userMsg,
+          errorType,
+          startedAt: startTime,
+          elapsedMs: elapsed,
+          retryCount,
+        });
         try { fs.rmSync(repoDir, { recursive: true, force: true }); } catch { /* ignore */ }
       }
     });
@@ -266,6 +382,49 @@ export class WorkspaceManager {
       : repoDir;
 
     return effectiveRepoDir;
+  }
+
+  /**
+   * 重试云端 workspace 初始化（清理已损坏目录并重新克隆）。
+   * 仅在当前状态为 "error" 时允许重试，防止并发克隆。
+   */
+  retryCloudWorkspace(taskId: string, gitRepo: GitRepoConfig): string {
+    const currentStatus = this.initStatuses.get(taskId);
+    const logPrefix = `[WorkspaceManager][${taskId}]`;
+
+    // 防止并发克隆
+    if (currentStatus?.stage === "cloning") {
+      throw new Error("克隆正在进行中，请等待完成后再重试");
+    }
+
+    if (!currentStatus || currentStatus.stage !== "error") {
+      throw new Error(`当前状态为 "${currentStatus?.stage || "idle"}"，无法重试克隆（仅在 error 状态下允许重试）`);
+    }
+
+    const taskDir = path.join(this.root, taskId);
+    const repoDir = path.join(taskDir, "repo");
+
+    // 清理上次失败的残留
+    if (fs.existsSync(repoDir)) {
+      console.log(`${logPrefix} Retry — cleaning up failed clone residue: ${repoDir}`);
+      fs.rmSync(repoDir, { recursive: true, force: true });
+    }
+
+    const retryCount = (currentStatus.retryCount ?? 0) + 1;
+    console.log(`${logPrefix} Retry clone #${retryCount} — clearing status and restarting`);
+
+    // 重置状态为 idle，让 initCloudWorkspace 正常启动新克隆
+    this.initStatuses.delete(taskId);
+
+    const effectiveDir = this.initCloudWorkspace(taskId, gitRepo);
+
+    // 补上 retryCount（initCloudWorkspace 会创建新状态，retryCount 默认为 0）
+    const status = this.initStatuses.get(taskId);
+    if (status) {
+      this.initStatuses.set(taskId, { ...status, retryCount });
+    }
+
+    return effectiveDir;
   }
 
   /** 设置外部工作空间目录（用户指定的本地 Git 项目等） */

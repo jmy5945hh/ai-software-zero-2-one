@@ -1057,6 +1057,24 @@ export async function handleWsMessage(
         break;
       }
 
+      case "workspace.retryClone": {
+        const { taskId } = msg.params as { taskId: string };
+        const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
+        if (!gitRepo?.url) {
+          throw new Error("retryClone 需要 gitRepo 参数");
+        }
+        const repoDir = workspace.retryCloudWorkspace(taskId, gitRepo);
+        const initStatus = workspace.getInitStatus(taskId);
+        ws.send(
+          JSON.stringify({
+            type: "response",
+            id: msg.id,
+            result: { repoDir, initStatus },
+          }),
+        );
+        break;
+      }
+
       case "workspace.browse": {
         const { dirPath } = msg.params as { dirPath: string };
         const entries = workspace.browseDir(dirPath || "/");

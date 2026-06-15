@@ -526,6 +526,7 @@ export function TaskPage() {
               }}
               onFixIssues={handleFixQaIssues}
               workspaceInitStatus={agent.workspaceInitStatus}
+              onRetryClone={() => agent.retryWorkspaceInit(state.gitRepo)}
             />
           </div>
 

@@ -28,6 +28,7 @@ import {
   Folder,
   Code2,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
 import { useStepKey } from "../hooks";
@@ -35,7 +36,7 @@ import { workflow, getContentForStage } from "../data";
 import type {
   TrajectoryTurn,
 } from "../data/stageContent";
-import type { SessionState, ToolCallCategory, ToolCallRecord, Turn } from "../agent/types";
+import type { SessionState, ToolCallCategory, ToolCallRecord, Turn, WorkspaceInitStatus } from "../agent/types";
 import { extractFileChanges } from "../agent/useAgent";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { TokenUsageBadge } from "./TokenUsageBadge";
@@ -98,7 +99,9 @@ type DecisionBoardProps = {
   /** QA 一键修复回调 */
   onFixIssues?: (report: string) => void;
   /** Workspace 初始化状态（云端模式 git clone 进度） */
-  workspaceInitStatus?: { stage: string; progress?: string; error?: string };
+  workspaceInitStatus?: WorkspaceInitStatus;
+  /** 重试克隆回调（云端模式 clone 失败后） */
+  onRetryClone?: () => void;
 };
 
 export function DecisionBoard({
@@ -123,6 +126,7 @@ export function DecisionBoard({
   onBuildUpdate,
   onFixIssues,
   workspaceInitStatus,
+  onRetryClone,
 }: DecisionBoardProps) {
   const step = workflow[state.stepIndex];
   const stepKey = useStepKey(state.stepIndex);
@@ -2206,24 +2210,48 @@ function TrajectoryChatTab({
               <p>连接 Agent 后将在此展示实时工作轨迹</p>
             </div>
           )}
-          {displayTurns.length === 0 && timeline.length === 0 && isAgentConnected && workspaceInitStatus?.stage === "cloning" && (
-            <div className="trajectory-waiting">
-              <Loader2 size={20} className="spin-icon" />
-              <p>正在克隆 Git 仓库...</p>
-              {workspaceInitStatus.progress && (
-                <p className="trajectory-progress">{workspaceInitStatus.progress}</p>
+          {displayTurns.length === 0 && timeline.length === 0 && isAgentConnected && workspaceInitStatus?.stage === "error" && (
+            <div className="trajectory-waiting trajectory-clone-error">
+              <AlertTriangle size={20} />
+              <p>{workspaceInitStatus.error || "仓库克隆失败，未知错误"}</p>
+              {workspaceInitStatus.elapsedMs != null && (
+                <p className="trajectory-progress">
+                  耗时 {Math.round(workspaceInitStatus.elapsedMs / 1000)} 秒
+                  {workspaceInitStatus.retryCount ? `（已重试 ${workspaceInitStatus.retryCount} 次）` : ""}
+                </p>
+              )}
+              {onRetryClone && (
+                <button
+                  className="todo-submit-btn"
+                  type="button"
+                  onClick={onRetryClone}
+                >
+                  <RefreshCw size={14} /> 重试克隆
+                </button>
               )}
             </div>
           )}
-          {displayTurns.length === 0 && timeline.length === 0 && isAgentConnected && workspaceInitStatus?.stage !== "cloning" && (
+          {displayTurns.length === 0 && timeline.length === 0 && isAgentConnected && workspaceInitStatus?.stage === "cloning" && (
+            <div className="trajectory-waiting">
+              <Loader2 size={20} className="spin-icon" />
+              <p>
+                正在克隆 Git 仓库...
+                {workspaceInitStatus.retryCount ? `（第 ${workspaceInitStatus.retryCount + 1} 次尝试）` : ""}
+              </p>
+              {workspaceInitStatus.progress && (
+                <p className="trajectory-progress">{workspaceInitStatus.progress}</p>
+              )}
+              {workspaceInitStatus.startedAt && (
+                <p className="trajectory-progress" style={{ fontSize: "0.68rem", marginTop: 2 }}>
+                  已用 {Math.round((Date.now() - workspaceInitStatus.startedAt) / 1000)} 秒
+                </p>
+              )}
+            </div>
+          )}
+          {displayTurns.length === 0 && timeline.length === 0 && isAgentConnected && workspaceInitStatus?.stage !== "cloning" && workspaceInitStatus?.stage !== "error" && (
             <div className="trajectory-waiting">
               <Loader2 size={20} className="spin-icon" />
               <p>等待 Agent 开始工作...</p>
-            </div>
-          )}
-          {displayTurns.length === 0 && timeline.length === 0 && isAgentConnected && workspaceInitStatus?.stage === "error" && (
-            <div className="trajectory-waiting" style={{ color: "var(--danger)" }}>
-              <p>仓库克隆失败: {workspaceInitStatus.error || "未知错误"}</p>
             </div>
           )}
 

@@ -214,6 +214,11 @@ export class AgentWebSocket {
     this.authErrorHandlers.push(handler);
   }
 
+  /** 检查 WebSocket 是否处于已连接状态 */
+  isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+
   /** 关闭连接（不重连） */
   close(): void {
     this.shouldReconnect = false;
