@@ -1997,6 +1997,7 @@ function TrajectoryChatTab({
   intent,
   initialPrompts,
   stepSummaries,
+  workspaceInitStatus,
 }: {
   trajectory: TrajectoryTurn[];
   stepIndex: number;
@@ -2037,6 +2038,7 @@ function TrajectoryChatTab({
   intent: string;
   initialPrompts: Record<string, string>;
   stepSummaries: Record<string, string>;
+  workspaceInitStatus?: { stage: string; progress?: string; error?: string };
 }) {
   const [input, setInput] = useState("");
   const [expandedRoundIds, setExpandedRoundIds] = useState<Set<string>>(new Set());
