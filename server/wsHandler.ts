@@ -344,6 +344,13 @@ export async function handleWsMessage(
     return;
   }
 
+  // 记录所有收到的 request（ping 除外）
+  if (msg.type === "request") {
+    const params = msg.params as Record<string, unknown> || {};
+    const textPreview = typeof params.text === "string" ? params.text.slice(0, 30) : "(no text)";
+    console.log("[wsHandler] request received: method=%s step=%s text=%.30s", msg.method, params.step || "(no step)", textPreview);
+  }
+
   // ── 心跳 ping/pong ──────────────────
   if (msg.type === "ping") {
     ws.send(JSON.stringify({ type: "pong", ts: msg.ts }));
@@ -417,31 +424,6 @@ export async function handleWsMessage(
         break;
       }
 
-      case "session.prompt": {
-        const { taskId, step, text } = msg.params as {
-          taskId: string;
-          step: string;
-          text: string;
-        };
-        console.log("[session.prompt] userPrompt=%.20s systemPrompt=N/A step=%s", text.slice(0, 20), step);
-        const session = pool.get(taskId, step);
-        if (!session) throw new Error(`Session not found: ${taskId}:${step}`);
-
-        ensureSubscription(pool, taskId, step, ws, msg.id, sessionStore);
-
-        console.log(`[session.prompt] isStreaming=${session.isStreaming} step=${step}`);
-        if (session.isStreaming) {
-          // Agent 正在处理中，用 steer() 排队（不 await，避免阻塞 response）
-          console.log(`[session.prompt] → steer() (queue during streaming)`);
-          session.steer(text);
-        } else {
-          console.log(`[session.prompt] → prompt() (idle, start new run)`);
-          await session.prompt(text);
-        }
-        ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
-        break;
-      }
-
       case "session.steer": {
         const { taskId, step, text } = msg.params as {
           taskId: string;
@@ -470,70 +452,13 @@ export async function handleWsMessage(
 
         ensureSubscription(pool, taskId, step, ws, msg.id, sessionStore);
 
-        // 关键修复：session.steer() 仅入队，不触发模型执行。
-        // 当 agent 空闲时，入队的消息永远不会被处理。
-        // 因此：streaming 中 → 用 steer() 入队中断；空闲时 → 用 prompt() 直接触发新轮次。
-
         console.log(`[session.steer] isStreaming=${session.isStreaming} step=${step} text=%.20s`, text.slice(0, 20));
         if (session.isStreaming) {
-          console.log(`[session.steer] → steer() (queue during streaming)`);
           session.steer(text);
         } else {
-          console.log(`[session.steer] → prompt() (idle, start new run)`);
-          try {
-            await session.prompt(text);
-            console.log(`[session.steer] prompt() completed successfully`);
-          } catch (err) {
-            console.error(`[session.steer] prompt() FAILED:`, err);
-          }
+          await session.prompt(text);
         }
 
-        ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
-        break;
-      }
-
-      case "session.followUp": {
-        const { taskId, step, text } = msg.params as {
-          taskId: string;
-          step: string;
-          text: string;
-        };
-        let session = pool.get(taskId, step);
-        if (!session) {
-          const intent = (msg.params as { intent?: string }).intent || "";
-          const extPath = (msg.params as { workspacePath?: string }).workspacePath;
-          const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
-          const { workspaceDir, needsWait } = resolveWorkspaceDir(workspace, taskId, {
-            gitRepo,
-            workspacePath: extPath,
-            intent,
-          });
-          if (needsWait) {
-            const status = workspace.getInitStatus(taskId);
-            ws.send(JSON.stringify({ type: "response", id: msg.id, result: { status: "workspace_initializing", initStatus: status } }));
-            break;
-          }
-          session = await runner.createSession(taskId, step, workspaceDir);
-          pool.set(taskId, step, session);
-        }
-
-        ensureSubscription(pool, taskId, step, ws, msg.id, sessionStore);
-
-        // 同 steer：followUp() 仅入队，空闲时需用 prompt() 触发执行
-
-        console.log(`[session.followUp] isStreaming=${session.isStreaming} step=${step} text=%.20s`, text.slice(0, 20));
-        if (session.isStreaming) {
-          console.log(`[session.followUp] → followUp() (queue during streaming)`);
-          session.followUp(text);
-        } else {
-          console.log(`[session.followUp] → prompt() (idle, start new run)`);
-          try {
-            await session.prompt(text);
-            console.log(`[session.followUp] prompt() completed successfully`);
-          } catch (err) {
-            console.error(`[session.followUp] prompt() FAILED:`, err);
-          }
-        }
         ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
         break;
       }
@@ -686,62 +611,6 @@ export async function handleWsMessage(
             result: { sessionId: session.sessionId },
           }),
         );
-        break;
-      }
-
-      // ── 重试整个 Agent 流程 ──────────────
-      case "session.retry": {
-        const { taskId, step, text, initialPrompt } = msg.params as {
-          taskId: string;
-          step: string;
-          text: string;
-          initialPrompt?: string;
-        };
-        console.log("[session.retry] systemPromptOverride=%.20s initialPrompt=%.20s step=%s", text.slice(0, 20), (initialPrompt || "").slice(0, 20), step);
-        pool.dispose(taskId, step);
-
-        const intent = (msg.params as { intent?: string }).intent || "";
-        const extPath = (msg.params as { workspacePath?: string }).workspacePath;
-        const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
-        const { workspaceDir, needsWait } = resolveWorkspaceDir(workspace, taskId, {
-          gitRepo,
-          workspacePath: extPath,
-          intent,
-        });
-
-        if (needsWait) {
-          const status = workspace.getInitStatus(taskId);
-          ws.send(JSON.stringify({ type: "response", id: msg.id, result: { status: "workspace_initializing", initStatus: status } }));
-          break;
-        }
-
-        const newSession = await runner.createSession(taskId, step, workspaceDir, text);
-        pool.set(taskId, step, newSession);
-
-        const unsub = newSession.subscribe((sdkEvent) => {
-          const event = mapSdkEvent(sdkEvent);
-          if (!event) return;
-          ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
-
-          // 每轮 turn 或 agent 结束时，自动保存步骤快照
-          if (event.type === "turn_end" || event.type === "agent_end") {
-            const snapshot = buildStepSnapshot(newSession);
-            sessionStore.saveStep(taskId, newSession.sessionId, step, snapshot);
-          }
-        });
-        pool.setUnsub(taskId, step, unsub);
-
-        ws.send(
-          JSON.stringify({
-            type: "response",
-            id: msg.id,
-            result: { sessionId: newSession.sessionId },
-          }),
-        );
-
-        if (initialPrompt) {
-          await newSession.prompt(initialPrompt);
-        }
         break;
       }
 
@@ -1029,43 +898,6 @@ export async function handleWsMessage(
         break;
       }
 
-      // ── Workspace 操作 ──────────────────
-      case "workspace.tree": {
-        const { taskId } = msg.params as { taskId: string };
-        const tree = workspace.getFileTree(taskId);
-        ws.send(
-          JSON.stringify({ type: "response", id: msg.id, result: { tree } }),
-        );
-        break;
-      }
-
-      case "workspace.readFile": {
-        const { taskId, filePath } = msg.params as { taskId: string; filePath: string };
-        const content = workspace.readFile(taskId, filePath);
-        ws.send(
-          JSON.stringify({ type: "response", id: msg.id, result: { content } }),
-        );
-        break;
-      }
-
-      case "workspace.initStatus": {
-        const { taskId } = msg.params as { taskId: string };
-        const status = workspace.getInitStatus(taskId);
-        ws.send(
-          JSON.stringify({ type: "response", id: msg.id, result: { initStatus: status } }),
-        );
-        break;
-      }
-
-      case "workspace.browse": {
-        const { dirPath } = msg.params as { dirPath: string };
-        const entries = workspace.browseDir(dirPath || "/");
-        ws.send(
-          JSON.stringify({ type: "response", id: msg.id, result: { entries } }),
-        );
-        break;
-      }
-
       // ── 会话记录 ──────────────────────
       case "session.saveStep": {
         const { taskId, sessionId, stepId, snapshot } = msg.params as { taskId: string; sessionId: string; stepId: string; snapshot: import("./SessionStore").StepSessionSnapshot };
@@ -1098,21 +930,6 @@ export async function handleWsMessage(
         const { sessionId } = msg.params as { sessionId: string };
         sessionStore.delete(sessionId);
         ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
-        break;
-      }
-
-      // ── 按步骤独立存储 ────────────────
-      case "session.saveMeta": {
-        const meta = msg.params as Record<string, unknown>;
-        sessionStore.saveMeta(meta as import("./SessionStore").SessionMeta);
-        ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
-        break;
-      }
-
-      case "session.loadMeta": {
-        const { sessionId } = msg.params as { sessionId: string };
-        const meta = sessionStore.loadMeta(sessionId);
-        ws.send(JSON.stringify({ type: "response", id: msg.id, result: { meta } }));
         break;
       }
 
