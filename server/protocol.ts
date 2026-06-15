@@ -12,9 +12,6 @@ export type AgentMethod =
   | "session.restore"
   | "summarization.save"
   | "summarization.trigger"
-  | "workspace.tree"
-  | "workspace.readFile"
-  | "workspace.browse"
   | "workspace.initStatus"
   | "workspace.retryClone"
   // ── 会话记录 ──

@@ -898,62 +898,6 @@ export async function handleWsMessage(
         break;
       }
 
-      // ── Workspace 操作 ──────────────────
-      case "workspace.tree": {
-        const { taskId } = msg.params as { taskId: string };
-        const tree = workspace.getFileTree(taskId);
-        ws.send(
-          JSON.stringify({ type: "response", id: msg.id, result: { tree } }),
-        );
-        break;
-      }
-
-      case "workspace.readFile": {
-        const { taskId, filePath } = msg.params as { taskId: string; filePath: string };
-        const content = workspace.readFile(taskId, filePath);
-        ws.send(
-          JSON.stringify({ type: "response", id: msg.id, result: { content } }),
-        );
-        break;
-      }
-
-      case "workspace.initStatus": {
-        const { taskId } = msg.params as { taskId: string };
-        const status = workspace.getInitStatus(taskId);
-        ws.send(
-          JSON.stringify({ type: "response", id: msg.id, result: { initStatus: status } }),
-        );
-        break;
-      }
-
-      case "workspace.retryClone": {
-        const { taskId } = msg.params as { taskId: string };
-        const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
-        if (!gitRepo?.url) {
-          throw new Error("retryClone 需要 gitRepo 参数");
-        }
-        const repoDir = workspace.retryCloudWorkspace(taskId, gitRepo);
-        const initStatus = workspace.getInitStatus(taskId);
-        ws.send(
-          JSON.stringify({
-            type: "response",
-            id: msg.id,
-            result: { repoDir, initStatus },
-          }),
-        );
-        break;
-      }
-
-      case "workspace.browse": {
-        const { dirPath } = msg.params as { dirPath: string };
-        const entries = workspace.browseDir(dirPath || "/");
-        ws.send(
-          JSON.stringify({ type: "response", id: msg.id, result: { entries } }),
-        );
-        break;
-      }
-
-
       // ── 会话记录 ──────────────────────
       case "session.saveStep": {
         const { taskId, sessionId, stepId, snapshot } = msg.params as { taskId: string; sessionId: string; stepId: string; snapshot: import("./SessionStore").StepSessionSnapshot };
@@ -986,6 +930,24 @@ export async function handleWsMessage(
         const { sessionId } = msg.params as { sessionId: string };
         sessionStore.delete(sessionId);
         ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
+        break;
+      }
+
+      case "workspace.retryClone": {
+        const { taskId } = msg.params as { taskId: string };
+        const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;
+        if (!gitRepo?.url) {
+          throw new Error("retryClone 需要 gitRepo 参数");
+        }
+        const repoDir = workspace.retryCloudWorkspace(taskId, gitRepo);
+        const initStatus = workspace.getInitStatus(taskId);
+        ws.send(
+          JSON.stringify({
+            type: "response",
+            id: msg.id,
+            result: { repoDir, initStatus },
+          }),
+        );
         break;
       }
 
