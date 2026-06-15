@@ -1,4 +1,4 @@
-import type { TaskCard, CategoryMeta, ScopeChoice } from "./types";
+import type { TaskCard, CategoryMeta } from "./types";
 import { Sparkles, TriangleAlert, ShieldCheck } from "lucide-react";
 
 // ── 任务卡片数据 ────────────────────────────
@@ -141,25 +141,6 @@ export function priorityLabel(priority: TaskCard["priority"]) {
     }[priority]
   );
 }
-
-// ── 交付模式 ─────────────────────────────────
-export function scopeLabel(scope: ScopeChoice) {
-  return {
-    mvp: "MVP 快速交付",
-    governed: "企业受控交付",
-    full: "完整产品化交付",
-  }[scope];
-}
-
-// ── 模块选项 ────────────────────────────────
-export const moduleOptions = [
-  "线索池",
-  "客户详情",
-  "跟进提醒",
-  "沟通记录",
-  "团队周报",
-  "主管看板",
-];
 
 // ── 代码资产数据 ───────────────────────────
 import type { CodeItem } from "./types";

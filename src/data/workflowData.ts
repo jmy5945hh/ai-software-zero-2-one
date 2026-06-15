@@ -1,5 +1,4 @@
 import type { WorkflowStep, AppState, Stage, Gate, Agent } from "./types";
-import { scopeLabel } from "./taskData";
 import {
   MessageSquareText,
   Network,
@@ -220,8 +219,6 @@ export function createDefaultState(): AppState {
     gitRepo: undefined,
     activeStage: "intent",
     stepIndex: 0,
-    scope: "mvp",
-    selectedModules: ["线索池", "客户详情", "跟进提醒", "沟通记录"],
     notes: "",
     codeConfirmed: false,
     fixApproved: false,

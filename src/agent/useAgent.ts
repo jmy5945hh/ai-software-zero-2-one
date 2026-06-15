@@ -221,8 +221,6 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       workspacePath: string;
       runtimeMode: "local" | "cloud";
       notes: string;
-      scope: string;
-      selectedModules: string[];
       todoAnswers: Record<number, string | string[]>;
       initialPrompts: Record<string, string>;
       gitRepo?: { url: string; branch: string };

@@ -159,11 +159,6 @@ export function SessionHistoryPanel({
                   )}
 
                   <div className="session-history-detail-row">
-                    <span className="detail-label">交付范围</span>
-                    <span className="detail-value">{scopeLabel(record.scope)}</span>
-                  </div>
-
-                  <div className="session-history-detail-row">
                     <span className="detail-label">创建时间</span>
                     <span className="detail-value">
                       {formatDateTime(record.createdAt)}
@@ -298,15 +293,6 @@ function getStepLabel(stepId: string): string {
     release: "发布交付",
   };
   return labels[stepId] || stepId;
-}
-
-function scopeLabel(scope: string): string {
-  const labels: Record<string, string> = {
-    mvp: "MVP",
-    governed: "治理模式",
-    full: "完整交付",
-  };
-  return labels[scope] || scope;
 }
 
 function truncateIntent(intent: string, maxLen: number): string {

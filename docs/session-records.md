@@ -46,8 +46,6 @@ type SessionMeta = {
   workspacePath: string;                // 工作空间路径
   stepIndex: number;                    // 当前步骤索引 (0-5)
   activeStage: string;                  // 当前活动阶段
-  scope: string;                        // 交付范围
-  selectedModules: string[];            // 已选功能模块
   notes: string;                        // 用户备注
   todoAnswers: Record<number, ...>;     // 待决策事项的回答
   initialPrompts: Record<string, string>; // 各步骤初始提示词
@@ -132,8 +130,6 @@ const sessionId = Array.from({ length: 32 }, () =>
 在 WorkspacePage 中，以下状态变化会触发自动保存（2 秒防抖）：
 - `stepIndex` — 步骤切换
 - `activeStage` — 活动阶段变化
-- `scope` — 交付范围变化
-- `selectedModules` — 模块选择变化
 - `notes` — 备注变化
 - `todoAnswers` — 待决策回答变化
 - `codeConfirmed/fixApproved/releaseApproved/qualityPassed` — 审批状态变化

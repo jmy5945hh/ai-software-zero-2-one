@@ -80,8 +80,6 @@ export type SessionMeta = {
   gitRepo?: { url: string; branch: string; subdirectory?: string };
   stepIndex: number;
   activeStage: string;
-  scope: string;
-  selectedModules: string[];
   notes: string;
   todoAnswers: Record<number, string | string[]>;
   initialPrompts: Record<string, string>;

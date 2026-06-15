@@ -71,8 +71,6 @@ export type SessionMeta = {
   gitRepo?: { url: string; branch: string; subdirectory?: string };
   stepIndex: number;
   activeStage: string;
-  scope: string;
-  selectedModules: string[];
   notes: string;
   todoAnswers: Record<number, string | string[]>;
   initialPrompts: Record<string, string>;
@@ -411,8 +409,6 @@ export function useSessionRecords() {
         gitRepo: state.gitRepo,
         stepIndex: state.stepIndex,
         activeStage: state.activeStage,
-        scope: state.scope,
-        selectedModules: state.selectedModules,
         notes: state.notes,
         todoAnswers: state.todoAnswers,
         initialPrompts: state.initialPrompts,

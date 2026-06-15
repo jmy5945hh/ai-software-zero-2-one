@@ -55,8 +55,6 @@ export function TaskPage() {
         gitRepo: (record as any).gitRepo,
         stepIndex: record.stepIndex,
         activeStage: record.activeStage as AppState["activeStage"],
-        scope: record.scope as AppState["scope"],
-        selectedModules: record.selectedModules,
         notes: record.notes,
         todoAnswers: record.todoAnswers,
         initialPrompts: record.initialPrompts,
@@ -228,8 +226,6 @@ export function TaskPage() {
   }, [
     state.stepIndex,
     state.activeStage,
-    state.scope,
-    state.selectedModules,
     state.notes,
     state.todoAnswers,
     state.codeConfirmed,
@@ -354,8 +350,6 @@ export function TaskPage() {
       const promptText = getStepPrompt(
         nextStep.id,
         state.intent,
-        state.scope,
-        state.selectedModules,
       );
 
       patchState({
@@ -384,7 +378,7 @@ export function TaskPage() {
       } : {}),
     });
     window.scrollTo({ top: 0 });
-  }, [state.stepIndex, state.intent, state.scope, state.selectedModules, state.initialPrompts, isAgentConnected, taskId, agent, patchState, state.codeConfirmed]);
+  }, [state.stepIndex, state.intent, state.initialPrompts, isAgentConnected, taskId, agent, patchState, state.codeConfirmed]);
 
   const handleStepClick = (index: number) => {
     const targetStage = workflow[index].id;
@@ -557,8 +551,6 @@ function getLanguageFromPath(path: string): string {
 function getStepPrompt(
   step: string,
   intent: string,
-  scope: string,
-  selectedModules: string[],
 ): string {
   switch (step) {
     case "intent":

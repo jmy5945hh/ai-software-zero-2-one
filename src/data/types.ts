@@ -5,7 +5,6 @@ export type View = "home" | "workspace";
 export type HomeTab = "tasks" | "build" | "history";
 
 // ── 任务卡片 ────────────────────────────────
-export type ScopeChoice = "mvp" | "governed" | "full";
 export type TaskCategory = "story" | "defect" | "governance";
 
 export type TaskCard = {
@@ -101,8 +100,6 @@ export type AppState = {
   gitRepo?: GitRepoConfig;
   activeStage: WorkflowId;
   stepIndex: number;
-  scope: ScopeChoice;
-  selectedModules: string[];
   notes: string;
   codeConfirmed: boolean;
   fixApproved: boolean;

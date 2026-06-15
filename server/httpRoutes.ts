@@ -219,8 +219,6 @@ export function handleHttpRequest(
           gitRepo: params.gitRepo || undefined,
           stepIndex: 0,
           activeStage: "intent",
-          scope: params.scope || "mvp",
-          selectedModules: params.selectedModules || [],
           notes: params.notes || "",
           todoAnswers: params.todoAnswers || {},
           initialPrompts: params.initialPrompts || {},

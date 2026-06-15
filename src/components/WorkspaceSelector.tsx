@@ -44,8 +44,8 @@ export function WorkspaceSelector({
   const [internalMode, setInternalMode] = useState<RuntimeMode>(mode);
 
   // ── 云端模式状态 ──
-  const [gitUrl, setGitUrl] = useState(initialPath && mode === "cloud" ? initialPath : "");
-  const [gitBranch, setGitBranch] = useState("main");
+  const [gitUrl, setGitUrl] = useState("https://github.com/jmy5945hh/ant-design-pro-for-edd.git");
+  const [gitBranch, setGitBranch] = useState("001_chatbot");
 
   // 父目录（浏览模式下路径为服务端解析后的绝对路径）
   const parentPath = currentPath === "/" ? null : currentPath.split("/").slice(0, -1).join("/") || "/";
