@@ -1180,11 +1180,11 @@
 }
 
 .diff-stat-add {
-  color: #2D6A4F;
+  color: #22c55e;
 }
 
 .diff-stat-del {
-  color: var(--terracotta);
+  color: #ef4444;
 }
 
 .drawer-actions {
@@ -3732,11 +3732,11 @@
 }
 
 .repo-tree-file.diff-file .diff-file-stats-inline .diff-stat-add {
-  color: #2D6A4F;
+  color: #22c55e;
 }
 
 .repo-tree-file.diff-file .diff-file-stats-inline .diff-stat-del {
-  color: var(--terracotta);
+  color: #ef4444;
 }
 
 /* 右侧 diff 预览区 */
@@ -3840,11 +3840,11 @@
 }
 
 .diff-gutter.add {
-  background: #2D6A4F;
+  background: #22c55e;
 }
 
 .diff-gutter.del {
-  background: #C27B66;
+  background: #ef4444;
 }
 
 /* 行号 */
@@ -3878,13 +3878,13 @@
   align-items: center;
 }
 
-/* 行背景色 */
+/* 行背景色 — 新增绿色，删除红色 */
 .diff-line.add {
-  background: rgba(45, 106, 79, 0.07);
+  background: rgba(34, 197, 94, 0.12);
 }
 
 .diff-line.del {
-  background: rgba(194, 123, 102, 0.07);
+  background: rgba(239, 68, 68, 0.12);
 }
 
 .diff-line.ctx {
@@ -3896,11 +3896,11 @@
 }
 
 .diff-content.add {
-  color: #1B4B3A;
+  color: #166534;
 }
 
 .diff-content.del {
-  color: #8B4A3A;
+  color: #991b1b;
 }
 
 .diff-content.ctx {

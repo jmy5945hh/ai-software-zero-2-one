@@ -185,19 +185,23 @@ export function useSessionRecords() {
       }
     }
 
-    // 查询云端
+    // 查询云端（仅当云端地址与本地不同时，避免重复）
     if (wsCloudRef.current && cloudReadyRef.current) {
-      try {
-        const result = (await wsCloudRef.current.request("session.listRecords", {})) as {
-          records: SessionMeta[];
-        };
-        const cloudRecords = (result.records || []).map((r) => ({
-          ...r,
-          runtimeMode: r.runtimeMode || "cloud",
-        }));
-        allRecords.push(...cloudRecords);
-      } catch (err) {
-        console.error("[useSessionRecords] listRecords (cloud) failed:", err);
+      const localUrl = wsLocalRef.current?.url;
+      const cloudUrl = wsCloudRef.current.url;
+      if (localUrl !== cloudUrl) {
+        try {
+          const result = (await wsCloudRef.current.request("session.listRecords", {})) as {
+            records: SessionMeta[];
+          };
+          const cloudRecords = (result.records || []).map((r) => ({
+            ...r,
+            runtimeMode: r.runtimeMode || "cloud",
+          }));
+          allRecords.push(...cloudRecords);
+        } catch (err) {
+          console.error("[useSessionRecords] listRecords (cloud) failed:", err);
+        }
       }
     }
 

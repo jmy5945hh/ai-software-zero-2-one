@@ -127,7 +127,10 @@ export function SessionHistoryPanel({
                 </div>
                 <div className="session-history-item-info">
                   <div className="session-history-item-title">
-                    {truncateIntent(record.intent, 40)}
+                    <span className={`session-history-mode-badge ${record.runtimeMode === "cloud" ? "badge-cloud" : "badge-local"}`}>
+                      {record.runtimeMode === "cloud" ? "云端" : "本地"}
+                    </span>
+                    {truncateIntent(record.intent, 34)}
                   </div>
                   <div className="session-history-item-meta">
                     <span className="session-history-item-step">{stepLabel}</span>

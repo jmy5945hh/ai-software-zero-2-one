@@ -5164,6 +5164,25 @@ p {
   font-weight: 500;
 }
 
+.session-history-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  line-height: 1.4;
+}
+.session-history-mode-badge.badge-local {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.session-history-mode-badge.badge-cloud {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
 .session-history-item-mode {
   display: inline-flex;
   align-items: center;
