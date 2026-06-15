@@ -287,13 +287,12 @@ WebSocket 支持的方法：
 | `session.followUp` | 追加指令 |
 | `session.abort` | 中止当前操作 |
 | `session.dispose` | 销毁 Session |
-| `session.retry` | 重试整个 Agent 流程（替换 system prompt） |
 | `session.answerQuestion` | 回答 Agent 提出的问题 |
 | `session.continueQuestion` | 回答后继续执行 |
 | `workspace.tree` | 获取工作区文件树 |
 | `workspace.readFile` | 读取工作区文件 |
 | `workspace.browse` | 浏览文件系统目录 |
-| `session.saveMeta` / `loadMeta` | 保存/加载任务元信息 |
+| `session.saveMeta` | 保存任务元信息 |
 | `session.saveStep` / `loadStep` | 按步骤保存/加载会话快照 |
 | `session.saveRecord` / `loadRecord` / `listRecords` / `deleteRecord` | 会话记录 CRUD |
 | `summarization.trigger` | 触发 Agent 总结（独立 LLM 会话） |

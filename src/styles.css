@@ -3378,6 +3378,47 @@ p {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.task-desc-text.expanded {
+  -webkit-line-clamp: unset;
+}
+
+.task-desc-expand-btn {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--primary);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  transition: color var(--duration-fast) var(--ease-gentle);
+}
+
+.task-desc-expand-btn:hover {
+  color: var(--primary-dark);
+}
+
+.task-desc-expand-btn.visible {
+  display: inline-flex;
+}
+
+.task-desc-expand-btn svg {
+  width: 12px;
+  height: 12px;
+  transition: transform var(--duration-fast) var(--ease-gentle);
+}
+
+.task-desc-expand-btn svg.rotated {
+  transform: rotate(180deg);
 }
 
 /* ── 当前任务信息 ─────────────────────────── */

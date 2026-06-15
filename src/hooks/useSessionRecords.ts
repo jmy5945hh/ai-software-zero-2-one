@@ -234,28 +234,6 @@ export function useSessionRecords() {
     [getWsForMode, isWsReady],
   );
 
-  /**
-   * 保存任务元信息。
-   * 关键状态变化时调用（防抖 2s，作为兜底）。
-   */
-  const saveMeta = useCallback(
-    async (sessionId: string, meta: SessionMeta) => {
-      const ws = getWsForMode(meta.runtimeMode || "local");
-      const ready = isWsReady(meta.runtimeMode || "local");
-      if (!ws || !ready) return;
-      saveQueueRef.current = saveQueueRef.current.then(async () => {
-        try {
-          await ws.request("session.saveMeta", meta as unknown as Record<string, unknown>);
-          await refreshRecords();
-        } catch (err) {
-          console.error("[useSessionRecords] saveMeta failed:", sessionId, err);
-        }
-      });
-      await saveQueueRef.current;
-    },
-    [refreshRecords, getWsForMode, isWsReady],
-  );
-
   /** 保存当前 AppState 为会话记录（兼容旧接口，内部拆分为 meta + step 文件） */
   const saveRecord = useCallback(
     async (
@@ -431,8 +409,14 @@ export function useSessionRecords() {
       // 串行化保存：先保存 meta，再逐个保存 step
       saveQueueRef.current = saveQueueRef.current.then(async () => {
         try {
-          // 保存元信息
-          await ws.request("session.saveMeta", meta as unknown as Record<string, unknown>);
+          // 保存元信息（HTTP 替代 WebSocket）
+          const { getAgentWsOrigin } = await import("../agent/config");
+          const origin = getAgentWsOrigin(meta.runtimeMode || "local");
+          await fetch(`${origin}/session/save-meta`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(meta),
+          });
           // 逐个保存步骤会话快照
           for (const [stepId, snapshot] of Object.entries(stepSessions)) {
             await ws.request("session.saveStep", {
@@ -442,14 +426,26 @@ export function useSessionRecords() {
               taskId,
             });
           }
-          await refreshRecords();
+          // 本地插入/更新 records，避免全量重查
+          setRecords((prev) => {
+            const idx = prev.findIndex((r) => r.sessionId === sessionId);
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = { ...next[idx], ...meta };
+              return next;
+            }
+            // 新记录，按 updatedAt 降序插入
+            const next = [...prev, meta];
+            next.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+            return next;
+          });
         } catch (err) {
           console.error("[useSessionRecords] saveRecord failed:", meta.sessionId, err);
         }
       });
       await saveQueueRef.current;
     },
-    [refreshRecords, getWsForMode, isWsReady],
+    [getWsForMode, isWsReady],
   );
 
   /** 按 sessionId 加载完整会话记录（需要知道记录属于哪个模式） */
@@ -512,12 +508,13 @@ export function useSessionRecords() {
       if (!ws || !ready) return;
       try {
         await ws.request("session.deleteRecord", { sessionId });
-        await refreshRecords();
+        // 本地移除，避免全量重查
+        setRecords((prev) => prev.filter((r) => r.sessionId !== sessionId));
       } catch (err) {
         console.error("[useSessionRecords] deleteRecord failed:", sessionId, err);
       }
     },
-    [refreshRecords, records, getWsForMode, isWsReady],
+    [records, getWsForMode, isWsReady],
   );
 
   return {
@@ -525,7 +522,6 @@ export function useSessionRecords() {
     loading,
     refreshRecords,
     saveRecord,
-    saveMeta,
     loadRecord,
     loadStep,
     deleteRecord,

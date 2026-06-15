@@ -338,7 +338,11 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   // ── 发送 prompt ──
   const prompt = useCallback(
     async (step: string, text: string) => {
-      if (!taskId || !wsRef.current) return;
+      console.log("[useAgent] prompt() called", { step, text: text.slice(0, 50), taskId, hasWs: !!wsRef.current });
+      if (!taskId || !wsRef.current) {
+        console.warn("[useAgent] prompt() aborted — no taskId or wsRef", { taskId, hasWs: !!wsRef.current });
+        return;
+      }
       activeStepRef.current = step;
 
       // 记录到 steerInputPairsRef（与 steer 一致），确保 agent_end 时消息不被丢失
@@ -376,7 +380,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
         };
       });
 
-      await wsRef.current.request("session.prompt", { taskId, step, text });
+      wsRef.current.request("session.steer", { taskId, step, text });
     },
     [taskId],
   );
@@ -537,40 +541,6 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     [taskId],
   );
 
-  // ── 重试整个 Agent 流程 ──
-  const retrySession = useCallback(
-    async (step: string, text: string, initialPrompt?: string, gitRepo?: { url: string; branch: string }) => {
-      if (!taskId || !wsRef.current) return;
-      activeStepRef.current = step;
-
-      // 重置 session 状态（前端立即清理，等待新 session 事件覆盖）
-      setSessions((prev) => ({
-        ...prev,
-        [step]: {
-          ...defaultSession(),
-          id: prev[step]?.id || "",
-          messages: [],
-        },
-      }));
-
-      // 清除该 step 的总结标记，允许重新触发总结
-      summarizingRef.current.delete(step);
-
-      const effectiveGitRepo = gitRepo || hookGitRepoRef.current;
-      const result = await wsRef.current.request("session.retry", { taskId, step, text, initialPrompt, gitRepo: effectiveGitRepo }) as { sessionId: string };
-
-      // 更新 sessionId，用于 WebSocket 重连后自动恢复
-      if (result?.sessionId) {
-        pendingReconnectRef.current[step] = result.sessionId;
-        setSessions((prev) => ({
-          ...prev,
-          [step]: { ...prev[step], id: result.sessionId },
-        }));
-      }
-    },
-    [taskId],
-  );
-
   // ── 重连恢复 session ──
   const reconnectSession = useCallback(
     async (step: string, sessionId: string): Promise<boolean> => {
@@ -624,38 +594,53 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     [taskId],
   );
 
-  // ── 获取文件树 ──
+  // ── 获取文件树（HTTP 方式） ──
   const getFileTree = useCallback(async () => {
-    if (!taskId || !wsRef.current) return;
-    const result = (await wsRef.current.request("workspace.tree", {
-      taskId,
-    })) as { tree: FileNode[] };
-    setFileTree(result.tree);
-  }, [taskId]);
+    if (!taskId) return;
+    try {
+      const origin = getAgentWsOrigin(mode || "local");
+      const res = await fetch(`${origin}/workspace-tree?taskId=${encodeURIComponent(taskId)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as { tree: FileNode[] };
+      setFileTree(data.tree);
+    } catch (err) {
+      console.error("[useAgent] getFileTree failed:", err);
+    }
+  }, [taskId, mode]);
 
-  // ── 读取文件 ──
+  // ── 读取文件（HTTP 方式） ──
   const readFile = useCallback(
     async (filePath: string): Promise<string> => {
-      if (!taskId || !wsRef.current) return "";
-      const result = (await wsRef.current.request("workspace.readFile", {
-        taskId,
-        filePath,
-      })) as { content: string };
-      return result.content;
+      if (!taskId) return "";
+      try {
+        const origin = getAgentWsOrigin(mode || "local");
+        const res = await fetch(`${origin}/workspace-read-file?taskId=${encodeURIComponent(taskId)}&filePath=${encodeURIComponent(filePath)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as { content: string };
+        return data.content;
+      } catch (err) {
+        console.error("[useAgent] readFile failed:", err);
+        return "";
+      }
     },
-    [taskId],
+    [taskId, mode],
   );
 
-  // ── 浏览目录 ──
+  // ── 浏览目录（HTTP 方式） ──
   const browseDir = useCallback(
     async (dirPath: string): Promise<{ name: string; type: "dir" | "file"; path: string }[]> => {
-      if (!wsRef.current) return [];
-      const result = (await wsRef.current.request("workspace.browse", {
-        dirPath,
-      })) as { entries: { name: string; type: "dir" | "file"; path: string }[] };
-      return result.entries;
+      try {
+        const origin = getAgentWsOrigin(mode || "local");
+        const res = await fetch(`${origin}/workspace-browse?dirPath=${encodeURIComponent(dirPath)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as { entries: { name: string; type: "dir" | "file"; path: string }[] };
+        return data.entries;
+      } catch (err) {
+        console.error("[useAgent] browseDir failed:", err);
+        return [];
+      }
     },
-    [],
+    [mode],
   );
 
   // ── 查询 workspace 初始化状态（云端模式 git clone 进度） ──
@@ -1534,7 +1519,6 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     answerQuestion,
     continueQuestion,
     resumeQuestion,
-    retrySession,
     reconnectSession,
     restoreServerSession,
     getFileTree,

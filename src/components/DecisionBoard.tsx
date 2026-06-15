@@ -2001,6 +2001,7 @@ function TrajectoryChatTab({
   intent,
   initialPrompts,
   stepSummaries,
+  workspaceInitStatus,
 }: {
   trajectory: TrajectoryTurn[];
   stepIndex: number;
@@ -2041,11 +2042,13 @@ function TrajectoryChatTab({
   intent: string;
   initialPrompts: Record<string, string>;
   stepSummaries: Record<string, string>;
+  workspaceInitStatus?: { stage: string; progress?: string; error?: string };
 }) {
   const [input, setInput] = useState("");
   const [expandedRoundIds, setExpandedRoundIds] = useState<Set<string>>(new Set());
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
   const [modalContent, setModalContent] = useState<ModalContent | null>(null);
+  const [descExpanded, setDescExpanded] = useState(false);
   // final round 在最后一轮完成时自动展开
   const lastExpandedRef = useRef<string | null>(null);
   const roundsContainerRef = useRef<HTMLDivElement>(null);
@@ -2105,11 +2108,14 @@ function TrajectoryChatTab({
 
   const handleSend = () => {
     const text = input.trim();
+    console.log("[DecisionBoard] handleSend", { text, stepId, isAgentConnected, hasIntent: !!intent });
     if (!text) return;
     if (!isAgentConnected) {
+      console.warn("[DecisionBoard] handleSend — agent not connected, keeping input");
       return; // 不清空输入，让用户知道未连接
     }
     setInput("");
+    console.log("[DecisionBoard] handleSend — calling agentSteer", { stepId, text: text.slice(0, 50), intent });
     agentSteer(stepId, text, intent);
   };
 
@@ -2158,7 +2164,16 @@ function TrajectoryChatTab({
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                 <span>任务描述</span>
               </div>
-              <p className="task-desc-text">{intent}</p>
+              <p className={`task-desc-text${descExpanded ? ' expanded' : ''}`}>{intent}</p>
+              <button
+                className={`task-desc-expand-btn visible`}
+                onClick={() => setDescExpanded(!descExpanded)}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={descExpanded ? 'rotated' : ''}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                {descExpanded ? '收起' : '展开'}
+              </button>
             </div>
           )}
 

@@ -3,14 +3,11 @@
 /** 前端 → Agent Server 的请求方法 */
 export type AgentMethod =
   | "session.create"
-  | "session.prompt"
   | "session.steer"
-  | "session.followUp"
   | "session.abort"
   | "session.dispose"
   | "session.answerQuestion"
   | "session.continueQuestion"
-  | "session.retry"
   | "session.reconnect"
   | "session.restore"
   | "summarization.save"
@@ -25,9 +22,6 @@ export type AgentMethod =
   | "session.loadRecord"
   | "session.listRecords"
   | "session.deleteRecord"
-  // ── 按步骤独立存储 ──
-  | "session.saveMeta"
-  | "session.loadMeta"
   // ── 项目编译 ──
   | "build.detectCommand"
   | "build.save"

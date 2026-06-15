@@ -172,6 +172,7 @@ export class AgentWebSocket {
     params: Record<string, unknown>,
   ): Promise<unknown> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.error("[AgentWebSocket] request failed — ws not connected", { method, wsState: this.ws?.readyState });
       throw new Error("WebSocket is not connected");
     }
 
@@ -180,6 +181,7 @@ export class AgentWebSocket {
       this.pending.set(id, { resolve, reject });
     });
 
+    console.log("[AgentWebSocket] sending request", { method, id, params: { ...params, text: typeof params.text === 'string' ? params.text.slice(0, 30) : params.text } });
     this.ws.send(JSON.stringify({ type: "request", id, method, params }));
     return promise;
   }

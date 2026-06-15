@@ -129,6 +129,62 @@ export function handleHttpRequest(
     return true;
   }
 
+  // ── 获取 workspace 文件树（替代 WebSocket workspace.tree） ──
+  if (req.method === "GET" && req.url?.startsWith("/workspace-tree")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const taskId = url.searchParams.get("taskId");
+    if (!taskId) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'taskId' query parameter" }));
+      return true;
+    }
+    try {
+      const tree = deps.workspace.getFileTree(taskId);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ tree }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Failed to get file tree" }));
+    }
+    return true;
+  }
+
+  // ── 读取 workspace 文件（替代 WebSocket workspace.readFile） ──
+  if (req.method === "GET" && req.url?.startsWith("/workspace-read-file")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const taskId = url.searchParams.get("taskId");
+    const filePath = url.searchParams.get("filePath");
+    if (!taskId || !filePath) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'taskId' or 'filePath' query parameter" }));
+      return true;
+    }
+    try {
+      const content = deps.workspace.readFile(taskId, filePath);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ content }));
+    } catch (err) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : "File not found" }));
+    }
+    return true;
+  }
+
+  // ── 浏览 workspace 目录（替代 WebSocket workspace.browse） ──
+  if (req.method === "GET" && req.url?.startsWith("/workspace-browse")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const dirPath = url.searchParams.get("dirPath") || "/";
+    try {
+      const entries = deps.workspace.browseDir(dirPath);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ entries }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Browse failed" }));
+    }
+    return true;
+  }
+
   // 读取项目仓库目录树（排除 specs 目录）
   if (req.method === "GET" && req.url?.startsWith("/repo-tree")) {
     const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -237,6 +293,24 @@ export function handleHttpRequest(
       } catch (err) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Init failed" }));
+      }
+    });
+    return true;
+  }
+
+  // ── 保存会话元信息（HTTP 替代 WebSocket） ──
+  if (req.method === "POST" && req.url === "/session/save-meta") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const meta = JSON.parse(body) as import("./SessionStore").SessionMeta;
+        deps.sessionStore.saveMeta(meta);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true }));
+      } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Save meta failed" }));
       }
     });
     return true;

@@ -85,7 +85,7 @@ type SessionRecord = SessionMeta & {
 
 - **`server/SessionStore.ts`** — 文件系统持久化存储，提供：
   - `save/saveMeta/saveStep` — 保存元信息或某步骤的会话快照
-  - `load/loadMeta/loadStep` — 加载完整记录、元信息或某步骤快照
+  - `load/loadStep` — 加载完整记录或某步骤快照
   - `list` — 列出所有会话元信息（按更新时间倒序）
   - `delete` — 删除整个会话目录
   - `generateSessionId()` — 生成 32 位随机 sessionId
@@ -97,7 +97,6 @@ type SessionRecord = SessionMeta & {
   - `session.saveStep` — 保存某步骤的会话快照
   - `session.loadStep` — 加载某步骤的会话快照
   - `session.saveMeta` — 保存任务元信息
-  - `session.loadMeta` — 加载任务元信息
 
 ### 前端
 
@@ -164,5 +163,4 @@ type AgentMethod =
   | "session.saveStep"
   | "session.loadStep"
   | "session.saveMeta"
-  | "session.loadMeta";
 ```
