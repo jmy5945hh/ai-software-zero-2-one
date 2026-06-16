@@ -11,7 +11,7 @@ type AuthErrorHandler = () => void;
  */
 export class AgentWebSocket {
   private ws: WebSocket | null = null;
-  private url: string;
+  readonly url: string;
   private nextId = 1;
   private pending = new Map<
     string,
