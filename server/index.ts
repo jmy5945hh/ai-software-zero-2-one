@@ -16,8 +16,7 @@ const runner = new AgentRunner("./server/models.json");
 const pool = new SessionPool();
 const summaryStore = new SummaryStore();
 const workspace = new WorkspaceManager(WorkspaceManager.defaultRoot());
-const sessionStore = new SessionStore(workspace);
-// WorkspaceManager 已通过构造函数注入，无需重复调用 setWorkspaceManager
+const sessionStore = new SessionStore();
 
 // ── HTTP 服务 ───────────────────────────────
 const server = http.createServer((req, res) => {

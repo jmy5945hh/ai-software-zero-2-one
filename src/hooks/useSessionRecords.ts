@@ -272,13 +272,6 @@ export function useSessionRecords() {
       restoredSessions?: Record<string, StepSessionSnapshot>,
     ) => {
       const targetMode = state.runtimeMode || "local";
-      const ws = getWsForMode(targetMode);
-      const ready = isWsReady(targetMode);
-      if (!ws || !ready) {
-        console.warn("[saveRecord] skip: ws not connected for mode", targetMode);
-        return;
-      }
-
       const sessionId = state.sessionId;
       if (!sessionId) {
         console.log("[saveRecord] skip: no sessionId");
@@ -413,21 +406,20 @@ export function useSessionRecords() {
       // 串行化保存：先保存 meta，再逐个保存 step
       saveQueueRef.current = saveQueueRef.current.then(async () => {
         try {
-          // 保存元信息（HTTP 替代 WebSocket）
           const { getAgentWsOrigin } = await import("../agent/config");
           const origin = getAgentWsOrigin(meta.runtimeMode || "local");
+          // 保存元信息（HTTP）
           await fetch(`${origin}/session/save-meta`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(meta),
           });
-          // 逐个保存步骤会话快照
+          // 逐个保存步骤会话快照（HTTP）
           for (const [stepId, snapshot] of Object.entries(stepSessions)) {
-            await ws.request("session.saveStep", {
-              sessionId,
-              stepId,
-              snapshot,
-              taskId,
+            await fetch(`${origin}/session/save-step`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sessionId, stepId, snapshot }),
             });
           }
           // 本地插入/更新 records，避免全量重查
@@ -449,7 +441,7 @@ export function useSessionRecords() {
       });
       await saveQueueRef.current;
     },
-    [getWsForMode, isWsReady],
+    [],
   );
 
   /** 按 sessionId 加载完整会话记录（需要知道记录属于哪个模式） */

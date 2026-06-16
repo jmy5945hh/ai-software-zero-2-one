@@ -316,7 +316,7 @@ function ensureSubscription(
     // 每轮 turn 或 agent 结束时，自动保存步骤快照
     if (sessionStore && (event.type === "turn_end" || event.type === "agent_end")) {
       const snapshot = buildStepSnapshot(session);
-      sessionStore.saveStep(taskId, (session as any).sessionId as string, step, snapshot);
+      sessionStore.saveStep((session as any).sessionId as string, step, snapshot);
     }
   });
   pool.setUnsub(taskId, step, unsub);
@@ -409,7 +409,7 @@ export async function handleWsMessage(
           // 每轮 turn 或 agent 结束时，自动保存步骤快照
           if (event.type === "turn_end" || event.type === "agent_end") {
             const snapshot = buildStepSnapshot(session);
-            sessionStore.saveStep(taskId, session.sessionId, step, snapshot);
+            sessionStore.saveStep(session.sessionId, step, snapshot);
           }
         });
         pool.setUnsub(taskId, step, unsub);
@@ -590,7 +590,7 @@ export async function handleWsMessage(
           // 每轮 turn 或 agent 结束时，自动保存步骤快照
           if (event.type === "turn_end" || event.type === "agent_end") {
             const snapshot = buildStepSnapshot(session);
-            sessionStore.saveStep(taskId, session.sessionId, step, snapshot);
+            sessionStore.saveStep(session.sessionId, step, snapshot);
           }
         });
         pool.setUnsub(taskId, step, unsub);
@@ -675,7 +675,7 @@ export async function handleWsMessage(
           // 每轮 turn 或 agent 结束时，自动保存步骤快照
           if (event.type === "turn_end" || event.type === "agent_end") {
             const snapshot = buildStepSnapshot(session);
-            sessionStore.saveStep(taskId, session.sessionId, step, snapshot);
+            sessionStore.saveStep(session.sessionId, step, snapshot);
           }
         });
         pool.setUnsub(taskId, step, unsub);
@@ -844,7 +844,7 @@ export async function handleWsMessage(
           summary: "",
         };
         existing.buildResult = buildResult;
-        sessionStore.saveStep(taskId, sessionId, stepId, existing);
+        sessionStore.saveStep(sessionId, stepId, existing);
         ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
         break;
       }
@@ -881,7 +881,7 @@ export async function handleWsMessage(
           // 每轮 turn 或 agent 结束时，自动保存步骤快照
           if (event.type === "turn_end" || event.type === "agent_end") {
             const snapshot = buildStepSnapshot(fixSession);
-            sessionStore.saveStep(taskId, fixSession.sessionId, step, snapshot);
+            sessionStore.saveStep(fixSession.sessionId, step, snapshot);
           }
         });
 
@@ -901,7 +901,7 @@ export async function handleWsMessage(
       // ── 会话记录 ──────────────────────
       case "session.saveStep": {
         const { taskId, sessionId, stepId, snapshot } = msg.params as { taskId: string; sessionId: string; stepId: string; snapshot: import("./SessionStore").StepSessionSnapshot };
-        sessionStore.saveStep(taskId, sessionId, stepId, snapshot);
+        sessionStore.saveStep(sessionId, stepId, snapshot);
         ws.send(JSON.stringify({ type: "response", id: msg.id, result: {} }));
         break;
       }

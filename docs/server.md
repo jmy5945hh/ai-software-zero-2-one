@@ -158,9 +158,7 @@ index.ts
 
 ### 7. `SessionStore.ts` — 会话持久化
 
-**存储位置**：
-- 主存储：`~/.aiNativeDevPlatform/sessions/{sessionId}/`
-- 镜像存储：`~/workspaces/{taskId}/session/`（通过 WorkspaceManager）
+**存储位置**：`~/.aiNativeDevPlatform/sessions/{sessionId}/`
 
 **目录结构**：
 ```
@@ -172,9 +170,9 @@ index.ts
 **StepSessionSnapshot** 包含：messages、turns、summary、summarizationResult、buildCommand/Result、qaStatus/OutputLines/ResultContent 等完整执行状态。
 
 **相比旧版的变化**：
-- `saveStep()` 改为按 `taskId` 目录组织（`~/.aiNativeDevPlatform/sessions/{taskId}/step-{stepId}.json`），而非按 `sessionId`
-- 新增 `saveMetaMirror()` 和 `saveStepMirror()` 方法，镜像写入失败不影响主流程
-- `delete()` 同时清理主存储和 workspace 镜像
+- 移除镜像存储机制（`saveMetaMirror`、`saveStepMirror`、`workspaceSessionDir`），所有会话数据仅存储在 `~/.aiNativeDevPlatform/sessions/` 下
+- `saveStep()` 改为按 `sessionId` 目录组织，不再使用 `taskId` 参数
+- `delete()` 仅清理主存储
 - `list()` 仅以主存储为准扫描
 
 ### 8. `WorkspaceManager.ts` — 工作区管理
@@ -191,7 +189,6 @@ index.ts
 - 新增 `browseDir()` — 浏览文件系统目录（用于前端目录选择器），支持排序（目录在前）
 - 新增 `getFileTree()` — 获取 workspace 文件树
 - 新增 `readFile()` — 安全读取文件，支持绝对路径和 workspace 相对路径
-- 新增 `getSessionDir()` — 获取 workspace 下的 session 目录路径
 - 新增 `listTaskDirs()` — 列出所有 workspace 下的任务目录
 - 新增 `initCloudWorkspace()` — 从 Git 仓库克隆代码，支持子目录指定
 - 新增 `GitRepoConfig` 类型（`url`、`branch`、`subdirectory?`）

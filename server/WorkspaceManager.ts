@@ -141,13 +141,6 @@ export class WorkspaceManager {
     return path.join(this.root, taskId, "logs");
   }
 
-  /** 获取任务 workspace 下的 session 目录路径 */
-  getSessionDir(taskId: string): string {
-    const external = this.externalDirs.get(taskId);
-    if (external) return path.join(external, "session");
-    return path.join(this.root, taskId, "session");
-  }
-
   /** 获取 workspace 根目录（taskId 顶层目录） */
   getDir(taskId: string): string {
     return this.dir(taskId);

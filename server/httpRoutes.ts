@@ -316,6 +316,28 @@ export function handleHttpRequest(
     return true;
   }
 
+  // ── 保存步骤会话快照（HTTP 替代 WebSocket session.saveStep） ──
+  if (req.method === "POST" && req.url === "/session/save-step") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const { sessionId, stepId, snapshot } = JSON.parse(body) as {
+          sessionId: string;
+          stepId: string;
+          snapshot: import("./SessionStore").StepSessionSnapshot;
+        };
+        deps.sessionStore.saveStep(sessionId, stepId, snapshot);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true }));
+      } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Save step failed" }));
+      }
+    });
+    return true;
+  }
+
   // ── 读取步骤会话快照（HTTP 替代 WebSocket session.loadStep） ──
   if (req.method === "GET" && req.url?.startsWith("/step-snapshot")) {
     const url = new URL(req.url, `http://localhost:${PORT}`);

@@ -2563,7 +2563,9 @@ function useTimeline(
   const events: TimelineEvent[] = [];
 
   // 如果存在 restoredSession，将历史消息注入 timeline 作为初始事件
-  if (restoredSession) {
+  // 注意：当 turns 已经包含 restored 的轮次时（继续执行场景），跳过注入避免重复
+  const hasRestoredInTurns = restoredSession && turns.length >= (restoredSession.turns || []).length;
+  if (restoredSession && !hasRestoredInTurns) {
     const restoredTurns = restoredSession.turns || [];
     const restoredMsgs = restoredSession.messages || [];
 
@@ -2638,7 +2640,8 @@ function useTimeline(
   }
 
   // 记录历史轮次数量，用于实时轮次的 roundIndex 偏移
-  const restoredRoundCount = restoredSession ? (restoredSession.turns || []).length : 0;
+  // 当 turns 已包含 restored 轮次时，偏移量为 0（因为 turns 中的 roundIndex 已经是完整索引）
+  const restoredRoundCount = hasRestoredInTurns ? 0 : (restoredSession ? (restoredSession.turns || []).length : 0);
 
   // 收集所有系统自动生成的 prompt 文本，用于过滤
   const systemPromptSet = new Set(Object.values(initialPrompts || {}));

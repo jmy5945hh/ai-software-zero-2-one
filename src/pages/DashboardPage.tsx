@@ -201,8 +201,7 @@ export function DashboardPage() {
         await runtimeActions.switchMode(targetMode);
       }
 
-      setState((previous) => ({
-        ...previous,
+      const nextState: Partial<AppState> = {
         intent: followUpPrompt
           ? `${fullRecord.intent}\n\n--- 补充需求 ---\n${followUpPrompt}`
           : fullRecord.intent,
@@ -222,7 +221,14 @@ export function DashboardPage() {
         sessionId: fullRecord.sessionId,
         restoredSessions: fullRecord.stepSessions || {},
         view: "workspace",
-      }));
+      };
+      setState((previous) => ({ ...previous, ...nextState }));
+      // 同步写入 localStorage，确保 TaskPage 挂载时能读到最新状态
+      try {
+        const key = "zero-one-software.prototype.v4";
+        const existing = JSON.parse(localStorage.getItem(key) || "{}");
+        localStorage.setItem(key, JSON.stringify({ ...existing, ...nextState }));
+      } catch { /* ignore */ }
       navigate("/task");
     },
     [setState, navigate, sessionRecords, runtimeState.mode, runtimeActions],
