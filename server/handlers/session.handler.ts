@@ -19,7 +19,7 @@ export async function handleSessionMessage(
   msg: WsRequestMessage,
   deps: HandlerDeps,
 ): Promise<void> {
-  const { runner, pool, sessionStore, workspace } = deps;
+  const { runner, pool, sessionStore, workspace, rollback } = deps;
 
   switch (msg.method as string) {
     case "session.create": {
@@ -46,10 +46,14 @@ export async function handleSessionMessage(
 
       const session = await runner.createSession(taskId, step, workspaceDir);
       pool.set(taskId, step, session);
+      try { rollback.ensureBaseline(taskId, workspaceDir); } catch { /* 快照不可用不阻断任务 */ }
 
       const unsub = session.subscribe((sdkEvent) => {
         const event = mapSdkEvent(sdkEvent);
         if (!event) return;
+        if (event.type === "turn_start") {
+          try { rollback.createCheckpoint(taskId, workspaceDir, step); } catch { /* 回退不可用不阻断 Agent */ }
+        }
         ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
 
         if (event.type === "turn_end" || event.type === "agent_end") {
@@ -88,7 +92,7 @@ export async function handleSessionMessage(
         pool.set(taskId, step, session);
       }
 
-      ensureSubscription(pool, taskId, step, ws, msg.id, sessionStore);
+      ensureSubscription(pool, taskId, step, ws, msg.id, sessionStore, rollback, workspace);
 
       console.log(`[session.steer] isStreaming=${session.isStreaming} step=${step} text=%.20s`, text.slice(0, 20));
       if (session.isStreaming) {
@@ -129,7 +133,7 @@ export async function handleSessionMessage(
       }
 
       const { taskId, step, session } = found;
-      ensureSubscription(pool, taskId, step, ws, msg.id, sessionStore);
+      ensureSubscription(pool, taskId, step, ws, msg.id, sessionStore, rollback, workspace);
 
       const messages = (session as any).agent?.state?.messages || [];
       const mappedMessages = messages
@@ -209,6 +213,7 @@ export async function handleSessionMessage(
 
       const session = await runner.createSession(taskId, step, workspaceDir);
       pool.set(taskId, step, session);
+      try { rollback.ensureBaseline(taskId, workspaceDir); } catch { /* 快照不可用不阻断任务 */ }
 
       const unsub = session.subscribe((sdkEvent) => {
         const event = mapSdkEvent(sdkEvent);
@@ -283,10 +288,14 @@ export async function handleSessionMessage(
 
       const session = await runner.createSession(taskId, step, workspaceDir);
       pool.set(taskId, step, session);
+      try { rollback.ensureBaseline(taskId, workspaceDir); } catch { /* 快照不可用不阻断任务 */ }
 
       const unsub = session.subscribe((sdkEvent) => {
         const event = mapSdkEvent(sdkEvent);
         if (!event) return;
+        if (event.type === "turn_start") {
+          try { rollback.createCheckpoint(taskId, workspaceDir, step); } catch { /* 回退不可用不阻断 Agent */ }
+        }
         ws.send(JSON.stringify({ type: "event", id: msg.id, event }));
 
         if (event.type === "turn_end" || event.type === "agent_end") {

@@ -19,6 +19,7 @@ import {
   SignalHigh,
   SignalMedium,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 
 import { HomeTaskBoard } from "../components/HomeTaskBoard";
@@ -38,6 +39,7 @@ export function DashboardPage() {
   const [state, setState] = useStoredState();
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
   const [docsError, setDocsError] = useState<string | null>(null);
+  const [preflightError, setPreflightError] = useState<string | null>(null);
   const sessionRecords = useSessionRecords();
 
   const [pendingRecord, setPendingRecord] = useState<SessionRecord | null>(null);
@@ -80,8 +82,9 @@ export function DashboardPage() {
   );
 
   const confirmWorkspace = useCallback(
-    async (path: string, mode: "local" | "cloud") => {
+    async (path: string, mode: "local" | "cloud", gitConfig?: { branch: string; shouldPull: boolean }) => {
       setDocsError(null);
+      setPreflightError(null);
       const isCloud = mode === "cloud";
 
       // 同步 runtimeMode 到全局 store（用于连接器等）
@@ -135,11 +138,27 @@ export function DashboardPage() {
         return;
       }
 
+      // 本地模式：Git preflight（checkout + pull）
+      if (gitConfig) {
+        try {
+          const result = await agent.gitPreflight(path, gitConfig.branch, gitConfig.shouldPull);
+          if (!result.success) {
+            setPreflightError(result.error || "Git 操作失败");
+            setShowWorkspacePicker(false);
+            return;
+          }
+        } catch (err) {
+          setPreflightError(err instanceof Error ? err.message : "Git 操作异常");
+          setShowWorkspacePicker(false);
+          return;
+        }
+      }
+
       // 本地模式：path 为本地目录路径
-      // 需求文档内容已由 HomeTaskBoard 在预览时读取并融入 intent，无需再次读取
       setState((previous) => ({
         ...previous,
         workspacePath: path,
+        localGit: gitConfig ? { branch: gitConfig.branch, shouldPull: gitConfig.shouldPull } : undefined,
         view: "workspace",
       }));
       setShowWorkspacePicker(false);
@@ -150,6 +169,7 @@ export function DashboardPage() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
           ...currentState,
           workspacePath: path,
+          localGit: gitConfig ? { branch: gitConfig.branch, shouldPull: gitConfig.shouldPull } : undefined,
           view: "workspace",
           runtimeMode: mode,
         }));
@@ -392,10 +412,31 @@ export function DashboardPage() {
             onConfirm={confirmWorkspace}
             onCancel={cancelWorkspacePicker}
             onBrowse={(dirPath, browseMode) => agent.browseDirForMode(dirPath, browseMode)}
+            onListBranches={(dirPath) => agent.listGitBranches(dirPath)}
             initialPath={state.workspacePath || "~"}
             mode={state.runtimeMode || dashboardMode}
           />
         </>
+      )}
+
+      {/* Preflight 错误提示 */}
+      {preflightError && (
+        <div className="preflight-error-toast">
+          <div className="preflight-error-toast-content">
+            <AlertTriangle size={16} />
+            <div>
+              <strong>Git 操作失败</strong>
+              <p>{preflightError}</p>
+            </div>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => setPreflightError(null)}
+            >
+              关闭
+            </button>
+          </div>
+        </div>
       )}
     </>
   );

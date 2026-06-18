@@ -8,7 +8,7 @@
     "dev:ui": "vite --host 0.0.0.0",
     "dev:agent": "tsx server/index.ts",
     "start:agent": "npm install && tsx server/index.ts",
-    "test:server": "tsx --test server/httpAuth.test.ts server/httpRoutes.test.ts server/wsHandler.test.ts server/utils/buildCommand.test.ts",
+    "test:server": "tsx --test server/httpAuth.test.ts server/httpRoutes.test.ts server/wsHandler.test.ts server/RollbackManager.test.ts server/utils/buildCommand.test.ts",
     "typecheck:server": "tsc -p tsconfig.server.json",
     "build": "npm run typecheck:server && tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0"

@@ -9,6 +9,7 @@ test("HTTP endpoints keep their transport modules", () => {
     ["/session/meta?sessionId=1", "session"],
     ["/repo-diff-files?path=/repo", "session"],
     ["/step-snapshot?sessionId=1", "session"],
+    ["/rollback/status?taskId=1", "session"],
     ["/project-build?path=/repo", "build"],
     ["/read-file?file=/tmp/result", "build"],
     ["/qa-review?path=/repo", "build"],

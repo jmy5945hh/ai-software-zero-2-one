@@ -8,6 +8,9 @@ import {
   FileDiff,
   FilePlus,
   FileMinus,
+  History,
+  RotateCcw,
+  ShieldCheck,
 } from "lucide-react";
 import { DiffViewer } from "./DiffViewer";
 import { agentFetch } from "../agent/config";
@@ -28,9 +31,17 @@ type DiffFileInfo = {
 
 type RepoExplorerProps = {
   workspacePath: string;
+  taskId?: string;
 };
 
-type RepoTab = "tree" | "diff";
+type RepoTab = "tree" | "diff" | "rollback";
+
+type RollbackCheckpoint = {
+  id: string;
+  round: number;
+  step: string;
+  createdAt: string;
+};
 
 /**
  * Build a tree structure from flat file paths.
@@ -69,7 +80,7 @@ function buildFileTree(files: DiffFileInfo[]): TreeNode[] {
  * RepoExplorer — 浏览项目仓库目录（排除 specs 目录），
  * 支持切换「目录树」和「代码 Diff」两种视图。
  */
-export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
+export function RepoExplorer({ workspacePath, taskId }: RepoExplorerProps) {
   const [tab, setTab] = useState<RepoTab>("tree");
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +92,51 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
   const [treeWidth, setTreeWidth] = useState(240);
   const splitRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
+  const [checkpoints, setCheckpoints] = useState<RollbackCheckpoint[]>([]);
+  const [rollbackLoading, setRollbackLoading] = useState(false);
+  const [rollbackMessage, setRollbackMessage] = useState("");
+  const [rollbackReady, setRollbackReady] = useState(false);
+
+  const loadRollbackStatus = useCallback(async () => {
+    if (!taskId) return;
+    setRollbackLoading(true);
+    try {
+      const res = await agentFetch(`/rollback/status?taskId=${encodeURIComponent(taskId)}`);
+      const data = await res.json();
+      setCheckpoints(data.checkpoints || []);
+      setRollbackReady(data.ready === true);
+    } finally {
+      setRollbackLoading(false);
+    }
+  }, [taskId]);
+
+  const applyRollback = useCallback(async (
+    params: { type: "round" | "file" | "task"; checkpointId?: string; filePath?: string },
+    prompt: string,
+  ) => {
+    if (!taskId || !window.confirm(prompt)) return;
+    setRollbackLoading(true);
+    setRollbackMessage("");
+    try {
+      const res = await agentFetch("/rollback/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId, ...params }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "回退失败");
+      setRollbackMessage("已恢复文件状态");
+      const diffParams = new URLSearchParams({ path: workspacePath });
+      if (taskId) diffParams.set("taskId", taskId);
+      const diffRes = await agentFetch(`/repo-diff-files?${diffParams.toString()}`);
+      const diffData = await diffRes.json();
+      setDiffFiles(diffData.files || []);
+    } catch (err) {
+      setRollbackMessage(err instanceof Error ? err.message : "回退失败");
+    } finally {
+      setRollbackLoading(false);
+    }
+  }, [taskId, workspacePath]);
 
   // 拖拽调整左右分栏宽度
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -133,7 +189,9 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
   const loadDiff = useCallback(async () => {
     setDiffLoading(true);
     try {
-      const res = await agentFetch(`/repo-diff-files?path=${encodeURIComponent(workspacePath)}`);
+      const params = new URLSearchParams({ path: workspacePath });
+      if (taskId) params.set("taskId", taskId);
+      const res = await agentFetch(`/repo-diff-files?${params.toString()}`);
       const data = await res.json();
       const files: DiffFileInfo[] = data.files || [];
       setDiffFiles(files);
@@ -149,14 +207,16 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
     } finally {
       setDiffLoading(false);
     }
-  }, [workspacePath]);
+  }, [workspacePath, taskId]);
 
   // 切换到 diff tab 时自动加载
   useEffect(() => {
     if (tab === "diff") {
       loadDiff();
+    } else if (tab === "rollback") {
+      loadRollbackStatus();
     }
-  }, [tab, loadDiff]);
+  }, [tab, loadDiff, loadRollbackStatus]);
 
   // 读取文件内容
   const openFile = useCallback(
@@ -203,6 +263,14 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
         >
           <FileDiff size={14} />
           Diff
+        </button>
+        <button
+          className={`repo-explorer-tab ${tab === "rollback" ? "active" : ""}`}
+          type="button"
+          onClick={() => setTab("rollback")}
+        >
+          <History size={14} />
+          回退
         </button>
       </div>
 
@@ -311,6 +379,20 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
                         <span className="diff-stat-add">+{selectedDiff.additions}</span>
                         <span className="diff-stat-del">-{selectedDiff.deletions}</span>
                       </span>
+                      {taskId && (
+                        <button
+                          className="ghost-button small"
+                          type="button"
+                          disabled={rollbackLoading}
+                          onClick={() => applyRollback(
+                            { type: "file", filePath: selectedDiff.path },
+                            `将 ${selectedDiff.path} 恢复到任务开始前？`,
+                          )}
+                        >
+                          <RotateCcw size={12} />
+                          恢复此文件
+                        </button>
+                      )}
                     </div>
                     <DiffViewer content={selectedDiff.diff} />
                   </div>
@@ -325,8 +407,72 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
           )}
         </div>
       )}
+
+      {tab === "rollback" && (
+        <div className="repo-explorer-content rollback-panel">
+          <div className="rollback-hero">
+            <div className="rollback-hero-icon"><ShieldCheck size={22} /></div>
+            <div>
+              <strong>任务安全网</strong>
+              <p>回退只恢复文件，不改动当前分支、提交历史和暂存区。</p>
+            </div>
+            <button
+              className="rollback-danger-button"
+              type="button"
+              disabled={!taskId || !rollbackReady || rollbackLoading}
+              onClick={() => applyRollback({ type: "task" }, "恢复整个任务到开始前？当前任务产生的全部文件变更都会被撤销。")}
+            >
+              <RotateCcw size={14} />
+              整体回退
+            </button>
+          </div>
+
+          {rollbackMessage && <div className="rollback-message">{rollbackMessage}</div>}
+          <div className="rollback-section-header">
+            <div>
+              <strong>轮次回退点</strong>
+              <span>恢复到该轮开始时的文件状态</span>
+            </div>
+            <button className="ghost-button small" type="button" onClick={loadRollbackStatus} disabled={rollbackLoading}>
+              <RefreshIcon />
+              刷新
+            </button>
+          </div>
+          <div className="rollback-list">
+            {rollbackLoading && checkpoints.length === 0 ? (
+              <div className="repo-explorer-loading"><Loader2 size={18} className="spin-icon" />加载回退点...</div>
+            ) : checkpoints.length === 0 ? (
+              <div className="repo-explorer-empty"><History size={28} /><p>{rollbackReady ? "Agent 开始执行后将自动生成轮次回退点" : "该任务尚未建立文件回退基线"}</p></div>
+            ) : [...checkpoints].reverse().map((checkpoint) => (
+              <div className="rollback-item" key={checkpoint.id}>
+                <span className="rollback-round">R{checkpoint.round}</span>
+                <div className="rollback-item-body">
+                  <strong>第 {checkpoint.round} 轮开始</strong>
+                  <span>{checkpoint.step.toUpperCase()} · {new Date(checkpoint.createdAt).toLocaleString()}</span>
+                </div>
+                <button
+                  className="ghost-button small"
+                  type="button"
+                  disabled={rollbackLoading}
+                  onClick={() => applyRollback(
+                    { type: "round", checkpointId: checkpoint.id },
+                    `恢复到第 ${checkpoint.round} 轮开始时？该轮及之后的文件变更都会被撤销。`,
+                  )}
+                >
+                  <RotateCcw size={12} />
+                  回到这里
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function RefreshIcon() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 11a8 8 0 1 0 2 5"/><polyline points="20 4 20 11 13 11"/></svg>;
 }
 
 // ── 文件树节点 ──────────────────────────────

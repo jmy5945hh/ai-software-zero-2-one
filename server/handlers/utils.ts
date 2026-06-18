@@ -5,6 +5,7 @@ import type { SessionPool } from "../SessionPool";
 import type { SummaryStore } from "../SummaryStore";
 import type { WorkspaceManager } from "../WorkspaceManager";
 import type { SessionStore } from "../SessionStore";
+import type { RollbackManager } from "../RollbackManager";
 import type { AgentEvent } from "../protocol";
 
 /** 所有 handler 共享的依赖注入类型 */
@@ -14,6 +15,7 @@ export type HandlerDeps = {
   summaryStore: SummaryStore;
   workspace: WorkspaceManager;
   sessionStore: SessionStore;
+  rollback: RollbackManager;
 };
 
 /** 从 AgentToolResult 的 content 数组中提取文本 */
@@ -169,6 +171,8 @@ export function ensureSubscription(
   ws: WebSocket,
   msgId: string,
   sessionStore?: SessionStore,
+  rollback?: RollbackManager,
+  workspace?: WorkspaceManager,
 ): void {
   pool.clearUnsub(taskId, step);
   const session = pool.get(taskId, step);
@@ -176,6 +180,13 @@ export function ensureSubscription(
   const unsub = session.subscribe((sdkEvent) => {
     const event = mapSdkEvent(sdkEvent);
     if (!event) return;
+    if (event.type === "turn_start" && rollback && workspace) {
+      try {
+        rollback.createCheckpoint(taskId, workspace.getRepoDir(taskId), step);
+      } catch (err) {
+        console.warn("[rollback] checkpoint unavailable:", err instanceof Error ? err.message : err);
+      }
+    }
     ws.send(JSON.stringify({ type: "event", id: msgId, event }));
 
     if (sessionStore && (event.type === "turn_end" || event.type === "agent_end")) {

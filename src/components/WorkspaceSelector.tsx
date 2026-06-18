@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Folder, FolderOpen, File, ChevronRight, Home, Check, X, GitBranch, Globe, Monitor, Cloud, Check as CheckIcon } from "lucide-react";
+import { Folder, FolderOpen, File, ChevronRight, Home, Check, X, GitBranch, Globe, Monitor, Cloud, Check as CheckIcon, Loader2 } from "lucide-react";
 
 export type BrowseEntry = {
   name: string;
@@ -10,7 +10,7 @@ export type BrowseEntry = {
 export type RuntimeMode = "local" | "cloud";
 
 type WorkspaceSelectorProps = {
-  onConfirm: (path: string, mode: RuntimeMode) => void;
+  onConfirm: (path: string, mode: RuntimeMode, gitConfig?: { branch: string; shouldPull: boolean }) => void;
   onCancel: () => void;
   /** 浏览目录的回调（传入路径和模式，返回条目列表） */
   onBrowse?: (dirPath: string, mode?: RuntimeMode) => Promise<BrowseEntry[]>;
@@ -18,11 +18,13 @@ type WorkspaceSelectorProps = {
   initialPath?: string;
   /** 运行时模式：本地显示文件路径，云端显示 Git 仓库信息 */
   mode?: RuntimeMode;
+  /** 列出 Git 分支的回调 */
+  onListBranches?: (dirPath: string) => Promise<{ branches: string[]; current: string | null; isRepo: boolean }>;
 };
 
 /**
  * 工作空间选择器 — 模态弹窗。
- * - 本地模式：手动输入路径 + 可选的目录浏览器。
+ * - 本地模式：手动输入路径 + 可选的目录浏览器 + Git 分支检测。
  * - 云端模式：Git 仓库地址 + 分支。
  * 用户选择后回调 onConfirm，取消则 onCancel。
  */
@@ -32,6 +34,7 @@ export function WorkspaceSelector({
   onBrowse,
   initialPath,
   mode = "local",
+  onListBranches,
 }: WorkspaceSelectorProps) {
   // ── 本地模式状态 ──
   const [currentPath, setCurrentPath] = useState(initialPath || "~");
@@ -46,6 +49,14 @@ export function WorkspaceSelector({
   // ── 云端模式状态 ──
   const [gitUrl, setGitUrl] = useState("https://github.com/jmy5945hh/ant-design-pro-for-edd.git");
   const [gitBranch, setGitBranch] = useState("001_chatbot");
+
+  // ── 本地模式 Git 检测状态 ──
+  const [isGitRepo, setIsGitRepo] = useState(false);
+  const [gitBranches, setGitBranches] = useState<string[]>([]);
+  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [shouldPull, setShouldPull] = useState(false);
+  const [gitLoading, setGitLoading] = useState(false);
 
   // 父目录（浏览模式下路径为服务端解析后的绝对路径）
   const parentPath = currentPath === "/" ? null : currentPath.split("/").slice(0, -1).join("/") || "/";
@@ -72,6 +83,33 @@ export function WorkspaceSelector({
     }
   }, [showBrowser, currentPath, onBrowse, loadDir]);
 
+  // ── 自动检测 Git 仓库 ──
+  useEffect(() => {
+    if (internalMode === "cloud" || !onListBranches || showBrowser) return;
+    let cancelled = false;
+    const detect = async () => {
+      setGitLoading(true);
+      try {
+        const result = await onListBranches(currentPath);
+        if (cancelled) return;
+        setIsGitRepo(result.isRepo);
+        setGitBranches(result.branches);
+        setCurrentBranch(result.current);
+        setSelectedBranch(result.current || (result.branches.length > 0 ? result.branches[0] : ""));
+      } catch {
+        if (!cancelled) {
+          setIsGitRepo(false);
+          setGitBranches([]);
+          setCurrentBranch(null);
+        }
+      } finally {
+        if (!cancelled) setGitLoading(false);
+      }
+    };
+    detect();
+    return () => { cancelled = true; };
+  }, [currentPath, internalMode, onListBranches, showBrowser]);
+
   // 点击进入子目录
   const enterDir = (entry: BrowseEntry) => {
     if (entry.type === "dir") {
@@ -89,7 +127,7 @@ export function WorkspaceSelector({
   // 键盘确认（本地模式）
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      onConfirm(currentPath, "local");
+      handleConfirm();
     } else if (e.key === "Escape") {
       onCancel();
     }
@@ -115,7 +153,11 @@ export function WorkspaceSelector({
       const branch = gitBranch.trim() || "main";
       onConfirm(`${url}#${branch}`, internalMode);
     } else {
-      onConfirm(currentPath, internalMode);
+      if (isGitRepo && selectedBranch) {
+        onConfirm(currentPath, internalMode, { branch: selectedBranch, shouldPull });
+      } else {
+        onConfirm(currentPath, internalMode);
+      }
     }
   };
 
@@ -322,6 +364,41 @@ export function WorkspaceSelector({
                 重置
               </button>
             </div>
+
+            {/* Git 分支设置（仅在检测到 Git 仓库时显示） */}
+            {isGitRepo && !showBrowser && (
+              <div className="ws-selector-git-section">
+                <div className="ws-selector-git-header">
+                  <GitBranch size={14} />
+                  <span>Git 仓库已检测到</span>
+                  {gitLoading && <Loader2 size={12} className="agent-spin" />}
+                </div>
+                <div className="ws-selector-path-row">
+                  <label>分支</label>
+                  <div className="ws-selector-input-group">
+                    <select
+                      className="ws-selector-branch-select"
+                      value={selectedBranch}
+                      onChange={(e) => setSelectedBranch(e.target.value)}
+                    >
+                      {gitBranches.map((b) => (
+                        <option key={b} value={b}>
+                          {b}{b === currentBranch ? " (当前)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <label className="ws-selector-pull-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={shouldPull}
+                    onChange={(e) => setShouldPull(e.target.checked)}
+                  />
+                  <span>开发前拉取最新代码 (git pull)</span>
+                </label>
+              </div>
+            )}
           </>
         )}
 

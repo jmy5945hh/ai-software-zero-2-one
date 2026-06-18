@@ -156,6 +156,49 @@ export function handleWorkspaceRoutes(
     return true;
   }
 
+  // 列出指定目录的 Git 分支
+  if (req.method === "GET" && req.url?.startsWith("/git-branches")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const dirPath = url.searchParams.get("dirPath");
+    if (!dirPath) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'dirPath' query parameter" }));
+      return true;
+    }
+    try {
+      const result = workspace.listGitBranches(dirPath);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Failed to list branches" }));
+    }
+    return true;
+  }
+
+  // Git preflight: checkout + pull
+  if (req.method === "POST" && req.url === "/git-preflight") {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => {
+      try {
+        const { dirPath, branch, shouldPull } = JSON.parse(body);
+        if (!dirPath || !branch) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Missing 'dirPath' or 'branch'" }));
+          return;
+        }
+        const result = workspace.gitPreflight(dirPath, branch, !!shouldPull);
+        res.writeHead(result.success ? 200 : 400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
+      } catch (err) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Preflight failed" }));
+      }
+    });
+    return true;
+  }
+
   // 读取项目仓库目录树
   if (req.method === "GET" && req.url?.startsWith("/repo-tree")) {
     const url = new URL(req.url, `http://localhost:${PORT}`);

@@ -6,6 +6,7 @@ import { SessionPool } from "./SessionPool";
 import { SummaryStore } from "./SummaryStore";
 import { WorkspaceManager } from "./WorkspaceManager";
 import { SessionStore } from "./SessionStore";
+import { RollbackManager } from "./RollbackManager";
 import { handleHttpRequest } from "./httpRoutes";
 import { handleWsMessage } from "./wsHandler";
 import { isHttpRequestAuthorized, rejectUnauthorizedRequest } from "./httpAuth";
@@ -18,6 +19,7 @@ const pool = new SessionPool();
 const summaryStore = new SummaryStore();
 const workspace = new WorkspaceManager(WorkspaceManager.defaultRoot());
 const sessionStore = new SessionStore();
+const rollback = new RollbackManager();
 const AGENT_SECRET = process.env.AGENT_SECRET;
 
 // ── HTTP 服务 ───────────────────────────────
@@ -26,7 +28,7 @@ const server = http.createServer((req, res) => {
     rejectUnauthorizedRequest(res);
     return;
   }
-  const handled = handleHttpRequest(req, res, { pool, sessionStore, workspace });
+  const handled = handleHttpRequest(req, res, { pool, sessionStore, workspace, rollback });
   if (!handled) {
     res.writeHead(404);
     res.end();
@@ -70,7 +72,7 @@ wss.on("connection", (ws: WebSocket, req) => {
   console.log("[ws] Client connected");
 
   ws.on("message", async (raw) => {
-    await handleWsMessage(ws, raw, { runner, pool, summaryStore, workspace, sessionStore });
+    await handleWsMessage(ws, raw, { runner, pool, summaryStore, workspace, sessionStore, rollback });
   });
 
   ws.on("close", () => {

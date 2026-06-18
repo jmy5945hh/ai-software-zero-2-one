@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 
 export type FileNode = {
   name: string;
@@ -557,5 +557,101 @@ export class WorkspaceManager {
         }
         return { name: d.name, type: "file" as const };
       });
+  }
+
+  /** 列出指定目录的 Git 分支（含当前分支高亮） */
+  listGitBranches(dirPath: string): { branches: string[]; current: string | null; isRepo: boolean } {
+    const resolved = path.resolve(this.expandHome(dirPath));
+    if (!fs.existsSync(resolved) || !fs.existsSync(path.join(resolved, ".git"))) {
+      return { branches: [], current: null, isRepo: false };
+    }
+    try {
+      const result = execSync("git branch -a --no-color", {
+        cwd: resolved,
+        encoding: "utf-8",
+        timeout: 5000,
+      }) as string;
+      const branches: string[] = [];
+      let current: string | null = null;
+      for (const line of result.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        if (trimmed.startsWith("* ")) {
+          current = trimmed.slice(2);
+          branches.push(current);
+        } else if (!trimmed.includes("remotes/origin/HEAD")) {
+          // 过滤掉 origin/HEAD 指针，保留实际远程分支
+          branches.push(trimmed.replace(/^remotes\//, ""));
+        }
+      }
+      return { branches, current, isRepo: true };
+    } catch {
+      return { branches: [], current: null, isRepo: true };
+    }
+  }
+
+  /** Git preflight：切换分支 + 可选 pull */
+  gitPreflight(dirPath: string, branch: string, shouldPull: boolean): { success: boolean; error?: string; output?: string; errorType?: "auth" | "network" | "conflict" | "unknown" } {
+    const resolved = path.resolve(this.expandHome(dirPath));
+    if (!fs.existsSync(resolved) || !fs.existsSync(path.join(resolved, ".git"))) {
+      return { success: false, error: "指定目录不是 Git 仓库", errorType: "unknown" };
+    }
+    // 防止 shell 注入
+    if (!/^[a-zA-Z0-9._\-\/]+$/.test(branch)) {
+      return { success: false, error: `分支名称包含非法字符: ${branch}`, errorType: "unknown" };
+    }
+    let output = "";
+    // Step 1: checkout
+    try {
+      const checkoutResult = execSync(`git checkout ${branch}`, {
+        cwd: resolved,
+        encoding: "utf-8",
+        timeout: 30000,
+      }) as string;
+      output += checkoutResult;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const errorType = this.classifyGitOperationError(msg);
+      return { success: false, error: this.buildPreflightError(errorType, msg), output: msg, errorType };
+    }
+    // Step 2: pull (if requested)
+    if (shouldPull) {
+      try {
+        const pullResult = execSync("git pull", {
+          cwd: resolved,
+          encoding: "utf-8",
+          timeout: 60000,
+        }) as string;
+        output += "\n" + pullResult;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const errorType = this.classifyGitOperationError(msg);
+        return { success: false, error: this.buildPreflightError(errorType, msg), output: msg, errorType };
+      }
+    }
+    return { success: true, output };
+  }
+
+  /** 分类 git 操作错误 */
+  private classifyGitOperationError(message: string): "auth" | "network" | "conflict" | "unknown" {
+    const lower = message.toLowerCase();
+    if (lower.includes("conflict") || lower.includes("merge conflict") || lower.includes("unmerged")) return "conflict";
+    if (lower.includes("authentication") || lower.includes("permission") || lower.includes("could not read from remote")) return "auth";
+    if (lower.includes("timeout") || lower.includes("connection") || lower.includes("network") || lower.includes("unable to access")) return "network";
+    return "unknown";
+  }
+
+  /** 构建 preflight 友好的错误信息 */
+  private buildPreflightError(errorType: string, rawMessage: string): string {
+    switch (errorType) {
+      case "conflict":
+        return "存在合并冲突，请先手动解决冲突后再试";
+      case "auth":
+        return "Git 认证失败，请检查凭证配置";
+      case "network":
+        return "网络连接失败，请检查网络后重试";
+      default:
+        return `Git 操作失败: ${rawMessage}`;
+    }
   }
 }

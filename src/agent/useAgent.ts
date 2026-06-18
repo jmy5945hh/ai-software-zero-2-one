@@ -651,6 +651,39 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     [browseDirForMode],
   );
 
+  // ── 列出 Git 分支 ──
+  const listGitBranches = useCallback(
+    async (dirPath: string): Promise<{ branches: string[]; current: string | null; isRepo: boolean }> => {
+      try {
+        const origin = getAgentWsOrigin(mode || "local");
+        const res = await agentFetch(`${origin}/git-branches?dirPath=${encodeURIComponent(dirPath)}`, {}, mode || "local");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch {
+        return { branches: [], current: null, isRepo: false };
+      }
+    },
+    [mode],
+  );
+
+  // ── Git preflight（checkout + pull） ──
+  const gitPreflight = useCallback(
+    async (dirPath: string, branch: string, shouldPull: boolean): Promise<{ success: boolean; error?: string; output?: string; errorType?: string }> => {
+      try {
+        const origin = getAgentWsOrigin(mode || "local");
+        const res = await agentFetch(`${origin}/git-preflight`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dirPath, branch, shouldPull }),
+        }, mode || "local");
+        return await res.json();
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : "Preflight request failed" };
+      }
+    },
+    [mode],
+  );
+
   // ── 查询 workspace 初始化状态（云端模式 git clone 进度） ──
   const getWorkspaceInitStatus = useCallback(async () => {
     if (!taskId || !wsRef.current) return;
@@ -1533,6 +1566,8 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     readFile,
     browseDir,
     browseDirForMode,
+    listGitBranches,
+    gitPreflight,
     triggerBuild,
     detectBuildCommand,
     /** 更新指定步骤的编译数据（命令 + 结果），用于手动检测/编译后的持久化 */

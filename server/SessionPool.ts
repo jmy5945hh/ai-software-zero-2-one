@@ -79,6 +79,14 @@ export class SessionPool {
     return this.pool.size;
   }
 
+  /** 任务仍在写文件时禁止回退，避免恢复结果立刻被后续工具调用覆盖。 */
+  isTaskStreaming(taskId: string): boolean {
+    for (const entry of this.pool.values()) {
+      if (entry.taskId === taskId && entry.session.isStreaming) return true;
+    }
+    return false;
+  }
+
   /** 销毁全部 session */
   disposeAll(): void {
     for (const entry of this.pool.values()) {

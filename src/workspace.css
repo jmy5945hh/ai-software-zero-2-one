@@ -3403,6 +3403,124 @@
   font-size: 0.85rem;
 }
 
+/* ── 任务回退 ───────────────────────────── */
+.rollback-panel {
+  padding: 20px;
+  overflow-y: auto;
+  background: var(--bg-soft);
+}
+
+.rollback-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+
+.rollback-hero-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.rollback-hero > div:nth-child(2) {
+  flex: 1;
+}
+
+.rollback-hero strong,
+.rollback-section-header strong,
+.rollback-item-body strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.rollback-hero p,
+.rollback-section-header span,
+.rollback-item-body span {
+  margin: 3px 0 0;
+  color: var(--muted-warm);
+  font-size: 0.7rem;
+}
+
+.rollback-danger-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid rgba(194, 123, 102, 0.4);
+  border-radius: var(--radius-full);
+  color: var(--terracotta);
+  background: var(--terracotta-light);
+  font: 600 0.72rem var(--font-body);
+  cursor: pointer;
+}
+
+.rollback-danger-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.rollback-message {
+  margin-top: 12px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--primary);
+  background: var(--primary-light);
+  font-size: 0.72rem;
+}
+
+.rollback-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 22px;
+  padding: 0 4px 10px;
+}
+
+.rollback-list {
+  display: grid;
+  gap: 8px;
+}
+
+.rollback-list .repo-explorer-loading,
+.rollback-list .repo-explorer-empty {
+  min-height: 220px;
+}
+
+.rollback-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.rollback-round {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--primary);
+  background: var(--primary-light);
+  font: 700 0.72rem "SF Mono", monospace;
+}
+
+.rollback-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ── 目录树 + 预览（左右分栏） ────────────── */
 
 .repo-explorer-split {
@@ -4102,4 +4220,3 @@
   opacity: 0.7;
   font-family: "SF Mono", monospace;
 }
-

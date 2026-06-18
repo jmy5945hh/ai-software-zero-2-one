@@ -87,6 +87,8 @@ export type GitRepoConfig = {
   branch: string;
   /** 子目录（可选，只克隆仓库中的特定目录作为工作空间） */
   subdirectory?: string;
+  /** 本地模式：是否在开发前 pull 最新代码 */
+  shouldPull?: boolean;
 };
 
 export type AppState = {
@@ -98,6 +100,11 @@ export type AppState = {
   runtimeMode: "local" | "cloud";
   /** Git 仓库配置（仅云端模式使用） */
   gitRepo?: GitRepoConfig;
+  /** 本地模式 Git 分支配置（分支切换 + pull） */
+  localGit?: {
+    branch: string;
+    shouldPull: boolean;
+  };
   activeStage: WorkflowId;
   stepIndex: number;
   notes: string;

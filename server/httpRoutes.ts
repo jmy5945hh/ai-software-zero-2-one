@@ -1,6 +1,7 @@
 import http from "http";
 import { SessionPool } from "./SessionPool";
 import { SessionStore } from "./SessionStore";
+import { RollbackManager } from "./RollbackManager";
 import { WorkspaceManager } from "./WorkspaceManager";
 import { handleWorkspaceRoutes } from "./routes/workspace.routes";
 import { handleSessionRoutes } from "./routes/session.routes";
@@ -12,7 +13,8 @@ export type HttpRouteGroup = "api" | "session" | "build" | "workspace" | null;
 export function resolveHttpRouteGroup(url: string | undefined): HttpRouteGroup {
   if (url?.startsWith("/api/")) return "api";
   if (url?.startsWith("/session/") || url === "/task/init" ||
-      url?.startsWith("/repo-diff") || url?.startsWith("/step-snapshot")) return "session";
+      url?.startsWith("/repo-diff") || url?.startsWith("/step-snapshot") ||
+      url?.startsWith("/rollback/")) return "session";
   if (url?.startsWith("/project-build") || url?.startsWith("/read-file") ||
       url?.startsWith("/qa-review")) return "build";
   if (url?.startsWith("/specs-") || url?.startsWith("/workspace-") ||
@@ -26,7 +28,7 @@ export function resolveHttpRouteGroup(url: string | undefined): HttpRouteGroup {
 export function handleHttpRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  deps: { pool: SessionPool; sessionStore: SessionStore; workspace: WorkspaceManager },
+  deps: { pool: SessionPool; sessionStore: SessionStore; workspace: WorkspaceManager; rollback: RollbackManager },
 ): boolean {
   // ── CORS 头 ──
   res.setHeader("Access-Control-Allow-Origin", "*");

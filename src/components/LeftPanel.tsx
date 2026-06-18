@@ -60,6 +60,7 @@ export function LeftPanel({
           </div>
           <WorkspaceExplorer
             workspacePath={workspacePath}
+            taskId={sessionId}
             repoExplorerOpen={repoExplorerOpen}
             onCloseRepoExplorer={onCloseRepoExplorer}
           />

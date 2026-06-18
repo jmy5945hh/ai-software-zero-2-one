@@ -4,6 +4,7 @@ import { SessionPool } from "./SessionPool";
 import { SummaryStore } from "./SummaryStore";
 import { WorkspaceManager } from "./WorkspaceManager";
 import { SessionStore } from "./SessionStore";
+import { RollbackManager } from "./RollbackManager";
 import type { WsMessage } from "./protocol";
 import type { HandlerDeps } from "./handlers/utils";
 import { handleSessionMessage } from "./handlers/session.handler";
@@ -33,6 +34,7 @@ export async function handleWsMessage(
     summaryStore: SummaryStore;
     workspace: WorkspaceManager;
     sessionStore: SessionStore;
+    rollback: RollbackManager;
   },
 ): Promise<void> {
   let msg: WsMessage;

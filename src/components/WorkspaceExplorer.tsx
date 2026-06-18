@@ -7,6 +7,7 @@ type ExplorerMode = "specs" | "repo" | null;
 
 type WorkspaceExplorerProps = {
   workspacePath: string;
+  taskId?: string;
   /** 外部触发打开 repo explorer */
   repoExplorerOpen?: boolean;
   /** 关闭 repo explorer */
@@ -18,7 +19,7 @@ type WorkspaceExplorerProps = {
  * 展示两个按钮：展开 specs 文档 / 展开项目代码仓库。
  * 点击后展开对应的全屏覆盖式页面。
  */
-export function WorkspaceExplorer({ workspacePath, repoExplorerOpen, onCloseRepoExplorer }: WorkspaceExplorerProps) {
+export function WorkspaceExplorer({ workspacePath, taskId, repoExplorerOpen, onCloseRepoExplorer }: WorkspaceExplorerProps) {
   const [mode, setMode] = useState<ExplorerMode>(null);
 
   const handleClose = useCallback(() => {
@@ -92,7 +93,7 @@ export function WorkspaceExplorer({ workspacePath, repoExplorerOpen, onCloseRepo
             </button>
           </div>
           <div className="workspace-explorer-body">
-            <RepoExplorer workspacePath={workspacePath} />
+            <RepoExplorer workspacePath={workspacePath} taskId={taskId} />
           </div>
         </div>
       )}
