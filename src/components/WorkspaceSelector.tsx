@@ -12,8 +12,8 @@ export type RuntimeMode = "local" | "cloud";
 type WorkspaceSelectorProps = {
   onConfirm: (path: string, mode: RuntimeMode) => void;
   onCancel: () => void;
-  /** 浏览目录的回调（传入路径，返回条目列表） */
-  onBrowse?: (dirPath: string) => Promise<BrowseEntry[]>;
+  /** 浏览目录的回调（传入路径和模式，返回条目列表） */
+  onBrowse?: (dirPath: string, mode?: RuntimeMode) => Promise<BrowseEntry[]>;
   /** 初始路径 */
   initialPath?: string;
   /** 运行时模式：本地显示文件路径，云端显示 Git 仓库信息 */
@@ -56,7 +56,7 @@ export function WorkspaceSelector({
     setLoading(true);
     setError(null);
     try {
-      const result = await onBrowse(dirPath);
+      const result = await onBrowse(dirPath, internalMode);
       setEntries(result);
     } catch (err) {
       setError((err as Error).message || "无法读取目录");
@@ -64,7 +64,7 @@ export function WorkspaceSelector({
     } finally {
       setLoading(false);
     }
-  }, [onBrowse]);
+  }, [onBrowse, internalMode]);
 
   useEffect(() => {
     if (showBrowser && onBrowse) {

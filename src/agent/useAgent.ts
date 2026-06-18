@@ -629,11 +629,12 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   );
 
   // ── 浏览目录（HTTP 方式） ──
-  const browseDir = useCallback(
-    async (dirPath: string): Promise<{ name: string; type: "dir" | "file"; path: string }[]> => {
+  const browseDirForMode = useCallback(
+    async (dirPath: string, browseMode?: RuntimeMode): Promise<{ name: string; type: "dir" | "file"; path: string }[]> => {
+      const effectiveMode = browseMode || mode || "local";
       try {
-        const origin = getAgentWsOrigin(mode || "local");
-        const res = await agentFetch(`${origin}/workspace-browse?dirPath=${encodeURIComponent(dirPath)}`, {}, mode || "local");
+        const origin = getAgentWsOrigin(effectiveMode);
+        const res = await agentFetch(`${origin}/workspace-browse?dirPath=${encodeURIComponent(dirPath)}`, {}, effectiveMode);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { entries: { name: string; type: "dir" | "file"; path: string }[] };
         return data.entries;
@@ -643,6 +644,11 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       }
     },
     [mode],
+  );
+
+  const browseDir = useCallback(
+    async (dirPath: string) => browseDirForMode(dirPath),
+    [browseDirForMode],
   );
 
   // ── 查询 workspace 初始化状态（云端模式 git clone 进度） ──
@@ -1526,6 +1532,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     getFileTree,
     readFile,
     browseDir,
+    browseDirForMode,
     triggerBuild,
     detectBuildCommand,
     /** 更新指定步骤的编译数据（命令 + 结果），用于手动检测/编译后的持久化 */

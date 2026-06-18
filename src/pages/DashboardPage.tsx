@@ -391,7 +391,7 @@ export function DashboardPage() {
           <WorkspaceSelector
             onConfirm={confirmWorkspace}
             onCancel={cancelWorkspacePicker}
-            onBrowse={agentAvailable ? agent.browseDir : undefined}
+            onBrowse={(dirPath, browseMode) => agent.browseDirForMode(dirPath, browseMode)}
             initialPath={state.workspacePath || "~"}
             mode={state.runtimeMode || dashboardMode}
           />
