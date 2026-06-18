@@ -36,7 +36,7 @@ index.ts
 - HTTP 服务：`http.createServer` + `handleHttpRequest` 路由分发
 - WebSocket 服务：`wss.on("connection")` → Token 认证 → `handleWsMessage`
 - WebSocket 路径：`/agent`（通过 `WebSocketServer` 的 `path` 选项限定）
-- 认证：通过 `AGENT_SECRET` 环境变量控制，未设置时接受所有连接。认证方式为 URL query 参数 `?token=xxx`
+- 认证：通过 `AGENT_SECRET` 环境变量控制，未设置时维持本地开发模式；配置后 WebSocket 使用 `?token=xxx`，HTTP 使用 `Authorization: Bearer xxx`。仅 `/health` 与 CORS 预检公开。
 
 ### 2. `httpRoutes.ts` — HTTP 路由
 
@@ -50,7 +50,7 @@ index.ts
 | `/repo-file` | GET | 读取仓库文件内容 |
 | `/repo-diff` | GET | 获取 git diff |
 | `/repo-diff-files` | GET | 按文件拆分的 git diff（含未跟踪新增文件） |
-| `/project-build` | GET | 执行编译命令（支持 `command` 参数由模型提供） |
+| `/project-build` | GET | 执行模型识别出的构建脚本（服务端白名单校验） |
 | `/read-file` | GET | 读取任意本地文件（支持 `~` 展开） |
 | `/step-snapshot` | GET | 读取步骤会话快照（替代 WebSocket `session.loadStep`） |
 | `/qa-review` | GET | **SSE 流式**执行 QA 审查 CLI |
@@ -70,10 +70,11 @@ index.ts
 - `/qa-review` 使用 SSE（Server-Sent Events）实现 CLI 命令的实时流式输出，客户端断开时自动终止子进程
 - `/workspace-*` 和 `/task/init` 将原本 WebSocket 的 workspace 操作迁移到 HTTP，减少 WebSocket 消息耦合
 - Cloud Runtime API 为 `CloudRuntimeConnector` 提供项目和资源数据，使用模拟数据
+- `/project-build` 不执行任意 Shell 文本，只允许项目 `package.json` 已声明脚本以及受限的 Make/Go/Cargo/Gradle 构建命令
 
-### 3. `wsHandler.ts` — WebSocket 消息处理
+### 3. `wsHandler.ts` — WebSocket 消息分发
 
-这是 Server 最核心的文件，处理所有 Agent 交互。消息协议定义在 `protocol.ts`。
+入口仅负责协议校验和按 method 前缀分发，具体逻辑位于 `handlers/`；消息协议定义在 `protocol.ts`。
 
 **支持的方法（共 21 个，含 wsHandler 内部处理但未在类型中声明的）：**
 
@@ -99,6 +100,8 @@ index.ts
 | `session.loadRecord` | 加载会话记录 |
 | `session.listRecords` | 列出所有会话记录 |
 | `session.deleteRecord` | 删除会话记录 |
+| `workspace.initStatus` | 查询云端 workspace 克隆状态 |
+| `workspace.retryClone` | 重试云端 workspace 克隆 |
 
 **相比旧版的变化**：
 - 移除了 `session.prompt`、`session.followUp`、`session.saveMeta` 方法（`prompt` 和 `followUp` 逻辑合并到 `steer` 中，`saveMeta` 迁移到 HTTP）
@@ -111,7 +114,7 @@ index.ts
 - `steer()` 在 Agent 空闲时会 fallback 到 `prompt()` 直接触发新轮次，这是 WebSocket 断连重连后消息积压导致并发 Agent 运行的根因
 - **自动步骤快照**：在 `turn_end` 和 `agent_end` 事件触发时，Server 自动调用 `SessionStore.saveStep()` 持久化当前步骤的会话快照（messages + turns），不再通过 WebSocket 暴露 `session.saveStep`
 - **步骤快照读取**：`loadStep` 改为 HTTP GET `/step-snapshot?sessionId=xxx&stepId=xxx`，不依赖 WebSocket 连接
-- **Prompt 构建函数**：`buildSummarizationPrompt()`、`buildBuildPrompt()`、`buildDetectCommandPrompt()` 内联在 wsHandler 中，分别用于总结、编译分析、编译命令检测
+- **Prompt 构建函数**：集中在 `prompts/index.ts`，由总结与构建 handler 复用
 
 ### 4. `AgentRunner.ts` — Agent 会话工厂
 
