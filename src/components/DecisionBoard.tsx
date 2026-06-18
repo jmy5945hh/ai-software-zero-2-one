@@ -421,17 +421,20 @@ function DeliveryCollabTab({
 
   // 点击 Spec 文件 → 从 server 读取文件内容并弹窗展示
   const handleSpecFileClick = useCallback(
-    (path: string, name: string) => {
-      const isMarkdown = /\.md$/i.test(name);
-      fetch(`/specs-file?path=${encodeURIComponent(state.workspacePath)}&file=${encodeURIComponent(path)}`)
+    (filePath: string, name: string) => {
+      const params = new URLSearchParams();
+      if (state.workspacePath) params.set("path", state.workspacePath);
+      params.set("taskId", state.sessionId);
+      params.set("file", filePath);
+      fetch(`/specs-file?${params.toString()}`)
         .then((res) => res.json())
         .then((data: { content: string; isMarkdown: boolean }) => {
           setModalContent({
             type: data.isMarkdown ? "markdown" : "code",
             title: name,
             content: data.content,
-            language: data.isMarkdown ? undefined : getLanguageFromPath(path),
-            filePath: path,
+            language: data.isMarkdown ? undefined : getLanguageFromPath(filePath),
+            filePath,
             workspacePath: state.workspacePath,
           });
         })
@@ -443,7 +446,7 @@ function DeliveryCollabTab({
           });
         });
     },
-    [state.workspacePath],
+    [state.workspacePath, state.sessionId],
   );
 
   // 从历史恢复的 ask_user_question 中提取已存储的回答
@@ -562,7 +565,7 @@ function DeliveryCollabTab({
               <KeyPointsGrid keyPoints={summaryResult.key_points ?? []} />
               {/* intent / plan 阶段展示交付Spec 目录，其他阶段展示跳转到项目代码仓库的按钮 */}
               {(stepId === "intent" || stepId === "plan")
-                ? <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
+                ? <SpecsDirectory workspacePath={state.workspacePath} taskId={state.sessionId} onFileClick={handleSpecFileClick} />
                 : <FileChangesButton files={fileChanges} onOpenRepoExplorer={onOpenRepoExplorer} />
               }
               {/* coding 步骤展示项目编译 */}
@@ -610,7 +613,7 @@ function DeliveryCollabTab({
               <SummaryBrief brief={summaryResult.brief} />
               <KeyPointsGrid keyPoints={summaryResult.key_points ?? []} />
               {(stepId === "intent" || stepId === "plan")
-                ? <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
+                ? <SpecsDirectory workspacePath={state.workspacePath} taskId={state.sessionId} onFileClick={handleSpecFileClick} />
                 : <FileChangesButton files={fileChanges} onOpenRepoExplorer={onOpenRepoExplorer} />
               }
               {stepId === "coding" && (
@@ -690,7 +693,7 @@ function DeliveryCollabTab({
 
       {!isAgentConnected && !restoredCompleted && !restoredIncomplete && !restoredPendingResume && !restoredPendingSummary && (
         (stepId === "intent" || stepId === "plan") ? (
-          <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
+          <SpecsDirectory workspacePath={state.workspacePath} taskId={state.sessionId} onFileClick={handleSpecFileClick} />
         ) : (
           <div className="delivery-empty">
             <Bot size={24} />
@@ -702,7 +705,7 @@ function DeliveryCollabTab({
       {/* 已连接但无当前步骤 session（排除历史恢复已完成场景） */}
       {isAgentConnected && !agentSession && !agentWorking && !restoredCompleted && (
         (stepId === "intent" || stepId === "plan") ? (
-          <SpecsDirectory workspacePath={state.workspacePath} onFileClick={handleSpecFileClick} />
+          <SpecsDirectory workspacePath={state.workspacePath} taskId={state.sessionId} onFileClick={handleSpecFileClick} />
         ) : (
           <div className="delivery-empty">
             <Bot size={24} />
@@ -1501,21 +1504,26 @@ type SpecNode = {
 
 function SpecsDirectory({
   workspacePath,
+  taskId,
   onFileClick,
 }: {
   workspacePath: string;
+  taskId?: string;
   onFileClick: (path: string, name: string) => void;
 }) {
   const [nodes, setNodes] = useState<SpecNode[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!workspacePath) {
+    if (!workspacePath && !taskId) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    fetch(`/specs-tree?path=${encodeURIComponent(workspacePath)}`)
+    const params = new URLSearchParams();
+    if (workspacePath) params.set("path", workspacePath);
+    if (taskId) params.set("taskId", taskId);
+    fetch(`/specs-tree?${params.toString()}`)
       .then((res) => res.json())
       .then((data: SpecNode[]) => {
         setNodes(data);
@@ -1525,7 +1533,7 @@ function SpecsDirectory({
         setNodes([]);
         setLoading(false);
       });
-  }, [workspacePath]);
+  }, [workspacePath, taskId]);
 
   if (loading) {
     return (

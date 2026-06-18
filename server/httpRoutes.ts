@@ -298,6 +298,31 @@ export function handleHttpRequest(
     return true;
   }
 
+  // ── 读取会话元信息（HTTP 替代 WebSocket） ──
+  if (req.method === "GET" && req.url?.startsWith("/session/meta")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const sessionId = url.searchParams.get("sessionId");
+    if (!sessionId) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'sessionId' query parameter" }));
+      return true;
+    }
+    try {
+      const meta = deps.sessionStore.loadMeta(sessionId);
+      if (!meta) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Session not found" }));
+        return true;
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ meta }));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Load meta failed" }));
+    }
+    return true;
+  }
+
   // ── 保存会话元信息（HTTP 替代 WebSocket） ──
   if (req.method === "POST" && req.url === "/session/save-meta") {
     let body = "";

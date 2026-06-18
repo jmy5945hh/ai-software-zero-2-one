@@ -229,7 +229,7 @@ export function DashboardPage() {
         const existing = JSON.parse(localStorage.getItem(key) || "{}");
         localStorage.setItem(key, JSON.stringify({ ...existing, ...nextState }));
       } catch { /* ignore */ }
-      navigate("/task");
+      navigate(`/task?taskId=${fullRecord.sessionId}`);
     },
     [setState, navigate, sessionRecords, runtimeState.mode, runtimeActions],
   );

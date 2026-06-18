@@ -414,15 +414,8 @@ export function useSessionRecords() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(meta),
           });
-          // 逐个保存步骤会话快照（HTTP）
-          for (const [stepId, snapshot] of Object.entries(stepSessions)) {
-            await fetch(`${origin}/session/save-step`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ sessionId, stepId, snapshot }),
-            });
-          }
-          // 本地插入/更新 records，避免全量重查
+
+          // 本地插入/更新 records（meta 已保存成功，先更新本地缓存，避免全量重查）
           setRecords((prev) => {
             const idx = prev.findIndex((r) => r.sessionId === sessionId);
             if (idx >= 0) {
@@ -430,11 +423,30 @@ export function useSessionRecords() {
               next[idx] = { ...next[idx], ...meta };
               return next;
             }
-            // 新记录，按 updatedAt 降序插入
             const next = [...prev, meta];
             next.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
             return next;
           });
+
+          // 逐个保存步骤会话快照（需要 WebSocket）
+          const ws = getWsForMode(targetMode);
+          const ready = isWsReady(targetMode);
+          if (ws && ready) {
+            for (const [stepId, snapshot] of Object.entries(stepSessions)) {
+              try {
+                await ws.request("session.saveStep", {
+                  sessionId,
+                  stepId,
+                  snapshot,
+                  taskId,
+                });
+              } catch (stepErr) {
+                console.error("[useSessionRecords] saveStep failed:", sessionId, stepId, stepErr);
+              }
+            }
+          } else {
+            console.warn("[saveRecord] step sessions not saved: ws not connected for mode", targetMode);
+          }
         } catch (err) {
           console.error("[useSessionRecords] saveRecord failed:", meta.sessionId, err);
         }
@@ -444,20 +456,58 @@ export function useSessionRecords() {
     [],
   );
 
-  /** 按 sessionId 加载完整会话记录（需要知道记录属于哪个模式） */
+  /** 按 sessionId 加载完整会话记录（优先 HTTP，不依赖 WebSocket） */
   const loadRecord = useCallback(
     async (sessionId: string, mode?: RuntimeMode): Promise<SessionRecord | null> => {
       // 尝试从现有 records 中查找该 session 的模式
       const existing = records.find((r) => r.sessionId === sessionId);
       const targetMode = mode || existing?.runtimeMode || "local";
-      const ws = getWsForMode(targetMode);
-      const ready = isWsReady(targetMode);
-      if (!ws || !ready) return null;
+
       try {
-        const result = (await ws.request("session.loadRecord", {
-          sessionId,
-        })) as { record: SessionRecord | null };
-        return result.record;
+        // 1. 通过 HTTP 加载 meta（不依赖 WebSocket，页面刷新后立即可用）
+        const { getAgentWsOrigin } = await import("../agent/config");
+        const origin = getAgentWsOrigin(targetMode);
+        const metaRes = await fetch(`${origin}/session/meta?sessionId=${encodeURIComponent(sessionId)}`);
+        if (!metaRes.ok) {
+          console.error("[useSessionRecords] loadRecord meta HTTP failed:", metaRes.status);
+          return null;
+        }
+        const { meta } = await metaRes.json() as { meta: SessionMeta | null };
+        if (!meta) return null;
+
+        // 2. 等待 WebSocket 就绪后加载 step sessions（最多等待 5 秒）
+        let stepSessions: Record<string, StepSessionSnapshot> = {};
+        const ws = getWsForMode(targetMode);
+        if (ws) {
+          // 如果尚未就绪，轮询等待
+          if (!isWsReady(targetMode)) {
+            await new Promise<void>((resolve) => {
+              const start = Date.now();
+              const check = () => {
+                if (isWsReady(targetMode) || Date.now() - start > 5000) {
+                  resolve();
+                } else {
+                  setTimeout(check, 200);
+                }
+              };
+              setTimeout(check, 200);
+            });
+          }
+          if (isWsReady(targetMode)) {
+            try {
+              const result = (await ws.request("session.loadRecord", {
+                sessionId,
+              })) as { record: SessionRecord | null };
+              if (result.record?.stepSessions) {
+                stepSessions = result.record.stepSessions;
+              }
+            } catch (wsErr) {
+              console.warn("[useSessionRecords] loadRecord step sessions via WS failed:", wsErr);
+            }
+          }
+        }
+
+        return { ...meta, stepSessions };
       } catch (err) {
         console.error("[useSessionRecords] loadRecord failed:", sessionId, err);
         return null;
@@ -469,15 +519,11 @@ export function useSessionRecords() {
   /** 按 sessionId 加载某步骤的会话快照（通过 HTTP，不依赖 WebSocket） */
   const loadStep = useCallback(
     async (sessionId: string, stepId: string, mode?: RuntimeMode): Promise<StepSessionSnapshot | null> => {
-      const existing = records.find((r) => r.sessionId === sessionId);
-      const targetMode = mode || existing?.runtimeMode || "local";
-      const ws = getWsForMode(targetMode);
-      const ready = isWsReady(targetMode);
-      if (!ws || !ready) return null;
       try {
         const { getAgentWsOrigin } = await import("../agent/config");
-        const runtimeMode = (localStorage.getItem(RUNTIME_MODE_KEY) as RuntimeMode) || "local";
-        const origin = getAgentWsOrigin(runtimeMode);
+        const existing = records.find((r) => r.sessionId === sessionId);
+        const targetMode = mode || existing?.runtimeMode || "local";
+        const origin = getAgentWsOrigin(targetMode);
         const url = `${origin}/step-snapshot?sessionId=${encodeURIComponent(sessionId)}&stepId=${encodeURIComponent(stepId)}`;
         const res = await fetch(url);
         if (!res.ok) {
@@ -491,7 +537,7 @@ export function useSessionRecords() {
         return null;
       }
     },
-    [records, getWsForMode, isWsReady],
+    [records],
   );
 
   /** 删除会话记录（需要知道记录属于哪个模式） */

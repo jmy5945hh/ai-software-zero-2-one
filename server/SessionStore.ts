@@ -162,7 +162,7 @@ export class SessionStore {
   }
 
   /** 加载会话元信息 */
-  private loadMeta(sessionId: string): SessionMeta | null {
+  loadMeta(sessionId: string): SessionMeta | null {
     try {
       const raw = fs.readFileSync(this.metaPath(sessionId), "utf-8");
       return JSON.parse(raw) as SessionMeta;
