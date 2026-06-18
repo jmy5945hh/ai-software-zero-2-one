@@ -8,6 +8,7 @@ import { WorkspaceManager } from "./WorkspaceManager";
 import { SessionStore } from "./SessionStore";
 import { handleHttpRequest } from "./httpRoutes";
 import { handleWsMessage } from "./wsHandler";
+import { isHttpRequestAuthorized, rejectUnauthorizedRequest } from "./httpAuth";
 
 const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 
@@ -17,9 +18,14 @@ const pool = new SessionPool();
 const summaryStore = new SummaryStore();
 const workspace = new WorkspaceManager(WorkspaceManager.defaultRoot());
 const sessionStore = new SessionStore();
+const AGENT_SECRET = process.env.AGENT_SECRET;
 
 // ── HTTP 服务 ───────────────────────────────
 const server = http.createServer((req, res) => {
+  if (!isHttpRequestAuthorized(req, AGENT_SECRET)) {
+    rejectUnauthorizedRequest(res);
+    return;
+  }
   const handled = handleHttpRequest(req, res, { pool, sessionStore, workspace });
   if (!handled) {
     res.writeHead(404);
@@ -35,7 +41,6 @@ console.log(`  Model provider: DeepSeek (via DEEPSEEK_API_KEY)`);
 console.log(`  Port: ${PORT}`);
 
 // ── WebSocket 连接认证 ──────────────────────
-const AGENT_SECRET = process.env.AGENT_SECRET;
 if (AGENT_SECRET) {
   console.log("[auth] Token authentication enabled");
 } else {

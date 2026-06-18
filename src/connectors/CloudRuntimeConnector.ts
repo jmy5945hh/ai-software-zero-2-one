@@ -22,7 +22,7 @@ import type {
   ResourceHandler,
 } from "../types/runtime";
 import { AgentWebSocket } from "../agent/ws";
-import { buildAgentWsUrl, getAgentWsOrigin } from "../agent/config";
+import { agentFetch, buildAgentWsUrl, getAgentWsOrigin } from "../agent/config";
 
 function getCloudApiBase(): string {
   const origin = getAgentWsOrigin("cloud");
@@ -125,9 +125,9 @@ export class CloudRuntimeConnector implements IRuntimeConnector {
 
   async getResources(): Promise<ResourceMetrics> {
     try {
-      const resp = await fetch(`${getCloudApiBase()}/api/resources`, {
+      const resp = await agentFetch(`${getCloudApiBase()}/api/resources`, {
         signal: AbortSignal.timeout(3000),
-      });
+      }, "cloud");
       if (resp.ok) {
         const data = await resp.json();
         return {
@@ -152,9 +152,9 @@ export class CloudRuntimeConnector implements IRuntimeConnector {
 
   async listProjects(): Promise<AgentProject[]> {
     try {
-      const resp = await fetch(`${getCloudApiBase()}/api/projects`, {
+      const resp = await agentFetch(`${getCloudApiBase()}/api/projects`, {
         signal: AbortSignal.timeout(5000),
-      });
+      }, "cloud");
       if (resp.ok) {
         const data: CloudProjectResponse[] = await resp.json();
         return data.map(toAgentProject);
@@ -166,26 +166,26 @@ export class CloudRuntimeConnector implements IRuntimeConnector {
   }
 
   async createProject(params: CreateProjectParams): Promise<AgentProject> {
-    const resp = await fetch(`${getCloudApiBase()}/api/projects`, {
+    const resp = await agentFetch(`${getCloudApiBase()}/api/projects`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
-    });
+    }, "cloud");
     if (!resp.ok) throw new Error("Failed to create cloud project");
     const data: CloudProjectResponse = await resp.json();
     return toAgentProject(data);
   }
 
   async deleteProject(id: string): Promise<void> {
-    await fetch(`${getCloudApiBase()}/api/projects/${id}`, { method: "DELETE" });
+    await agentFetch(`${getCloudApiBase()}/api/projects/${id}`, { method: "DELETE" }, "cloud");
   }
 
   async startProject(id: string): Promise<void> {
-    await fetch(`${getCloudApiBase()}/api/projects/${id}/start`, { method: "POST" });
+    await agentFetch(`${getCloudApiBase()}/api/projects/${id}/start`, { method: "POST" }, "cloud");
   }
 
   async pauseProject(id: string): Promise<void> {
-    await fetch(`${getCloudApiBase()}/api/projects/${id}/pause`, { method: "POST" });
+    await agentFetch(`${getCloudApiBase()}/api/projects/${id}/pause`, { method: "POST" }, "cloud");
   }
 
   onStatusChange(handler: StatusHandler): () => void {

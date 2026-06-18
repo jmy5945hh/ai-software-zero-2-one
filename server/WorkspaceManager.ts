@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { spawn, spawnSync } from "child_process";
+import { spawn } from "child_process";
 
 export type FileNode = {
   name: string;

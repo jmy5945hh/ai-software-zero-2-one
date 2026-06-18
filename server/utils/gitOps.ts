@@ -139,19 +139,3 @@ export function getRepoDiffFiles(projectPath: string): {
 
   return { files };
 }
-
-/**
- * 在指定目录下执行 shell 命令
- * @param command 要执行的命令
- * @param cwd 工作目录
- * @param maxBuffer 最大输出缓冲区（默认 10MB）
- * @returns 命令输出
- */
-export function execCommand(command: string, cwd: string, maxBuffer: number = 10 * 1024 * 1024): string {
-  return execSync(command, {
-    cwd,
-    encoding: "utf-8",
-    maxBuffer,
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-}

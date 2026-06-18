@@ -56,8 +56,6 @@ export type StepConfig = {
 
 // ── Skill 定义（从 skills/*.md 加载）────────
 
-const PRODUCT_ANALYSIS_SKILL = loadSkill("product-analysis.md");
-const ARCHITECTURE_DESIGN_SKILL = loadSkill("architecture-design.md");
 const FRONTEND_DEV_SKILL = loadSkill("frontend-dev.md");
 const TESTING_SKILL = loadSkill("testing.md");
 const DEVOPS_SKILL = loadSkill("devops.md");

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { agentFetch } from "../agent/config";
 import {
   Bot,
   ChevronRight,
@@ -237,6 +238,8 @@ export function DecisionBoard({
             intent={state.intent}
             initialPrompts={state.initialPrompts}
             stepSummaries={stepSummaries}
+            workspaceInitStatus={workspaceInitStatus}
+            onRetryClone={onRetryClone}
           />
         )}
       </div>
@@ -426,7 +429,7 @@ function DeliveryCollabTab({
       if (state.workspacePath) params.set("path", state.workspacePath);
       params.set("taskId", state.sessionId);
       params.set("file", filePath);
-      fetch(`/specs-file?${params.toString()}`)
+      agentFetch(`/specs-file?${params.toString()}`)
         .then((res) => res.json())
         .then((data: { content: string; isMarkdown: boolean }) => {
           setModalContent({
@@ -1134,7 +1137,7 @@ function QaReviewSection({
     abortRef.current = controller;
 
     // 通过后端 API 执行 CLI 命令并流式返回
-    fetch(`/qa-review?path=${encodeURIComponent(workspacePath)}&sessionId=${encodeURIComponent(sessionId)}`, {
+    agentFetch(`/qa-review?path=${encodeURIComponent(workspacePath)}&sessionId=${encodeURIComponent(sessionId)}`, {
       signal: controller.signal,
     })
       .then(async (response) => {
@@ -1523,7 +1526,7 @@ function SpecsDirectory({
     const params = new URLSearchParams();
     if (workspacePath) params.set("path", workspacePath);
     if (taskId) params.set("taskId", taskId);
-    fetch(`/specs-tree?${params.toString()}`)
+    agentFetch(`/specs-tree?${params.toString()}`)
       .then((res) => res.json())
       .then((data: SpecNode[]) => {
         setNodes(data);
@@ -2010,6 +2013,7 @@ function TrajectoryChatTab({
   initialPrompts,
   stepSummaries,
   workspaceInitStatus,
+  onRetryClone,
 }: {
   trajectory: TrajectoryTurn[];
   stepIndex: number;
@@ -2050,7 +2054,8 @@ function TrajectoryChatTab({
   intent: string;
   initialPrompts: Record<string, string>;
   stepSummaries: Record<string, string>;
-  workspaceInitStatus?: { stage: string; progress?: string; error?: string };
+  workspaceInitStatus?: WorkspaceInitStatus;
+  onRetryClone?: () => void;
 }) {
   const [input, setInput] = useState("");
   const [expandedRoundIds, setExpandedRoundIds] = useState<Set<string>>(new Set());

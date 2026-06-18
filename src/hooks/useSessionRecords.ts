@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { AppState } from "../data/types";
 import { AgentWebSocket } from "../agent/ws";
-import { buildAgentWsUrl } from "../agent/config";
+import { agentFetch, buildAgentWsUrl, getAgentWsOrigin } from "../agent/config";
 import type { RuntimeMode } from "../types/runtime";
 
 // ── 会话记录类型（与服务端 SessionStore 对齐） ──
@@ -227,7 +227,6 @@ export function useSessionRecords() {
             sessionId,
             stepId,
             snapshot,
-            taskId,
           });
         } catch (err) {
           console.error("[useSessionRecords] saveStep failed:", sessionId, stepId, err);
@@ -259,6 +258,7 @@ export function useSessionRecords() {
             category: string;
             input: string;
             result?: string;
+            outputFragments?: string[];
           }>;
         }>;
         summary: string;
@@ -266,8 +266,8 @@ export function useSessionRecords() {
         buildCommand?: string | null;
         buildResult?: import("../data/types").BuildResult | null;
         completed?: boolean;
-        summarizationStatus?: string;
-        buildStatus?: string;
+        summarizationStatus?: StepSessionSnapshot["summarizationStatus"];
+        buildStatus?: StepSessionSnapshot["buildStatus"];
       }>,
       restoredSessions?: Record<string, StepSessionSnapshot>,
     ) => {
@@ -406,14 +406,13 @@ export function useSessionRecords() {
       // 串行化保存：先保存 meta，再逐个保存 step
       saveQueueRef.current = saveQueueRef.current.then(async () => {
         try {
-          const { getAgentWsOrigin } = await import("../agent/config");
           const origin = getAgentWsOrigin(meta.runtimeMode || "local");
           // 保存元信息（HTTP）
-          await fetch(`${origin}/session/save-meta`, {
+          await agentFetch(`${origin}/session/save-meta`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(meta),
-          });
+          }, meta.runtimeMode || "local");
 
           // 本地插入/更新 records（meta 已保存成功，先更新本地缓存，避免全量重查）
           setRecords((prev) => {
@@ -465,9 +464,8 @@ export function useSessionRecords() {
 
       try {
         // 1. 通过 HTTP 加载 meta（不依赖 WebSocket，页面刷新后立即可用）
-        const { getAgentWsOrigin } = await import("../agent/config");
         const origin = getAgentWsOrigin(targetMode);
-        const metaRes = await fetch(`${origin}/session/meta?sessionId=${encodeURIComponent(sessionId)}`);
+        const metaRes = await agentFetch(`${origin}/session/meta?sessionId=${encodeURIComponent(sessionId)}`, {}, targetMode);
         if (!metaRes.ok) {
           console.error("[useSessionRecords] loadRecord meta HTTP failed:", metaRes.status);
           return null;
@@ -520,12 +518,11 @@ export function useSessionRecords() {
   const loadStep = useCallback(
     async (sessionId: string, stepId: string, mode?: RuntimeMode): Promise<StepSessionSnapshot | null> => {
       try {
-        const { getAgentWsOrigin } = await import("../agent/config");
         const existing = records.find((r) => r.sessionId === sessionId);
         const targetMode = mode || existing?.runtimeMode || "local";
         const origin = getAgentWsOrigin(targetMode);
         const url = `${origin}/step-snapshot?sessionId=${encodeURIComponent(sessionId)}&stepId=${encodeURIComponent(stepId)}`;
-        const res = await fetch(url);
+        const res = await agentFetch(url, {}, targetMode);
         if (!res.ok) {
           console.error("[useSessionRecords] loadStep HTTP failed:", res.status);
           return null;

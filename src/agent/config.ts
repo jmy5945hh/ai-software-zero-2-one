@@ -1,4 +1,4 @@
-import type { RuntimeMode } from "../types/runtime";
+import { RUNTIME_MODE_KEY, type RuntimeMode } from "../types/runtime";
 
 /**
  * Agent WebSocket URL 构造。
@@ -30,6 +30,18 @@ export function getAgentHttpOrigin(mode: RuntimeMode): string {
   return getAgentWsOrigin(mode);
 }
 
+/** 调用 Agent HTTP API，并自动附加与 WebSocket 相同的认证 token。 */
+export function agentFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  mode?: RuntimeMode,
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const token = getSecret(mode || getActiveRuntimeMode());
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(input, { ...init, headers });
+}
+
 // ── 内部辅助 ──────────────────────────────────
 
 function getWsUrl(mode: RuntimeMode): string {
@@ -48,6 +60,13 @@ function getWsUrl(mode: RuntimeMode): string {
   if (url) return url;
   // 默认值：ws://localhost:3100/agent
   return "ws://localhost:3100/agent";
+}
+
+function getActiveRuntimeMode(): RuntimeMode {
+  if (typeof localStorage !== "undefined" && localStorage.getItem(RUNTIME_MODE_KEY) === "cloud") {
+    return "cloud";
+  }
+  return "local";
 }
 
 function getSecret(mode: RuntimeMode): string | undefined {

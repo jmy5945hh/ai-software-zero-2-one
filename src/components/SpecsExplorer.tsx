@@ -6,6 +6,7 @@ import {
   Save,
   Loader2,
 } from "lucide-react";
+import { agentFetch } from "../agent/config";
 
 type TreeNode = {
   name: string;
@@ -63,7 +64,7 @@ export function SpecsExplorer({ workspacePath }: SpecsExplorerProps) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`/specs-tree?path=${encodeURIComponent(workspacePath)}`)
+    agentFetch(`/specs-tree?path=${encodeURIComponent(workspacePath)}`)
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) {
@@ -83,7 +84,7 @@ export function SpecsExplorer({ workspacePath }: SpecsExplorerProps) {
       setSelectedFile(filePath);
       setDirty(false);
       try {
-        const res = await fetch(
+        const res = await agentFetch(
           `/specs-file?path=${encodeURIComponent(workspacePath)}&file=${encodeURIComponent(filePath)}`,
         );
         const data = await res.json();
@@ -102,7 +103,7 @@ export function SpecsExplorer({ workspacePath }: SpecsExplorerProps) {
     if (!selectedFile) return;
     setSaving(true);
     try {
-      await fetch("/specs-save", {
+      await agentFetch("/specs-save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

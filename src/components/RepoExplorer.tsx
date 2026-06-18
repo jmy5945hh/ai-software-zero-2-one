@@ -10,6 +10,7 @@ import {
   FileMinus,
 } from "lucide-react";
 import { DiffViewer } from "./DiffViewer";
+import { agentFetch } from "../agent/config";
 
 type TreeNode = {
   name: string;
@@ -111,7 +112,7 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`/repo-tree?path=${encodeURIComponent(workspacePath)}`)
+    agentFetch(`/repo-tree?path=${encodeURIComponent(workspacePath)}`)
       .then((r) => {
         if (!r.ok) throw new Error("Server error");
         return r.json();
@@ -132,7 +133,7 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
   const loadDiff = useCallback(async () => {
     setDiffLoading(true);
     try {
-      const res = await fetch(`/repo-diff-files?path=${encodeURIComponent(workspacePath)}`);
+      const res = await agentFetch(`/repo-diff-files?path=${encodeURIComponent(workspacePath)}`);
       const data = await res.json();
       const files: DiffFileInfo[] = data.files || [];
       setDiffFiles(files);
@@ -162,7 +163,7 @@ export function RepoExplorer({ workspacePath }: RepoExplorerProps) {
     async (filePath: string) => {
       setSelectedFile(filePath);
       try {
-        const res = await fetch(
+        const res = await agentFetch(
           `/repo-file?path=${encodeURIComponent(workspacePath)}&file=${encodeURIComponent(filePath)}`,
         );
         const data = await res.json();

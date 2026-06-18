@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState } from "react";
 import { X, Maximize2, Edit3, Save, RotateCcw } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { DiffViewer } from "./DiffViewer";
+import { agentFetch } from "../agent/config";
 
 export type ModalContent = {
   type: "code" | "markdown" | "json" | "diff" | "html";
@@ -80,7 +81,7 @@ export function ContentModal({ content, onClose }: ContentModalProps) {
     setSaving(true);
     setSaveError(null);
     try {
-      const res = await fetch("/specs-save", {
+      const res = await agentFetch("/specs-save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

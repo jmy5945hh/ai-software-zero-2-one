@@ -10,6 +10,8 @@ export type AgentMethod =
   | "session.continueQuestion"
   | "session.reconnect"
   | "session.restore"
+  | "session.resumeQuestion"
+  | "session.saveStep"
   | "summarization.save"
   | "summarization.trigger"
   | "workspace.initStatus"
@@ -33,6 +35,8 @@ export type WsMessage =
   | { type: "error"; id: string; error: { code: string; message: string } }
   | { type: "ping"; ts: number }
   | { type: "pong"; ts: number };
+
+export type WsRequestMessage = Extract<WsMessage, { type: "request" }>;
 
 /** Agent 事件（与 SDK AgentSessionEvent 对齐） */
 export type AgentEvent =

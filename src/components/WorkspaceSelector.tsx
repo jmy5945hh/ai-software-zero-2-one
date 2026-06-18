@@ -89,7 +89,7 @@ export function WorkspaceSelector({
   // 键盘确认（本地模式）
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
-      onConfirm(currentPath);
+      onConfirm(currentPath, "local");
     } else if (e.key === "Escape") {
       onCancel();
     }
@@ -98,7 +98,7 @@ export function WorkspaceSelector({
   // 云端模式回车确认
   const handleGitKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && gitUrl.trim()) {
-      onConfirm(gitUrl.trim());
+      onConfirm(gitUrl.trim(), "cloud");
     } else if (e.key === "Escape") {
       onCancel();
     }

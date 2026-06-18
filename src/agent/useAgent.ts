@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory, Turn, ConnectionQuality, SessionSnapshot, WorkspaceInitStatus } from "./types";
 import type { FileChange, AgentSummary } from "../data/types";
 import { AgentWebSocket } from "./ws";
-import { buildAgentWsUrl, getAgentWsOrigin, getAgentHttpOrigin } from "./config";
+import { agentFetch, buildAgentWsUrl, getAgentWsOrigin, getAgentHttpOrigin } from "./config";
 import type { RuntimeMode } from "../types/runtime";
 
 // ── 工具函数 ─────────────────────────────────
@@ -226,11 +226,11 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       if (!taskId) return;
       const origin = getAgentWsOrigin(params.runtimeMode);
       try {
-        const res = await fetch(`${origin}/task/init`, {
+        const res = await agentFetch(`${origin}/task/init`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ taskId, ...params }),
-        });
+        }, params.runtimeMode);
         if (!res.ok) {
           console.warn("[useAgent] initTask HTTP error:", res.status, await res.text());
         }
@@ -294,14 +294,15 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
                   workspaceDir?: string;
                 };
                 if (retryResult.sessionId) {
+                  const sessionId = retryResult.sessionId;
                   if (retryResult.workspaceDir && onWorkspaceDirRef.current) {
                     onWorkspaceDirRef.current(retryResult.workspaceDir);
                   }
                   setSessions((prev) => ({
                     ...prev,
-                    [step]: { ...defaultSession(), id: retryResult.sessionId },
+                    [step]: { ...defaultSession(), id: sessionId },
                   }));
-                  pendingReconnectRef.current[step] = retryResult.sessionId;
+                  pendingReconnectRef.current[step] = sessionId;
                 }
               }
               // 如果是 error，状态已在 getWorkspaceInitStatus 中更新，UI 会显示错误 + 重试按钮
@@ -323,14 +324,15 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
         console.warn("[useAgent] createSession: no sessionId returned");
         return;
       }
+      const sessionId = result.sessionId;
 
       setSessions((prev) => ({
         ...prev,
-        [step]: { ...defaultSession(), id: result.sessionId },
+        [step]: { ...defaultSession(), id: sessionId },
       }));
 
       // 记录 sessionId，用于 WebSocket 重连后自动恢复
-      pendingReconnectRef.current[step] = result.sessionId;
+      pendingReconnectRef.current[step] = sessionId;
     },
     [taskId],
   );
@@ -599,7 +601,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     if (!taskId) return;
     try {
       const origin = getAgentWsOrigin(mode || "local");
-      const res = await fetch(`${origin}/workspace-tree?taskId=${encodeURIComponent(taskId)}`);
+      const res = await agentFetch(`${origin}/workspace-tree?taskId=${encodeURIComponent(taskId)}`, {}, mode || "local");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { tree: FileNode[] };
       setFileTree(data.tree);
@@ -614,7 +616,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       if (!taskId) return "";
       try {
         const origin = getAgentWsOrigin(mode || "local");
-        const res = await fetch(`${origin}/workspace-read-file?taskId=${encodeURIComponent(taskId)}&filePath=${encodeURIComponent(filePath)}`);
+        const res = await agentFetch(`${origin}/workspace-read-file?taskId=${encodeURIComponent(taskId)}&filePath=${encodeURIComponent(filePath)}`, {}, mode || "local");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { content: string };
         return data.content;
@@ -631,7 +633,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     async (dirPath: string): Promise<{ name: string; type: "dir" | "file"; path: string }[]> => {
       try {
         const origin = getAgentWsOrigin(mode || "local");
-        const res = await fetch(`${origin}/workspace-browse?dirPath=${encodeURIComponent(dirPath)}`);
+        const res = await agentFetch(`${origin}/workspace-browse?dirPath=${encodeURIComponent(dirPath)}`, {}, mode || "local");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { entries: { name: string; type: "dir" | "file"; path: string }[] };
         return data.entries;
@@ -1379,7 +1381,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
         const taskIdParam = taskId ? `&taskId=${encodeURIComponent(taskId)}` : "";
         const url = `${baseUrl}/project-build?path=${encodeURIComponent(workspacePath)}&command=${encodeURIComponent(command)}${taskIdParam}`;
         console.log("[triggerBuild] url:", url);
-        const res = await fetch(url);
+        const res = await agentFetch(url, {}, effectiveMode);
         return await res.json();
       } catch {
         return { success: false, output: "// 编译请求失败", command: "" };
