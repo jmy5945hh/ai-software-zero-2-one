@@ -144,12 +144,10 @@ export function DashboardPage() {
           const result = await agent.gitPreflight(path, gitConfig.branch, gitConfig.shouldPull);
           if (!result.success) {
             setPreflightError(result.error || "Git 操作失败");
-            setShowWorkspacePicker(false);
             return;
           }
         } catch (err) {
           setPreflightError(err instanceof Error ? err.message : "Git 操作异常");
-          setShowWorkspacePicker(false);
           return;
         }
       }
@@ -185,6 +183,7 @@ export function DashboardPage() {
         notes: state.notes,
         todoAnswers: state.todoAnswers,
         initialPrompts: state.initialPrompts,
+        localGit: gitConfig ? { branch: gitConfig.branch, shouldPull: gitConfig.shouldPull } : undefined,
       }).catch((err: Error) => console.warn("[DashboardPage] task.init failed:", err));
 
       navigate(`/task?taskId=${state.sessionId}`);
@@ -228,6 +227,7 @@ export function DashboardPage() {
         workspacePath: fullRecord.workspacePath,
         runtimeMode: fullRecord.runtimeMode || "local",
         gitRepo: (fullRecord as any).gitRepo,
+        localGit: fullRecord.localGit,
         stepIndex: fullRecord.stepIndex,
         activeStage: fullRecord.activeStage as AppState["activeStage"],
         notes: fullRecord.notes,
@@ -411,8 +411,8 @@ export function DashboardPage() {
           <WorkspaceSelector
             onConfirm={confirmWorkspace}
             onCancel={cancelWorkspacePicker}
-            onBrowse={(dirPath, browseMode) => agent.browseDirForMode(dirPath, browseMode)}
-            onListBranches={(dirPath) => agent.listGitBranches(dirPath)}
+            onBrowse={agent.browseDirForMode}
+            onListBranches={agent.listGitBranches}
             initialPath={state.workspacePath || "~"}
             mode={state.runtimeMode || dashboardMode}
           />

@@ -69,6 +69,8 @@ export type SessionMeta = {
   runtimeMode: "local" | "cloud";
   /** Git 仓库配置（云端模式），用于 session 恢复时重建 workspace */
   gitRepo?: { url: string; branch: string; subdirectory?: string };
+  /** 本地模式使用的 Git 分支配置 */
+  localGit?: { branch: string; shouldPull: boolean };
   stepIndex: number;
   activeStage: string;
   notes: string;
@@ -382,6 +384,7 @@ export function useSessionRecords() {
         workspacePath: state.workspacePath,
         runtimeMode: state.runtimeMode || "local",
         gitRepo: state.gitRepo,
+        localGit: state.localGit,
         stepIndex: state.stepIndex,
         activeStage: state.activeStage,
         notes: state.notes,

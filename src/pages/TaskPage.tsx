@@ -53,6 +53,7 @@ export function TaskPage() {
         workspacePath: record.workspacePath,
         runtimeMode: (record as any).runtimeMode || "local",
         gitRepo: (record as any).gitRepo,
+        localGit: record.localGit,
         stepIndex: record.stepIndex,
         activeStage: record.activeStage as AppState["activeStage"],
         notes: record.notes,

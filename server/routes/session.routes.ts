@@ -54,6 +54,7 @@ export function handleSessionRoutes(
           workspacePath: resolvedWorkspacePath,
           runtimeMode: params.runtimeMode,
           gitRepo: params.gitRepo || undefined,
+          localGit: params.localGit || undefined,
           stepIndex: 0,
           activeStage: "intent",
           notes: params.notes || "",

@@ -222,6 +222,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       todoAnswers: Record<number, string | string[]>;
       initialPrompts: Record<string, string>;
       gitRepo?: { url: string; branch: string };
+      localGit?: { branch: string; shouldPull: boolean };
     }) => {
       if (!taskId) return;
       const origin = getAgentWsOrigin(params.runtimeMode);
@@ -655,33 +656,36 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   const listGitBranches = useCallback(
     async (dirPath: string): Promise<{ branches: string[]; current: string | null; isRepo: boolean }> => {
       try {
-        const origin = getAgentWsOrigin(mode || "local");
-        const res = await agentFetch(`${origin}/git-branches?dirPath=${encodeURIComponent(dirPath)}`, {}, mode || "local");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const origin = getAgentWsOrigin("local");
+        const res = await agentFetch(`${origin}/git-branches?dirPath=${encodeURIComponent(dirPath)}`, {}, "local");
+        if (!res.ok) {
+          const data = await res.json().catch(() => null) as { error?: string } | null;
+          throw new Error(data?.error || `Git 检测失败（HTTP ${res.status}）`);
+        }
         return await res.json();
-      } catch {
-        return { branches: [], current: null, isRepo: false };
+      } catch (err) {
+        throw err instanceof Error ? err : new Error("Git 检测失败");
       }
     },
-    [mode],
+    [],
   );
 
   // ── Git preflight（checkout + pull） ──
   const gitPreflight = useCallback(
     async (dirPath: string, branch: string, shouldPull: boolean): Promise<{ success: boolean; error?: string; output?: string; errorType?: string }> => {
       try {
-        const origin = getAgentWsOrigin(mode || "local");
+        const origin = getAgentWsOrigin("local");
         const res = await agentFetch(`${origin}/git-preflight`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ dirPath, branch, shouldPull }),
-        }, mode || "local");
+        }, "local");
         return await res.json();
       } catch (err) {
         return { success: false, error: err instanceof Error ? err.message : "Preflight request failed" };
       }
     },
-    [mode],
+    [],
   );
 
   // ── 查询 workspace 初始化状态（云端模式 git clone 进度） ──

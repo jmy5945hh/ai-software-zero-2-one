@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs";
 import os from "os";
-import { spawn, execSync } from "child_process";
+import { execFileSync, spawn, execSync } from "child_process";
 
 export type FileNode = {
   name: string;
@@ -566,25 +566,28 @@ export class WorkspaceManager {
       return { branches: [], current: null, isRepo: false };
     }
     try {
-      const result = execSync("git branch -a --no-color", {
+      const current = execFileSync("git", ["branch", "--show-current"], {
         cwd: resolved,
         encoding: "utf-8",
         timeout: 5000,
-      }) as string;
-      const branches: string[] = [];
-      let current: string | null = null;
-      for (const line of result.split("\n")) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        if (trimmed.startsWith("* ")) {
-          current = trimmed.slice(2);
-          branches.push(current);
-        } else if (!trimmed.includes("remotes/origin/HEAD")) {
-          // 过滤掉 origin/HEAD 指针，保留实际远程分支
-          branches.push(trimmed.replace(/^remotes\//, ""));
+      }).trim() || null;
+      const localOutput = execFileSync("git", ["for-each-ref", "--format=%(refname:short)", "refs/heads"], {
+        cwd: resolved,
+        encoding: "utf-8",
+        timeout: 5000,
+      });
+      const remoteOutput = execFileSync("git", ["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin"], {
+        cwd: resolved,
+        encoding: "utf-8",
+        timeout: 5000,
+      });
+      const branches = new Set(localOutput.split("\n").filter(Boolean));
+      for (const remoteBranch of remoteOutput.split("\n")) {
+        if (remoteBranch && remoteBranch !== "origin/HEAD") {
+          branches.add(remoteBranch.replace(/^origin\//, ""));
         }
       }
-      return { branches, current, isRepo: true };
+      return { branches: [...branches].sort(), current, isRepo: true };
     } catch {
       return { branches: [], current: null, isRepo: true };
     }
@@ -596,18 +599,48 @@ export class WorkspaceManager {
     if (!fs.existsSync(resolved) || !fs.existsSync(path.join(resolved, ".git"))) {
       return { success: false, error: "指定目录不是 Git 仓库", errorType: "unknown" };
     }
-    // 防止 shell 注入
-    if (!/^[a-zA-Z0-9._\-\/]+$/.test(branch)) {
-      return { success: false, error: `分支名称包含非法字符: ${branch}`, errorType: "unknown" };
-    }
-    let output = "";
-    // Step 1: checkout
+    const targetBranch = branch.trim();
     try {
-      const checkoutResult = execSync(`git checkout ${branch}`, {
+      execFileSync("git", ["check-ref-format", "--branch", targetBranch], {
         cwd: resolved,
         encoding: "utf-8",
+        stdio: "pipe",
+        timeout: 5000,
+      });
+    } catch {
+      return { success: false, error: `分支名称不合法: ${targetBranch}`, errorType: "unknown" };
+    }
+
+    const refExists = (ref: string) => {
+      try {
+        execFileSync("git", ["show-ref", "--verify", "--quiet", ref], {
+          cwd: resolved,
+          stdio: "ignore",
+          timeout: 5000,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    let output = "";
+    const localExists = refExists(`refs/heads/${targetBranch}`);
+    const remoteExists = refExists(`refs/remotes/origin/${targetBranch}`);
+    const checkoutArgs = localExists
+      ? ["checkout", targetBranch]
+      : remoteExists
+        ? ["checkout", "--track", "-b", targetBranch, `origin/${targetBranch}`]
+        : ["checkout", "-b", targetBranch];
+
+    // Step 1: 切换已有分支，或创建远程跟踪/全新分支
+    try {
+      const checkoutResult = execFileSync("git", checkoutArgs, {
+        cwd: resolved,
+        encoding: "utf-8",
+        stdio: "pipe",
         timeout: 30000,
-      }) as string;
+      });
       output += checkoutResult;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -615,13 +648,14 @@ export class WorkspaceManager {
       return { success: false, error: this.buildPreflightError(errorType, msg), output: msg, errorType };
     }
     // Step 2: pull (if requested)
-    if (shouldPull) {
+    if (shouldPull && (localExists || remoteExists)) {
       try {
-        const pullResult = execSync("git pull", {
+        const pullResult = execFileSync("git", ["pull"], {
           cwd: resolved,
           encoding: "utf-8",
+          stdio: "pipe",
           timeout: 60000,
-        }) as string;
+        });
         output += "\n" + pullResult;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

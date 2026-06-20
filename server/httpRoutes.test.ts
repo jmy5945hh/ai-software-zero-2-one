@@ -16,6 +16,8 @@ test("HTTP endpoints keep their transport modules", () => {
     ["/specs-tree?path=/repo", "workspace"],
     ["/workspace-tree?taskId=1", "workspace"],
     ["/repo-file?path=/repo", "workspace"],
+    ["/git-branches?dirPath=/repo", "workspace"],
+    ["/git-preflight", "workspace"],
   ] as const;
 
   for (const [url, expected] of cases) {

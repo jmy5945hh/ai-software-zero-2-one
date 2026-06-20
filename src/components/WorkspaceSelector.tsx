@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Folder, FolderOpen, File, ChevronRight, Home, Check, X, GitBranch, Globe, Monitor, Cloud, Check as CheckIcon, Loader2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Folder, FolderOpen, File, ChevronRight, ChevronDown, Home, Check, X, GitBranch, Globe, Monitor, Cloud, Check as CheckIcon, Loader2, RefreshCw } from "lucide-react";
 
 export type BrowseEntry = {
   name: string;
@@ -57,6 +57,11 @@ export function WorkspaceSelector({
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [shouldPull, setShouldPull] = useState(false);
   const [gitLoading, setGitLoading] = useState(false);
+  const [gitError, setGitError] = useState<string | null>(null);
+  const [gitRefreshKey, setGitRefreshKey] = useState(0);
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const branchInputRef = useRef<HTMLInputElement>(null);
+  const branchPickerRef = useRef<HTMLDivElement>(null);
 
   // 父目录（浏览模式下路径为服务端解析后的绝对路径）
   const parentPath = currentPath === "/" ? null : currentPath.split("/").slice(0, -1).join("/") || "/";
@@ -85,30 +90,48 @@ export function WorkspaceSelector({
 
   // ── 自动检测 Git 仓库 ──
   useEffect(() => {
-    if (internalMode === "cloud" || !onListBranches || showBrowser) return;
+    if (internalMode === "cloud" || !onListBranches) return;
     let cancelled = false;
     const detect = async () => {
       setGitLoading(true);
+      setGitError(null);
       try {
         const result = await onListBranches(currentPath);
         if (cancelled) return;
         setIsGitRepo(result.isRepo);
         setGitBranches(result.branches);
         setCurrentBranch(result.current);
-        setSelectedBranch(result.current || (result.branches.length > 0 ? result.branches[0] : ""));
-      } catch {
+        setSelectedBranch(result.current || "");
+        setBranchMenuOpen(false);
+      } catch (err) {
         if (!cancelled) {
           setIsGitRepo(false);
           setGitBranches([]);
           setCurrentBranch(null);
+          setSelectedBranch("");
+          setGitError(err instanceof Error ? err.message : "Git 检测失败");
         }
       } finally {
         if (!cancelled) setGitLoading(false);
       }
     };
-    detect();
-    return () => { cancelled = true; };
-  }, [currentPath, internalMode, onListBranches, showBrowser]);
+    const timer = window.setTimeout(detect, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [currentPath, internalMode, onListBranches, gitRefreshKey]);
+
+  useEffect(() => {
+    if (!branchMenuOpen) return;
+    const closeMenu = (event: MouseEvent) => {
+      if (!branchPickerRef.current?.contains(event.target as Node)) {
+        setBranchMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closeMenu);
+    return () => document.removeEventListener("mousedown", closeMenu);
+  }, [branchMenuOpen]);
 
   // 点击进入子目录
   const enterDir = (entry: BrowseEntry) => {
@@ -136,7 +159,8 @@ export function WorkspaceSelector({
   // 云端模式回车确认
   const handleGitKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && gitUrl.trim()) {
-      onConfirm(gitUrl.trim(), "cloud");
+      const branch = gitBranch.trim() || "main";
+      onConfirm(`${gitUrl.trim()}#${branch}`, "cloud");
     } else if (e.key === "Escape") {
       onCancel();
     }
@@ -168,7 +192,7 @@ export function WorkspaceSelector({
         <div className="ws-selector-header">
           <div>
             <span className="eyebrow">{isCloud ? "选择 Git 仓库" : "选择工作空间"}</span>
-            <h2>{isCloud ? "输入 Git 仓库地址和分支" : "选择项目目录作为 Agent 工作空间"}</h2>
+            <h2>{isCloud ? "输入 Git 仓库地址和分支" : "选择项目目录与开发分支"}</h2>
           </div>
           <button className="ghost-button" type="button" onClick={onCancel}>
             <X size={16} />
@@ -365,29 +389,104 @@ export function WorkspaceSelector({
               </button>
             </div>
 
-            {/* Git 分支设置（仅在检测到 Git 仓库时显示） */}
-            {isGitRepo && !showBrowser && (
+            {/* 本地 Git 检测与分支设置 */}
+            {gitLoading ? (
+              <div className="ws-selector-git-status is-loading">
+                <Loader2 size={14} className="agent-spin" />
+                <div>
+                  <strong>正在检测 Git 仓库</strong>
+                  <span>检测完成后将自动列出可用分支</span>
+                </div>
+              </div>
+            ) : gitError ? (
+              <div className="ws-selector-git-status is-error">
+                <GitBranch size={14} />
+                <div>
+                  <strong>Git 信息读取失败</strong>
+                  <span>{gitError}</span>
+                </div>
+                <button
+                  className="ws-selector-git-refresh"
+                  type="button"
+                  onClick={() => setGitRefreshKey((value) => value + 1)}
+                  title="重新检测"
+                >
+                  <RefreshCw size={13} />
+                </button>
+              </div>
+            ) : isGitRepo ? (
               <div className="ws-selector-git-section">
                 <div className="ws-selector-git-header">
                   <GitBranch size={14} />
                   <span>Git 仓库已检测到</span>
-                  {gitLoading && <Loader2 size={12} className="agent-spin" />}
+                  {currentBranch && <span className="ws-selector-current-branch">当前：{currentBranch}</span>}
+                  <button
+                    className="ws-selector-git-refresh"
+                    type="button"
+                    onClick={() => setGitRefreshKey((value) => value + 1)}
+                    title="刷新分支列表"
+                  >
+                    <RefreshCw size={13} />
+                  </button>
                 </div>
                 <div className="ws-selector-path-row">
                   <label>分支</label>
-                  <div className="ws-selector-input-group">
-                    <select
-                      className="ws-selector-branch-select"
-                      value={selectedBranch}
-                      onChange={(e) => setSelectedBranch(e.target.value)}
-                    >
-                      {gitBranches.map((b) => (
-                        <option key={b} value={b}>
-                          {b}{b === currentBranch ? " (当前)" : ""}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="ws-selector-branch-control" ref={branchPickerRef}>
+                    <div className="ws-selector-input-group">
+                      <input
+                        ref={branchInputRef}
+                        className="ws-selector-branch-input"
+                        type="text"
+                        value={selectedBranch}
+                        onChange={(e) => {
+                          setSelectedBranch(e.target.value);
+                          setBranchMenuOpen(false);
+                        }}
+                        placeholder={currentBranch || "输入新分支名称"}
+                      />
+                      <button
+                        className="ws-selector-branch-picker"
+                        type="button"
+                        aria-label="查看可用分支"
+                        aria-expanded={branchMenuOpen}
+                        aria-controls="local-git-branch-menu"
+                        title="查看可用分支"
+                        onClick={() => setBranchMenuOpen((open) => !open)}
+                      >
+                        <ChevronDown size={14} />
+                      </button>
+                    </div>
+                    {branchMenuOpen && (
+                      <div
+                        id="local-git-branch-menu"
+                        className="ws-selector-branch-menu"
+                        role="listbox"
+                        aria-label="可用分支"
+                      >
+                        {gitBranches.map((b) => (
+                          <button
+                            key={b}
+                            className="ws-selector-branch-option"
+                            type="button"
+                            role="option"
+                            aria-selected={b === selectedBranch}
+                            onClick={() => {
+                              setSelectedBranch(b);
+                              setBranchMenuOpen(false);
+                              branchInputRef.current?.focus();
+                            }}
+                          >
+                            <span>{b}</span>
+                            {b === currentBranch && <small>当前</small>}
+                            {b === selectedBranch && <Check size={13} />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                  <span className="ws-selector-branch-hint">
+                    已加载 {gitBranches.length} 个可选分支；也可直接输入新分支名称，留空则保持当前分支。
+                  </span>
                 </div>
                 <label className="ws-selector-pull-checkbox">
                   <input
@@ -397,6 +496,22 @@ export function WorkspaceSelector({
                   />
                   <span>开发前拉取最新代码 (git pull)</span>
                 </label>
+              </div>
+            ) : (
+              <div className="ws-selector-git-status">
+                <GitBranch size={14} />
+                <div>
+                  <strong>当前目录不是 Git 仓库</strong>
+                  <span>可继续使用该目录，任务将在当前文件夹中执行</span>
+                </div>
+                <button
+                  className="ws-selector-git-refresh"
+                  type="button"
+                  onClick={() => setGitRefreshKey((value) => value + 1)}
+                  title="重新检测"
+                >
+                  <RefreshCw size={13} />
+                </button>
               </div>
             )}
           </>
@@ -414,7 +529,7 @@ export function WorkspaceSelector({
             disabled={isCloud && !gitUrl.trim()}
           >
             <Check size={16} />
-            {isCloud ? "确认使用此仓库" : "确认使用此工作空间"}
+            {isCloud ? "确认使用此仓库" : "确认目录与分支"}
           </button>
         </div>
       </div>
