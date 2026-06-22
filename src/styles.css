@@ -5814,3 +5814,26 @@ p {
   margin: 4px 0 0;
   line-height: 1.5;
 }
+
+/* ── 原型预览 ──────────────────────────────── */
+.prototype-section {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--panel);
+}
+
+.prototype-mode-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 12px;
+  font-size: 0.8rem;
+}
+
+.prototype-mode-info code {
+  background: var(--bg-soft);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+}
