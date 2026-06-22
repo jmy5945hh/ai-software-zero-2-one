@@ -14,7 +14,7 @@ export function buildSummarizationPrompt(summary: string): string {
 {
   "brief": "核心总结，不超过200字",
   "key_points": [
-    { "title": "要点概要，不超过50字", "summary": "要点内容，不超过200字" }
+    { "title": "具体描述产出的核心内容，不超过50字", "summary": "要点内容，不超过200字" }
   ],
   "todos": [
     {
@@ -36,6 +36,13 @@ export function buildSummarizationPrompt(summary: string): string {
 - multiSelect 仅 type=choice 时有效，默认 false
 - type=choice 时，必须包含一个选项:需求已明确，进入下一阶段
 - brief 使用中文
+
+**标题要求（重要）**：
+- 标题应该具体描述产出的核心内容，让用户一目了然
+- 标题应该反映"产出了什么"或"做了什么"，而不是"总结了什么"
+- 避免使用事务性词汇如"已生成"、"已明确"、"已清晰"、"已覆盖"等
+- 好标题例子：基于微服务架构的服务设计、用户点击-弹窗-填写工作流、WorkTree分支回退机制、采用DDD领域驱动设计、API接口规范文档、前端组件库设计
+- 坏标题例子：文档已全部生成、关键设计决策明确、交付范围清晰、原型8项约束已覆盖、需求分析完成、技术方案确定
 
 以下是 Agent 工作摘要：
 ---
