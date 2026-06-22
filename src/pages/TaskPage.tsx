@@ -558,6 +558,8 @@ function getStepPrompt(
   switch (step) {
     case "intent":
       return `请分析以下业务意图，识别核心业务对象、角色和场景，并生成Spec 文档：\n\n${intent}`;
+    case "prototype":
+      return `请分析以下需求，判断是否包含 UI 变化。\n\n如果**不包含** UI 变化（纯后端/数据/逻辑任务），请直接回复：\n"当前需求不涉及 UI 变化，无需生成交互原型，建议跳过本阶段。"\n\n如果**包含** UI 变化，请先用 ask_user_question 确认原型模式（新页面 or 已有页面修改），然后生成 HTML 原型和交接文档。\n\n业务意图：${intent}`;
     case "plan":
       return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围，生成对应的技术方案文档。\n\n业务意图：${intent}`;
     case "coding":
