@@ -171,6 +171,10 @@ export function DecisionBoard({
           <span className="board-step-sep">·</span>
           <span className="board-step-detail">{step.detail}</span>
         </div>
+        <div className="board-header-tooltip">
+          <div className="board-tooltip-label">{step.label}</div>
+          <div className="board-tooltip-desc">{step.detailLong}</div>
+        </div>
       </div>
 
       <div className="board-tabs">
@@ -855,8 +859,39 @@ function BuildSection({
     if (!workspacePath) return;
     setLocalBuilding(true);
     setOutputExpanded(true);
+
+    // 如果没有编译命令，先检测
+    let effectiveCommand = buildCommand;
+    if (!effectiveCommand && detectBuildCommand) {
+      setLocalDetecting(true);
+      try {
+        effectiveCommand = await detectBuildCommand(workspacePath);
+        if (effectiveCommand) {
+          setLocalBuildCommand(effectiveCommand);
+        }
+      } finally {
+        setLocalDetecting(false);
+      }
+    }
+
+    if (!effectiveCommand) {
+      const buildResult: import("../data/types").BuildResult = {
+        command: "",
+        success: false,
+        output: "// 错误：模型未提供编译命令",
+        timestamp: new Date().toISOString(),
+        retryCount: 0,
+        building: false,
+        fixing: false,
+      };
+      setLocalBuildResult(buildResult);
+      onBuildUpdate?.("", buildResult);
+      setLocalBuilding(false);
+      return;
+    }
+
     try {
-      const result = await triggerBuild(workspacePath, buildCommand || undefined);
+      const result = await triggerBuild(workspacePath, effectiveCommand);
       const buildResult: import("../data/types").BuildResult = {
         command: result.command,
         success: result.success,
@@ -867,10 +902,10 @@ function BuildSection({
         fixing: false,
       };
       setLocalBuildResult(buildResult);
-      onBuildUpdate?.(buildCommand || result.command, buildResult);
+      onBuildUpdate?.(effectiveCommand, buildResult);
     } catch {
       const buildResult: import("../data/types").BuildResult = {
-        command: buildCommand || "",
+        command: effectiveCommand,
         success: false,
         output: "// 编译请求失败",
         timestamp: new Date().toISOString(),
@@ -879,11 +914,11 @@ function BuildSection({
         fixing: false,
       };
       setLocalBuildResult(buildResult);
-      onBuildUpdate?.(buildCommand || "", buildResult);
+      onBuildUpdate?.(effectiveCommand, buildResult);
     } finally {
       setLocalBuilding(false);
     }
-  }, [workspacePath, triggerBuild, buildCommand, onBuildUpdate]);
+  }, [workspacePath, triggerBuild, buildCommand, detectBuildCommand, onBuildUpdate]);
 
   // 截取缩略内容：前 50 行 + 后 20 行
   const truncatedOutput = useMemo(() => {
@@ -967,9 +1002,9 @@ function BuildSection({
       {isDone && buildResult && (
         <div className={`build-status ${buildResult.success ? "build-success" : "build-failure"}`}>
           {buildResult.success ? (
-            <>✅ 编译成功 ({new Date(buildResult.timestamp).toLocaleTimeString()})</>
+            <>✅ 编译成功{buildResult.timestamp ? ` (${new Date(buildResult.timestamp).toLocaleTimeString()})` : ""}</>
           ) : (
-            <>❌ 编译失败 ({new Date(buildResult.timestamp).toLocaleTimeString()})</>
+            <>❌ 编译失败{buildResult.timestamp ? ` (${new Date(buildResult.timestamp).toLocaleTimeString()})` : ""}</>
           )}
         </div>
       )}

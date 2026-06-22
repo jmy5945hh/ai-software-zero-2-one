@@ -92,7 +92,7 @@ export class AgentRunner {
 规则：
 1. 只输出编译命令本身，不要有任何额外说明文字（不要加 markdown 代码块、不要解释）
 2. 例如：npm run build、npm run compile、make、go build ./...、cargo build 等
-3. 如果找不到任何构建配置，输出 npm run build 作为默认值`,
+3. 请先探索项目目录结构，找到构建配置文件（package.json、pom.xml、build.gradle、Cargo.toml、Makefile 等）所在的目录。如果构建配置文件在子目录中，请在命令前加上 "cd <子目录> && " 前缀，例如 "cd my-app && mvn compile" 或 "cd frontend && npm run build"`,
     });
     await loader.reload();
 

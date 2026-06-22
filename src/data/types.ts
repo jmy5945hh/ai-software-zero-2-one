@@ -36,7 +36,10 @@ export type WorkflowId =
 export type WorkflowStep = {
   id: WorkflowId;
   label: string;
+  /** 简要描述（展示在导航条活跃步骤下方） */
   detail: string;
+  /** 详细描述（鼠标悬浮时 tooltip 展示） */
+  detailLong: string;
   userRole: string;
 };
 

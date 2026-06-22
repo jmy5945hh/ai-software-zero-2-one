@@ -1047,6 +1047,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
                   buildResult: {
                     ...result,
                     command: realCommand || result.command,
+                    timestamp: result.timestamp || new Date().toISOString(),
                   },
                   buildRaw: raw,
                 },

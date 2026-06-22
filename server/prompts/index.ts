@@ -91,10 +91,10 @@ ${buildResult.output}
 
 /** 构建编译命令检测 prompt */
 export function buildDetectCommandPrompt(): string {
-  return `请分析当前项目的构建配置文件（如 package.json、Makefile、Cargo.toml、build.gradle、CMakeLists.txt 等），输出正确的编译命令。
+  return `请分析当前项目的构建配置文件（如 package.json、Makefile、Cargo.toml、build.gradle、pom.xml、CMakeLists.txt 等），输出正确的编译命令。
 
 要求：
 1. 只输出编译命令本身，不要有任何额外说明文字
 2. 例如：npm run build、npm run compile、make、go build ./...、cargo build 等
-3. 如果找不到任何构建配置，输出 npm run build 作为默认值`;
+3. 请先探索项目目录结构，找到构建配置文件所在的目录。如果构建配置文件在子目录中，请在命令前加上 "cd <子目录> && " 前缀，例如 "cd my-app && mvn compile" 或 "cd frontend && npm run build"`;
 }

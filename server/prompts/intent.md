@@ -239,7 +239,7 @@ Success criteria must be:
 
 **Input**: User description: "$ARGUMENTS"
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing
 
 <!--
   IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
@@ -309,7 +309,7 @@ Success criteria must be:
 - What happens when [boundary condition]?
 - How does system handle [error scenario]?
 
-## Requirements *(mandatory)*
+## Requirements
 
 <!--
   ACTION REQUIRED: The content in this section represents placeholders.
@@ -334,7 +334,7 @@ Success criteria must be:
 - **[Entity 1]**: [What it represents, key attributes without implementation]
 - **[Entity 2]**: [What it represents, relationships to other entities]
 
-## Success Criteria *(mandatory)*
+## Success Criteria
 
 <!--
   ACTION REQUIRED: Define measurable success criteria.
