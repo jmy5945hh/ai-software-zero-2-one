@@ -120,7 +120,18 @@ export function Drawer({ content, onClose }: DrawerProps) {
               </button>
             )}
             {content.type === "html" && (
-              <button className="ghost-button small" type="button" title="新窗口打开">
+              <button
+                className="ghost-button small"
+                type="button"
+                title="新窗口打开"
+                onClick={() => {
+                  if (content.type === "html" && content.html) {
+                    const blob = new Blob([content.html], { type: "text/html" });
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, "_blank");
+                  }
+                }}
+              >
                 <ExternalLink size={14} />
               </button>
             )}
