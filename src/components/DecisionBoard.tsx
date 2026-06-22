@@ -30,6 +30,7 @@ import {
   Code2,
   AlertTriangle,
   RefreshCw,
+  RotateCcw,
 } from "lucide-react";
 import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
 import { useStepKey } from "../hooks";
@@ -45,6 +46,7 @@ import { ContentModal } from "./ContentModal";
 import type { ModalContent } from "./ContentModal";
 import type { StepSessionSnapshot } from "../hooks/useSessionRecords";
 import { DiffViewer } from "./DiffViewer";
+import type { RepoTab } from "./RepoExplorer";
 
 type BoardTab = "delivery" | "trajectory";
 
@@ -94,7 +96,7 @@ type DecisionBoardProps = {
   detectBuildCommand?: (workspacePath: string) => Promise<string>;
   taskId: string | null;
   /** 打开 Workspace 项目代码仓库 */
-  onOpenRepoExplorer?: () => void;
+  onOpenRepoExplorer?: (tab: RepoTab) => void;
   /** 编译数据持久化回调 */
   onBuildUpdate?: (stepId: string, command: string, result: import("../data/types").BuildResult) => void;
   /** QA 一键修复回调 */
@@ -240,6 +242,7 @@ export function DecisionBoard({
             stepSummaries={stepSummaries}
             workspaceInitStatus={workspaceInitStatus}
             onRetryClone={onRetryClone}
+            onOpenRollback={() => onOpenRepoExplorer?.("rollback")}
           />
         )}
       </div>
@@ -348,7 +351,7 @@ function DeliveryCollabTab({
     /** 项目编译状态 */
     buildStatus?: "idle" | "pending" | "detecting" | "loading" | "done" | "error";
   } | null;
-  onOpenRepoExplorer?: () => void;
+  onOpenRepoExplorer?: (tab: RepoTab) => void;
   onBuildUpdate?: (command: string, result: import("../data/types").BuildResult) => void;
   onFixIssues?: (report: string) => void;
 }) {
@@ -1458,7 +1461,7 @@ function QaReviewSection({
 }
 
 // ── 文件变更按钮 ─────────────────────────────
-function FileChangesButton({ files, onOpenRepoExplorer }: { files: FileChange[]; onOpenRepoExplorer?: () => void }) {
+function FileChangesButton({ files, onOpenRepoExplorer }: { files: FileChange[]; onOpenRepoExplorer?: (tab: RepoTab) => void }) {
   if (files.length === 0) return null;
 
   const totalAdditions = files.reduce((sum, f) => sum + (f.additions || 0), 0);
@@ -1487,7 +1490,7 @@ function FileChangesButton({ files, onOpenRepoExplorer }: { files: FileChange[];
       <button
         className="filechanges-repo-btn"
         type="button"
-        onClick={onOpenRepoExplorer}
+        onClick={() => onOpenRepoExplorer?.("diff")}
       >
         <Code2 size={15} />
         <span>查看项目代码仓库变更</span>
@@ -2014,6 +2017,7 @@ function TrajectoryChatTab({
   stepSummaries,
   workspaceInitStatus,
   onRetryClone,
+  onOpenRollback,
 }: {
   trajectory: TrajectoryTurn[];
   stepIndex: number;
@@ -2056,6 +2060,7 @@ function TrajectoryChatTab({
   stepSummaries: Record<string, string>;
   workspaceInitStatus?: WorkspaceInitStatus;
   onRetryClone?: () => void;
+  onOpenRollback?: () => void;
 }) {
   const [input, setInput] = useState("");
   const [expandedRoundIds, setExpandedRoundIds] = useState<Set<string>>(new Set());
@@ -2358,6 +2363,19 @@ function TrajectoryChatTab({
                         )}
                       </div>
                       <div className="round-group-header-right">
+                        {group.status !== "running" && onOpenRollback && (
+                          <button
+                            className="ghost-button small"
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenRollback();
+                            }}
+                          >
+                            <RotateCcw size={11} />
+                            回退
+                          </button>
+                        )}
                         {group.toolCount > 0 && (
                           <span className="round-group-badge">
                             <Wrench size={10} />

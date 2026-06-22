@@ -15,6 +15,7 @@ import { LeftPanel } from "../components/LeftPanel";
 import { DecisionBoard } from "../components/DecisionBoard";
 import { Drawer } from "../components/Drawer";
 import { AgentStatusBadge } from "../components/AgentStatusBadge";
+import type { RepoTab } from "../components/RepoExplorer";
 
 /**
  * 任务执行页 —— "/task"
@@ -25,7 +26,7 @@ export function TaskPage() {
   const [searchParams] = useSearchParams();
   const [state, setState] = useStoredState();
   const [drawerContent, setDrawerContent] = useState<DrawerContent>(null);
-  const [repoExplorerOpen, setRepoExplorerOpen] = useState(false);
+  const [repoExplorerOpen, setRepoExplorerOpen] = useState<RepoTab | null>(null);
 
   // ── URL taskId 恢复 ──
   // 如果 URL 携带 taskId 且与 localStorage 中的不一致，说明是刷新后首次加载，
@@ -487,7 +488,7 @@ export function TaskPage() {
               workspacePath={state.workspacePath}
               sessionId={state.sessionId}
               repoExplorerOpen={repoExplorerOpen}
-              onCloseRepoExplorer={() => setRepoExplorerOpen(false)}
+              onCloseRepoExplorer={() => setRepoExplorerOpen(null)}
             />
             <DecisionBoard
               state={state}
@@ -507,7 +508,7 @@ export function TaskPage() {
               triggerBuild={agent.triggerBuild}
               detectBuildCommand={agent.detectBuildCommand}
               taskId={taskId}
-              onOpenRepoExplorer={() => setRepoExplorerOpen(true)}
+              onOpenRepoExplorer={(tab) => setRepoExplorerOpen(tab)}
               onBuildUpdate={(stepId, command, result) => {
                 agent.updateBuildData(stepId, command, result);
                 // 立即持久化，避免用户切换页面导致数据丢失

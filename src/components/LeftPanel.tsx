@@ -5,6 +5,7 @@ import type { TaskCard } from "../data/types";
 import { categoryMeta, priorityLabel } from "../data";
 import type { SessionState } from "../agent/types";
 import { WorkspaceExplorer } from "./WorkspaceExplorer";
+import type { RepoTab } from "./RepoExplorer";
 
 type LeftPanelProps = {
   activeTaskCard: TaskCard | null;
@@ -20,7 +21,7 @@ type LeftPanelProps = {
   /** 当前会话 sessionId */
   sessionId?: string;
   /** 外部触发打开 repo explorer */
-  repoExplorerOpen?: boolean;
+  repoExplorerOpen?: RepoTab | null;
   /** 关闭 repo explorer */
   onCloseRepoExplorer?: () => void;
 };

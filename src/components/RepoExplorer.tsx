@@ -32,9 +32,10 @@ type DiffFileInfo = {
 type RepoExplorerProps = {
   workspacePath: string;
   taskId?: string;
+  initialTab?: RepoTab;
 };
 
-type RepoTab = "tree" | "diff" | "rollback";
+export type RepoTab = "tree" | "diff" | "rollback";
 
 type RollbackCheckpoint = {
   id: string;
@@ -80,8 +81,8 @@ function buildFileTree(files: DiffFileInfo[]): TreeNode[] {
  * RepoExplorer — 浏览项目仓库目录（排除 specs 目录），
  * 支持切换「目录树」和「代码 Diff」两种视图。
  */
-export function RepoExplorer({ workspacePath, taskId }: RepoExplorerProps) {
-  const [tab, setTab] = useState<RepoTab>("tree");
+export function RepoExplorer({ workspacePath, taskId, initialTab = "tree" }: RepoExplorerProps) {
+  const [tab, setTab] = useState<RepoTab>(initialTab);
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -130,7 +131,9 @@ export function RepoExplorer({ workspacePath, taskId }: RepoExplorerProps) {
       if (taskId) diffParams.set("taskId", taskId);
       const diffRes = await agentFetch(`/repo-diff-files?${diffParams.toString()}`);
       const diffData = await diffRes.json();
-      setDiffFiles(diffData.files || []);
+      const files: DiffFileInfo[] = diffData.files || [];
+      setDiffFiles(files);
+      setSelectedDiffFile((current) => files.some((file) => file.path === current) ? current : files[0]?.path || null);
     } catch (err) {
       setRollbackMessage(err instanceof Error ? err.message : "回退失败");
     } finally {
@@ -273,6 +276,8 @@ export function RepoExplorer({ workspacePath, taskId }: RepoExplorerProps) {
           回退
         </button>
       </div>
+
+      {rollbackMessage && <div className="rollback-message">{rollbackMessage}</div>}
 
       {/* 目录树视图 */}
       {tab === "tree" && (
@@ -427,7 +432,6 @@ export function RepoExplorer({ workspacePath, taskId }: RepoExplorerProps) {
             </button>
           </div>
 
-          {rollbackMessage && <div className="rollback-message">{rollbackMessage}</div>}
           <div className="rollback-section-header">
             <div>
               <strong>轮次回退点</strong>

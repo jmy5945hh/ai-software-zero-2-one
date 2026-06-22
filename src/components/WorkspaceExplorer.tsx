@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
-import { FileText, Code2, X } from "lucide-react";
+import { FileText, Code2, History, X } from "lucide-react";
 import { SpecsExplorer } from "./SpecsExplorer";
-import { RepoExplorer } from "./RepoExplorer";
+import { RepoExplorer, type RepoTab } from "./RepoExplorer";
 
 type ExplorerMode = "specs" | "repo" | null;
 
@@ -9,7 +9,7 @@ type WorkspaceExplorerProps = {
   workspacePath: string;
   taskId?: string;
   /** 外部触发打开 repo explorer */
-  repoExplorerOpen?: boolean;
+  repoExplorerOpen?: RepoTab | null;
   /** 关闭 repo explorer */
   onCloseRepoExplorer?: () => void;
 };
@@ -21,6 +21,12 @@ type WorkspaceExplorerProps = {
  */
 export function WorkspaceExplorer({ workspacePath, taskId, repoExplorerOpen, onCloseRepoExplorer }: WorkspaceExplorerProps) {
   const [mode, setMode] = useState<ExplorerMode>(null);
+  const [repoTab, setRepoTab] = useState<RepoTab>("tree");
+
+  const openRepo = useCallback((tab: RepoTab) => {
+    setRepoTab(tab);
+    setMode("repo");
+  }, []);
 
   const handleClose = useCallback(() => {
     setMode(null);
@@ -30,9 +36,9 @@ export function WorkspaceExplorer({ workspacePath, taskId, repoExplorerOpen, onC
   // 外部触发打开 repo explorer
   useEffect(() => {
     if (repoExplorerOpen) {
-      setMode("repo");
+      openRepo(repoExplorerOpen);
     }
-  }, [repoExplorerOpen]);
+  }, [repoExplorerOpen, openRepo]);
 
   return (
     <>
@@ -49,10 +55,14 @@ export function WorkspaceExplorer({ workspacePath, taskId, repoExplorerOpen, onC
         <button
           className="workspace-explorer-btn"
           type="button"
-          onClick={() => setMode("repo")}
+          onClick={() => openRepo("tree")}
         >
           <Code2 size={18} />
           <span>项目代码仓库</span>
+        </button>
+        <button className="workspace-explorer-btn" type="button" onClick={() => openRepo("rollback")}>
+          <History size={18} />
+          <span>任务回退</span>
         </button>
       </section>
 
@@ -93,7 +103,7 @@ export function WorkspaceExplorer({ workspacePath, taskId, repoExplorerOpen, onC
             </button>
           </div>
           <div className="workspace-explorer-body">
-            <RepoExplorer workspacePath={workspacePath} taskId={taskId} />
+            <RepoExplorer key={repoTab} workspacePath={workspacePath} taskId={taskId} initialTab={repoTab} />
           </div>
         </div>
       )}
