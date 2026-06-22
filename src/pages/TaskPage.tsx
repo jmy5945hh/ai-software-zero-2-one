@@ -98,6 +98,12 @@ export function TaskPage() {
             resultContent: "",
           };
         })(),
+        prototype: record.prototype || {
+          mode: "none",
+          status: "pending",
+          htmlPath: "",
+          handoffPath: "",
+        },
         view: "workspace",
       }));
     });
@@ -235,6 +241,7 @@ export function TaskPage() {
     state.releaseApproved,
     state.qualityPassed,
     state.qaReview,
+    state.prototype,
     state.workspacePath,
     taskId,
     stepSummaries,

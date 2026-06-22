@@ -89,6 +89,13 @@ export type SessionMeta = {
   qaReview?: {
     status: "idle" | "running" | "done" | "error";
   };
+  /** 交互原型状态 */
+  prototype?: {
+    mode: "none" | "new-page" | "existing-change";
+    status: "pending" | "generating" | "reviewing" | "approved" | "skipped";
+    htmlPath: string;
+    handoffPath: string;
+  };
 };
 
 /** 完整的会话记录（元信息 + 各步骤对话数据） */
@@ -401,6 +408,12 @@ export function useSessionRecords() {
         // meta 中仅存简略状态
         qaReview: {
           status: state.qaReview.status === "running" ? "idle" as const : state.qaReview.status,
+        },
+        prototype: state.prototype || {
+          mode: "none",
+          status: "pending",
+          htmlPath: "",
+          handoffPath: "",
         },
       };
 
