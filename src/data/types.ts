@@ -26,6 +26,7 @@ export type CategoryMeta = {
 // ── SOP 工作流 ──────────────────────────────
 export type WorkflowId =
   | "intent"
+  | "prototype"
   | "plan"
   | "coding"
   | "quality"
@@ -106,6 +107,7 @@ export type AppState = {
     shouldPull: boolean;
   };
   activeStage: WorkflowId;
+  prototype: PrototypeState;
   stepIndex: number;
   notes: string;
   codeConfirmed: boolean;
@@ -246,4 +248,21 @@ export type QaReviewState = {
   resultContent: string;
   /** 错误信息 */
   error?: string;
+};
+
+// ── 原型设计 ─────────────────────────────────
+
+export type PrototypeMode = "none" | "new-page" | "existing-change";
+export type PrototypeStatus =
+  | "pending"
+  | "generating"
+  | "reviewing"
+  | "approved"
+  | "skipped";
+
+export type PrototypeState = {
+  mode: PrototypeMode;
+  status: PrototypeStatus;
+  htmlPath: string;
+  handoffPath: string;
 };
