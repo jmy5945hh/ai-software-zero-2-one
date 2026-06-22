@@ -96,6 +96,13 @@ export type SessionMeta = {
   qaReview?: {
     status: "idle" | "running" | "done" | "error";
   };
+  /** 交互原型状态 */
+  prototype?: {
+    mode: "none" | "new-page" | "existing-change";
+    status: "pending" | "generating" | "reviewing" | "approved" | "skipped";
+    htmlPath: string;
+    handoffPath: string;
+  };
 };
 
 /** 完整的会话记录（元信息 + 各步骤对话数据） */

@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStoredState, STORAGE_KEY } from "../hooks/useStoredState";
-import { createDefaultState } from "../data";
+import { createDefaultState, getWorkflowStepIndex } from "../data";
 import type { AppState, HomeTab } from "../data/types";
 import { useSessionRecords } from "../hooks/useSessionRecords";
 import type { SessionMeta, SessionRecord } from "../hooks/useSessionRecords";
@@ -228,7 +228,7 @@ export function DashboardPage() {
         runtimeMode: fullRecord.runtimeMode || "local",
         gitRepo: (fullRecord as any).gitRepo,
         localGit: fullRecord.localGit,
-        stepIndex: fullRecord.stepIndex,
+        stepIndex: getWorkflowStepIndex(fullRecord.activeStage, fullRecord.stepIndex),
         activeStage: fullRecord.activeStage as AppState["activeStage"],
         notes: fullRecord.notes,
         todoAnswers: fullRecord.todoAnswers,
@@ -237,6 +237,12 @@ export function DashboardPage() {
         fixApproved: fullRecord.fixApproved,
         releaseApproved: fullRecord.releaseApproved,
         qualityPassed: fullRecord.qualityPassed,
+        prototype: fullRecord.prototype || {
+          mode: "none",
+          status: "pending",
+          htmlPath: "",
+          handoffPath: "",
+        },
         createdAt: fullRecord.createdAt,
         sessionId: fullRecord.sessionId,
         restoredSessions: fullRecord.stepSessions || {},

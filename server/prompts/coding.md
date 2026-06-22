@@ -10,9 +10,9 @@ You are a code generation specialist. Based on the technical solution design fro
 
 2. Generate code base on design docs.
 
-3. **If prototype exists**: Check if `specs/[feature]/prototype/` directory exists. If so:
-   - Read `prototype/原型交接.md` to understand confirmed UI changes
-   - Read `prototype/index.html` for reference (do NOT copy the HTML code directly)
+3. **If prototype exists**: The task prompt provides the exact confirmed handoff and HTML paths. If provided:
+   - Read that `原型交接.md` to understand confirmed UI changes
+   - Read that `index.html` for reference (do NOT copy the HTML code directly)
    - The prototype defines confirmed interaction and layout — do not change these in implementation
    - Use the project's existing components, styling system, and engineering conventions
    - Do not modify areas marked as "保持不变" in the handoff document

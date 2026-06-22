@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useCallback, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useStoredState } from "../hooks/useStoredState";
 import { useAgent } from "../agent";
-import { titleFromIntent, workflow } from "../data";
+import { getWorkflowStepIndex, titleFromIntent, workflow } from "../data";
 
 import type { DrawerContent, AppState } from "../data/types";
 import type { ConnectionStatus } from "../agent/types";
@@ -55,7 +55,7 @@ export function TaskPage() {
         runtimeMode: (record as any).runtimeMode || "local",
         gitRepo: (record as any).gitRepo,
         localGit: record.localGit,
-        stepIndex: record.stepIndex,
+        stepIndex: getWorkflowStepIndex(record.activeStage, record.stepIndex),
         activeStage: record.activeStage as AppState["activeStage"],
         notes: record.notes,
         todoAnswers: record.todoAnswers,
@@ -356,13 +356,19 @@ export function TaskPage() {
 
     if (isAgentConnected && taskId && nextStep.id !== "quality") {
       // quality 阶段不走 Agent session 逻辑，直接触发 CLI 命令
-      const promptText = getStepPrompt(
-        nextStep.id,
-        state.intent,
-      );
+      const prototype = nextStep.id === "prototype"
+        ? {
+            mode: "none" as const,
+            status: "generating" as const,
+            htmlPath: `prototype/${taskId}/index.html`,
+            handoffPath: `prototype/${taskId}/原型交接.md`,
+          }
+        : state.prototype;
+      const promptText = getStepPrompt(nextStep.id, state.intent, taskId, prototype);
 
       patchState({
         initialPrompts: { ...state.initialPrompts, [nextStep.id]: promptText },
+        ...(nextStep.id === "prototype" ? { prototype } : {}),
       });
       agent.createSession(nextStep.id, state.intent, state.workspacePath, state.gitRepo).then(() => {
         agent.prompt(nextStep.id, promptText);
@@ -375,7 +381,7 @@ export function TaskPage() {
     patchState({
       stepIndex: nextIndex,
       activeStage: nextStep.id,
-      codeConfirmed: state.codeConfirmed || state.stepIndex >= 2,
+      codeConfirmed: state.codeConfirmed || nextStep.id === "coding",
       // 进入 quality 阶段时重置 QA 审查状态
       ...(nextStep.id === "quality" ? {
         qaReview: {
@@ -387,9 +393,11 @@ export function TaskPage() {
       } : {}),
     });
     window.scrollTo({ top: 0 });
-  }, [state.stepIndex, state.intent, state.initialPrompts, isAgentConnected, taskId, agent, patchState, state.codeConfirmed]);
+  }, [state.stepIndex, state.intent, state.initialPrompts, state.prototype, isAgentConnected, taskId, agent, patchState, state.codeConfirmed]);
 
   const handleStepClick = (index: number) => {
+    // 已完成阶段可回看；未来阶段必须通过当前阶段的门禁顺序推进。
+    if (index > state.stepIndex) return;
     const targetStage = workflow[index].id;
     patchState({
       stepIndex: index,
@@ -561,16 +569,18 @@ function getLanguageFromPath(path: string): string {
 function getStepPrompt(
   step: string,
   intent: string,
+  taskId?: string | null,
+  prototype?: AppState["prototype"],
 ): string {
   switch (step) {
     case "intent":
       return `请分析以下业务意图，识别核心业务对象、角色和场景，并生成Spec 文档：\n\n${intent}`;
     case "prototype":
-      return `请分析以下需求，判断是否包含 UI 变化。\n\n如果**不包含** UI 变化（纯后端/数据/逻辑任务），请直接回复：\n"当前需求不涉及 UI 变化，无需生成交互原型，建议跳过本阶段。"\n\n如果**包含** UI 变化，请先用 ask_user_question 确认原型模式（新页面 or 已有页面修改），然后生成 HTML 原型和交接文档。\n\n业务意图：${intent}`;
+      return `请分析以下需求，判断是否包含 UI 变化。当前任务 ID：${taskId || "unknown"}。\n\n本阶段的产物目录固定为 specs/prototype/${taskId || "unknown"}/，不得写入其他 prototype 目录。\n\n如果**不包含** UI 变化（纯后端/数据/逻辑任务），请写入 prototype.json：\n{\"mode\":\"none\",\"status\":\"skipped\",\"htmlPath\":\"\",\"handoffPath\":\"\"}\n并回复当前需求无需生成交互原型。\n\n如果**包含** UI 变化，请先用 ask_user_question 确认原型模式（新页面 or 已有页面修改），生成 index.html、原型交接.md，并写入 prototype.json：\n{\"mode\":\"new-page 或 existing-change\",\"status\":\"reviewing\",\"htmlPath\":\"${prototype?.htmlPath || ""}\",\"handoffPath\":\"${prototype?.handoffPath || ""}\"}\n\n业务意图：${intent}`;
     case "plan":
-      return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围，生成对应的技术方案文档。\n\n业务意图：${intent}`;
+      return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围，生成对应的技术方案文档。${prototype?.handoffPath ? `\n\n原型已确认，请读取 specs/${prototype.handoffPath} 并遵守其中的确认范围和交互约束。` : ""}\n\n业务意图：${intent}`;
     case "coding":
-      return `基于技术方案设计，生成可运行的代码骨架。\n\n业务意图：${intent}`;
+      return `基于技术方案设计，生成可运行的代码骨架。${prototype?.handoffPath ? `\n\n编码前必须读取 specs/${prototype.handoffPath} 和 specs/${prototype.htmlPath}。原型用于表达已确认的交互，不得直接复制其 HTML。` : ""}\n\n业务意图：${intent}`;
     case "quality":
       return `请执行代码检视、检查测试覆盖率，运行测试并输出质量报告。`;
     case "verify":

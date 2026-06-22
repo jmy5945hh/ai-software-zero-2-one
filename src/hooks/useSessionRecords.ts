@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { AppState } from "../data/types";
+import type { AppState, PrototypeState } from "../data/types";
 import { AgentWebSocket } from "../agent/ws";
 import { agentFetch, buildAgentWsUrl, getAgentWsOrigin } from "../agent/config";
 import type { RuntimeMode } from "../types/runtime";
@@ -90,12 +90,7 @@ export type SessionMeta = {
     status: "idle" | "running" | "done" | "error";
   };
   /** 交互原型状态 */
-  prototype?: {
-    mode: "none" | "new-page" | "existing-change";
-    status: "pending" | "generating" | "reviewing" | "approved" | "skipped";
-    htmlPath: string;
-    handoffPath: string;
-  };
+  prototype?: PrototypeState;
 };
 
 /** 完整的会话记录（元信息 + 各步骤对话数据） */

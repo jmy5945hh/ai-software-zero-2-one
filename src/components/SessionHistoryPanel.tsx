@@ -16,6 +16,7 @@ import {
   Cloud,
 } from "lucide-react";
 import type { SessionMeta, SessionRecord } from "../hooks/useSessionRecords";
+import { getWorkflowStepIndex, workflow } from "../data";
 
 type SessionHistoryPanelProps = {
   records: SessionMeta[];
@@ -104,8 +105,9 @@ export function SessionHistoryPanel({
         {records.map((record) => {
           const isExpanded = expandedId === record.sessionId;
           const stepLabel = getStepLabel(record.activeStage);
+          const stageIndex = getWorkflowStepIndex(record.activeStage, record.stepIndex);
           const progress = Math.round(
-            ((record.stepIndex + (record.releaseApproved ? 1 : 0)) / 6) * 100,
+            ((stageIndex + (record.releaseApproved ? 1 : 0)) / workflow.length) * 100,
           );
           const timeAgo = formatTimeAgo(record.updatedAt);
 
@@ -287,15 +289,7 @@ export function SessionHistoryPanel({
 // ── 辅助函数 ────────────────────────────────
 
 function getStepLabel(stepId: string): string {
-  const labels: Record<string, string> = {
-    intent: "需求分析",
-    plan: "技术设计",
-    coding: "编码开发",
-    quality: "质量QA",
-    verify: "验证修复",
-    release: "发布交付",
-  };
-  return labels[stepId] || stepId;
+  return workflow.find((step) => step.id === stepId)?.label || stepId;
 }
 
 function truncateIntent(intent: string, maxLen: number): string {

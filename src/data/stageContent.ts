@@ -1,4 +1,6 @@
 
+import { workflow } from "./workflowData";
+
 export type DeliverableCard = {
   id: string;
   title: string;
@@ -107,7 +109,7 @@ export function getPrototypeContent(): StageContent {
         id: "t2",
         agent: "Prototype Agent",
         action: "生成 HTML 原型和交接文档",
-        output: "prototype/index.html + 原型交接.md 已就绪",
+        output: "任务级 prototype 目录中的 HTML 与原型交接文档已就绪",
         duration: "5s",
       },
     ],
@@ -530,7 +532,7 @@ export function getReleaseContent(): StageContent {
 }
 
 export function getContentForStage(stepIndex: number): StageContent {
-  const id = (["intent", "prototype", "plan", "coding", "quality", "verify", "release"] as const)[stepIndex];
+  const id = workflow[stepIndex]?.id;
   switch (id) {
     case "intent": return getIntentContent();
     case "prototype": return getPrototypeContent();

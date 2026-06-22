@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { X, Copy, Check, ExternalLink } from "lucide-react";
+import { X, Copy, Check } from "lucide-react";
 import type { DrawerContent } from "../data/types";
 import { DiffViewer } from "./DiffViewer";
 
@@ -117,22 +117,6 @@ export function Drawer({ content, onClose }: DrawerProps) {
                 title="复制内容"
               >
                 {copied ? <Check size={14} /> : <Copy size={14} />}
-              </button>
-            )}
-            {content.type === "html" && (
-              <button
-                className="ghost-button small"
-                type="button"
-                title="新窗口打开"
-                onClick={() => {
-                  if (content.type === "html" && content.html) {
-                    const blob = new Blob([content.html], { type: "text/html" });
-                    const url = URL.createObjectURL(blob);
-                    window.open(url, "_blank");
-                  }
-                }}
-              >
-                <ExternalLink size={14} />
               </button>
             )}
             <button

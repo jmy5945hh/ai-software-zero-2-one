@@ -31,7 +31,6 @@ import {
   AlertTriangle,
   RefreshCw,
   RotateCcw,
-  ExternalLink,
 } from "lucide-react";
 import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
 import { useStepKey } from "../hooks";
@@ -1505,49 +1504,69 @@ function PrototypePreview({
   isAgentConnected: boolean;
 }) {
   const [loadingHtml, setLoadingHtml] = useState(false);
+  const [hasPreviewed, setHasPreviewed] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!workspacePath || !sessionId || prototype.status === "approved") return;
+    let cancelled = false;
+
+    const loadManifest = async () => {
+      try {
+        const params = new URLSearchParams({
+          path: workspacePath,
+          taskId: sessionId,
+          file: `prototype/${sessionId}/prototype.json`,
+        });
+        const res = await agentFetch(`/specs-file?${params.toString()}`);
+        if (!res.ok) throw new Error("未找到原型产物清单");
+        const data = await res.json() as { content?: string };
+        const manifest = parsePrototypeManifest(data.content, sessionId);
+        if (!manifest) throw new Error("原型产物清单格式不正确");
+        if (cancelled) return;
+
+        const changed = prototype.mode !== manifest.mode
+          || prototype.status !== manifest.status
+          || prototype.htmlPath !== manifest.htmlPath
+          || prototype.handoffPath !== manifest.handoffPath;
+        if (changed) onPatch({ prototype: manifest });
+        setError("");
+      } catch (cause) {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : "原型产物加载失败");
+        }
+      }
+    };
+
+    void loadManifest();
+    return () => { cancelled = true; };
+  }, [workspacePath, sessionId, prototype, onPatch]);
 
   const handlePreview = useCallback(async () => {
-    if (!workspacePath || !sessionId) return;
+    if (!workspacePath || !sessionId || !prototype.htmlPath) return;
     setLoadingHtml(true);
+    setError("");
     try {
       const params = new URLSearchParams();
       params.set("path", workspacePath);
       params.set("taskId", sessionId);
-      params.set("file", "prototype/index.html");
+      params.set("file", prototype.htmlPath);
       const res = await agentFetch(`/specs-file?${params.toString()}`);
-      const data = await res.json() as { content: string };
-      if (data.content) {
-        onPreview({
-          type: "html",
-          title: "交互原型预览",
-          html: data.content,
-        });
-      }
-    } catch {
-      // 文件不存在或读取失败
+      if (!res.ok) throw new Error("原型文件不存在或无法读取");
+      const data = await res.json() as { content?: string };
+      if (!data.content) throw new Error("原型文件内容为空");
+      onPreview({
+        type: "html",
+        title: "交互原型预览",
+        html: data.content,
+      });
+      setHasPreviewed(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "原型预览加载失败");
     } finally {
       setLoadingHtml(false);
     }
-  }, [workspacePath, sessionId, onPreview]);
-
-  const handleOpenNewWindow = useCallback(async () => {
-    if (!workspacePath || !sessionId) return;
-    try {
-      const params = new URLSearchParams();
-      params.set("path", workspacePath);
-      params.set("taskId", sessionId);
-      params.set("file", "prototype/index.html");
-      const res = await agentFetch(`/specs-file?${params.toString()}`);
-      const data = await res.json() as { content: string };
-      if (data.content) {
-        const blob = new Blob([data.content], { type: "text/html" });
-        const url = URL.createObjectURL(blob);
-        window.open(url, "_blank");
-      }
-    } catch {
-      // 忽略
-    }
-  }, [workspacePath, sessionId]);
+  }, [workspacePath, sessionId, prototype.htmlPath, onPreview]);
 
   return (
     <div className="summary-section prototype-section">
@@ -1562,6 +1581,9 @@ function PrototypePreview({
             <Loader2 size={11} className="spin-icon" /> 生成中
           </span>
         )}
+        {prototype.status === "skipped" && (
+          <span className="build-badge">无需原型</span>
+        )}
       </div>
 
       {prototype.mode !== "none" && (
@@ -1571,12 +1593,18 @@ function PrototypePreview({
         </div>
       )}
 
-      <div className="build-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {error && (
+        <div className="prototype-error" role="alert">
+          <AlertTriangle size={14} /> {error}
+        </div>
+      )}
+
+      <div className="build-actions prototype-actions">
         <button
           className="todo-submit-btn"
           type="button"
           onClick={handlePreview}
-          disabled={loadingHtml || !isAgentConnected}
+          disabled={loadingHtml || !isAgentConnected || prototype.status !== "reviewing" || !prototype.htmlPath}
         >
           {loadingHtml ? (
             <><Loader2 size={14} className="spin-icon" /> 加载中...</>
@@ -1584,19 +1612,11 @@ function PrototypePreview({
             <><Eye size={14} /> 预览原型</>
           )}
         </button>
-        <button
-          className="ghost-button"
-          type="button"
-          onClick={handleOpenNewWindow}
-          disabled={!isAgentConnected}
-        >
-          <ExternalLink size={14} /> 新窗口打开
-        </button>
-        {prototype.status !== "approved" && (
+        {prototype.status === "reviewing" && (
           <button
-            className="todo-submit-btn"
+            className="todo-submit-btn prototype-confirm-btn"
             type="button"
-            style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+            disabled={!hasPreviewed}
             onClick={() => {
               onPatch({ prototype: { ...prototype, status: "approved" } });
               onContinue();
@@ -1605,9 +1625,40 @@ function PrototypePreview({
             <CheckCircle2 size={14} /> 确认原型，进入技术设计
           </button>
         )}
+        {prototype.status === "skipped" && (
+          <button className="todo-submit-btn" type="button" onClick={onContinue}>
+            <CheckCircle2 size={14} /> 进入技术设计
+          </button>
+        )}
       </div>
     </div>
   );
+}
+
+function parsePrototypeManifest(content: string | undefined, sessionId: string): AppState["prototype"] | null {
+  if (!content) return null;
+  try {
+    const value = JSON.parse(content) as Partial<AppState["prototype"]>;
+    const validMode = value.mode === "none" || value.mode === "new-page" || value.mode === "existing-change";
+    const validStatus = value.status === "reviewing" || value.status === "skipped";
+    if (!validMode || !validStatus) return null;
+    if (value.status === "reviewing") {
+      if (value.mode === "none") return null;
+      const expectedHtmlPath = `prototype/${sessionId}/index.html`;
+      const expectedHandoffPath = `prototype/${sessionId}/原型交接.md`;
+      if (value.htmlPath !== expectedHtmlPath || value.handoffPath !== expectedHandoffPath) return null;
+    } else if (value.mode !== "none" || value.htmlPath || value.handoffPath) {
+      return null;
+    }
+    return {
+      mode: value.mode,
+      status: value.status,
+      htmlPath: value.htmlPath || "",
+      handoffPath: value.handoffPath || "",
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ── 文件变更按钮 ─────────────────────────────
@@ -1876,7 +1927,7 @@ function TodoSection({
 
       // prototype 阶段：若原型未确认，阻止进入下一阶段
       if (stepId === "prototype" && allChoiceAdvance) {
-        if (!prototypeState || prototypeState.status !== "approved") {
+        if (!prototypeState || (prototypeState.status !== "approved" && prototypeState.status !== "skipped")) {
           setQaUncheckedWarning(true);
           return;
         }

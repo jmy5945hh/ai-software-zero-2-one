@@ -64,6 +64,12 @@ export function handleSessionRoutes(
           fixApproved: false,
           releaseApproved: false,
           qualityPassed: false,
+          prototype: {
+            mode: "none",
+            status: "pending",
+            htmlPath: "",
+            handoffPath: "",
+          },
           createdAt: now,
           updatedAt: now,
           status: "active",

@@ -29,16 +29,21 @@ export function handleApiRoutes(
 
   if (req.method === "GET" && req.url === "/api/projects") {
     const records = sessionStore.list();
-    const projects = records.map((meta) => ({
-      id: meta.sessionId,
-      name: meta.intent?.slice(0, 60) || meta.taskId,
-      description: meta.intent || "",
-      status: meta.status === "completed" ? "completed" : meta.stepIndex >= 3 ? "running" : "building",
-      progress: Math.round((meta.stepIndex / 7) * 100),
-      lastActivity: meta.updatedAt || meta.createdAt,
-      toolCallCount: 0,
-      fileCount: 0,
-    }));
+    const stageIds = ["intent", "prototype", "plan", "coding", "quality", "verify", "release"];
+    const projects = records.map((meta) => {
+      const semanticIndex = stageIds.indexOf(meta.activeStage);
+      const stepIndex = semanticIndex >= 0 ? semanticIndex : meta.stepIndex;
+      return {
+        id: meta.sessionId,
+        name: meta.intent?.slice(0, 60) || meta.taskId,
+        description: meta.intent || "",
+        status: meta.status === "completed" ? "completed" : stepIndex >= 3 ? "running" : "building",
+        progress: Math.round(((stepIndex + (meta.releaseApproved ? 1 : 0)) / stageIds.length) * 100),
+        lastActivity: meta.updatedAt || meta.createdAt,
+        toolCallCount: 0,
+        fileCount: 0,
+      };
+    });
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(projects));
     return true;

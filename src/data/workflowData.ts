@@ -54,6 +54,12 @@ export const workflow: WorkflowStep[] = [
   },
 ];
 
+export function getWorkflowStepIndex(stepId: string | undefined, fallback?: number): number {
+  const index = workflow.findIndex((step) => step.id === stepId);
+  if (index >= 0) return index;
+  return Math.max(0, Math.min(fallback ?? 0, workflow.length - 1));
+}
+
 // ── 阶段列表 ────────────────────────────────
 export function getStages(stepIndex: number): Stage[] {
   return workflow.map((step, index) => ({
@@ -70,30 +76,32 @@ export function getStages(stepIndex: number): Stage[] {
 
 // ── 质量门禁数据 ────────────────────────────
 export function getGates(state: AppState): Gate[] {
-  const { qualityPassed, fixApproved, releaseApproved, stepIndex } = state;
-  const isQuality = stepIndex >= 5;
+  const { fixApproved, stepIndex } = state;
+  const qualityIndex = getWorkflowStepIndex("quality");
+  const releaseIndex = getWorkflowStepIndex("release");
+  const isQuality = stepIndex >= qualityIndex;
   return [
     {
       name: "代码检视",
-      value: isQuality ? 100 : stepIndex >= 5 ? 100 : 0,
-      status: isQuality ? "passed" : stepIndex >= 5 ? "passed" : "queued",
+      value: isQuality ? 100 : 0,
+      status: isQuality ? "passed" : "queued",
     },
     {
       name: "单元测试",
-      value: isQuality ? 100 : stepIndex >= 5 ? 68 : 0,
-      status: isQuality ? "passed" : stepIndex >= 5 ? "running" : "queued",
+      value: isQuality ? 100 : 0,
+      status: isQuality ? "passed" : "queued",
     },
     {
       name: "API 测试",
-      value: isQuality ? 80 : stepIndex >= 5 ? 42 : 0,
-      status: isQuality ? "running" : stepIndex >= 5 ? "running" : "queued",
+      value: isQuality ? 80 : 0,
+      status: isQuality ? "running" : "queued",
     },
     {
       name: "UI E2E",
-      value: isQuality ? 0 : stepIndex >= 7 || fixApproved ? 100 : 72,
-      status: (stepIndex >= 7 || fixApproved)
+      value: stepIndex >= releaseIndex || fixApproved ? 100 : isQuality ? 72 : 0,
+      status: (stepIndex >= releaseIndex || fixApproved)
         ? "passed"
-        : stepIndex >= 5
+        : isQuality
           ? "running"
           : "queued",
     },
@@ -102,13 +110,18 @@ export function getGates(state: AppState): Gate[] {
 
 // ── Agent 数据 ──────────────────────────────
 export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
+  const prototypeIndex = getWorkflowStepIndex("prototype");
+  const planIndex = getWorkflowStepIndex("plan");
+  const codingIndex = getWorkflowStepIndex("coding");
+  const qualityIndex = getWorkflowStepIndex("quality");
+  const releaseIndex = getWorkflowStepIndex("release");
   const agents: Agent[] = [
     {
       name: "Product Agent",
       role: "意图澄清",
-      status: stepIndex >= 1 ? "done" : "running",
-      confidence: stepIndex >= 1 ? 96 : 68,
-      task: stepIndex >= 1
+      status: stepIndex >= prototypeIndex ? "done" : "running",
+      confidence: stepIndex >= prototypeIndex ? 96 : 68,
+      task: stepIndex >= prototypeIndex
         ? "已沉淀业务目标、角色和边界"
         : "正在从一句话中抽取业务对象",
       icon: MessageSquareText,
@@ -116,9 +129,9 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
     {
       name: "Prototype Agent",
       role: "交互原型",
-      status: stepIndex >= 2 ? "done" : stepIndex === 1 ? "running" : "review",
-      confidence: stepIndex >= 2 ? 88 : 72,
-      task: stepIndex >= 2
+      status: stepIndex >= planIndex ? "done" : stepIndex === prototypeIndex ? "running" : "review",
+      confidence: stepIndex >= planIndex ? 88 : 72,
+      task: stepIndex >= planIndex
         ? "HTML 原型和交接文档已生成"
         : "准备分析 UI 变化并生成交互原型",
       icon: LayoutTemplate,
@@ -126,9 +139,9 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
     {
       name: "Architect Agent",
       role: "可执行设计",
-      status: stepIndex >= 3 ? "done" : stepIndex >= 2 ? "running" : "review",
-      confidence: stepIndex >= 3 ? 93 : 82,
-      task: stepIndex >= 3
+      status: stepIndex >= codingIndex ? "done" : stepIndex >= planIndex ? "running" : "review",
+      confidence: stepIndex >= codingIndex ? 93 : 82,
+      task: stepIndex >= codingIndex
         ? "架构、数据模型和 API 契约已生成"
         : "等待技术方案设计后生成代码",
       icon: Network,
@@ -136,9 +149,9 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
     {
       name: "Frontend Agent",
       role: "交互实现",
-      status: stepIndex >= 4 ? "done" : stepIndex === 3 ? "running" : "review",
-      confidence: stepIndex >= 4 ? 90 : 74,
-      task: stepIndex >= 4
+      status: stepIndex >= qualityIndex ? "done" : stepIndex === codingIndex ? "running" : "review",
+      confidence: stepIndex >= qualityIndex ? 90 : 74,
+      task: stepIndex >= qualityIndex
         ? "页面和 mock 数据已接入"
         : "准备生成列表、详情和提醒工作流",
       icon: PanelRight,
@@ -146,13 +159,13 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
     {
       name: "Test Agent",
       role: "验证矩阵",
-      status: stepIndex >= 5 || fixApproved
+      status: stepIndex >= qualityIndex || fixApproved
         ? "done"
-        : stepIndex >= 4
+        : stepIndex >= codingIndex
           ? "running"
           : "review",
-      confidence: stepIndex >= 5 || fixApproved ? 94 : 78,
-      task: stepIndex >= 5 || fixApproved
+      confidence: stepIndex >= qualityIndex || fixApproved ? 94 : 78,
+      task: stepIndex >= qualityIndex || fixApproved
         ? "E2E、API、单测全部通过"
         : "正在把验收标准转为测试用例",
       icon: TestTube2,
@@ -160,9 +173,9 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
     {
       name: "DevOps Agent",
       role: "交付流水线",
-      status: stepIndex >= 6 ? "running" : "blocked",
-      confidence: stepIndex >= 6 ? 88 : 62,
-      task: stepIndex >= 6
+      status: stepIndex >= releaseIndex ? "running" : "blocked",
+      confidence: stepIndex >= releaseIndex ? 88 : 62,
+      task: stepIndex >= releaseIndex
         ? "准备构建、预发验证和交付包"
         : "等待质量门禁通过",
       icon: Rocket,

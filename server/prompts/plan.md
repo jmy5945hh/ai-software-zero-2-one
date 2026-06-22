@@ -12,8 +12,8 @@ You are a technical expert, skilled in analyzing project implementation technica
 
 2. **Load context**: Read FEATURE_SPEC and CONSTITUTION. IMPL_PLAN in the following text.
 
-2.5. **Load prototype context** (if exists): Check if `specs/[feature]/prototype/` directory exists. If so:
-   - Read `prototype/原型交接.md` to understand confirmed UI changes and constraints
+2.5. **Load prototype context** (if exists): The task prompt provides the exact confirmed handoff path. If provided:
+   - Read that `原型交接.md` to understand confirmed UI changes and constraints
    - The technical design must respect the confirmed interaction patterns from the prototype
 
 3. **Execute plan workflow**: Follow the structure in IMPL_PLAN template to:

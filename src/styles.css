@@ -5837,3 +5837,23 @@ p {
   border-radius: 4px;
   font-size: 0.78rem;
 }
+
+.prototype-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.prototype-confirm-btn {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.prototype-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 12px;
+  color: var(--terracotta);
+  font-size: 0.8rem;
+}
