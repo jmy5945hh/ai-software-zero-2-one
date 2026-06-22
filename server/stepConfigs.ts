@@ -71,6 +71,14 @@ export const STEP_CONFIGS: Record<string, StepConfig> = {
     systemPrompt: loadPrompt("intent"),
     skills: [],
   },
+  prototype: {
+    modelId: "deepseek-v4-flash",
+    modelProvider: "deepseek",
+    thinkingLevel: "medium",
+    tools: ["read", "write", "grep", "find", "ls", "ask_user_question"],
+    systemPrompt: loadPrompt("prototype"),
+    skills: [],
+  },
   plan: {
     modelId: "deepseek-v4-flash",
     modelProvider: "deepseek",
