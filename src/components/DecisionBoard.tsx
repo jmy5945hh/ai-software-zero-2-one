@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   RefreshCw,
   RotateCcw,
+  ExternalLink,
 } from "lucide-react";
 import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
 import { useStepKey } from "../hooks";
@@ -569,6 +570,17 @@ function DeliveryCollabTab({
             <>
               <SummaryBrief brief={summaryResult.brief} />
               <KeyPointsGrid keyPoints={summaryResult.key_points ?? []} />
+              {/* prototype 阶段：展示原型预览 */}
+              {stepId === "prototype" && (
+                <PrototypePreview
+                  workspacePath={state.workspacePath}
+                  sessionId={state.sessionId}
+                  prototype={state.prototype}
+                  onPreview={onPreview}
+                  onPatch={onPatch}
+                  isAgentConnected={isAgentConnected}
+                />
+              )}
               {/* intent / plan 阶段展示交付Spec 目录，其他阶段展示跳转到项目代码仓库的按钮 */}
               {(stepId === "intent" || stepId === "plan")
                 ? <SpecsDirectory workspacePath={state.workspacePath} taskId={state.sessionId} onFileClick={handleSpecFileClick} />
@@ -618,6 +630,16 @@ function DeliveryCollabTab({
             <>
               <SummaryBrief brief={summaryResult.brief} />
               <KeyPointsGrid keyPoints={summaryResult.key_points ?? []} />
+              {stepId === "prototype" && (
+                <PrototypePreview
+                  workspacePath={state.workspacePath}
+                  sessionId={state.sessionId}
+                  prototype={state.prototype}
+                  onPreview={onPreview}
+                  onPatch={onPatch}
+                  isAgentConnected={isAgentConnected}
+                />
+              )}
               {(stepId === "intent" || stepId === "plan")
                 ? <SpecsDirectory workspacePath={state.workspacePath} taskId={state.sessionId} onFileClick={handleSpecFileClick} />
                 : <FileChangesButton files={fileChanges} onOpenRepoExplorer={onOpenRepoExplorer} />
@@ -1456,6 +1478,125 @@ function QaReviewSection({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// ── 原型预览 ──────────────────────────────────
+function PrototypePreview({
+  workspacePath,
+  sessionId,
+  prototype,
+  onPreview,
+  onPatch,
+  isAgentConnected,
+}: {
+  workspacePath: string;
+  sessionId: string;
+  prototype: import("../data/types").PrototypeState;
+  onPreview: (content: DrawerContent) => void;
+  onPatch: (patch: Partial<AppState>) => void;
+  isAgentConnected: boolean;
+}) {
+  const [loadingHtml, setLoadingHtml] = useState(false);
+
+  const handlePreview = useCallback(async () => {
+    if (!workspacePath || !sessionId) return;
+    setLoadingHtml(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("path", workspacePath);
+      params.set("taskId", sessionId);
+      params.set("file", "prototype/index.html");
+      const res = await agentFetch(`/specs-file?${params.toString()}`);
+      const data = await res.json() as { content: string };
+      if (data.content) {
+        onPreview({
+          type: "html",
+          title: "交互原型预览",
+          html: data.content,
+        });
+      }
+    } catch {
+      // 文件不存在或读取失败
+    } finally {
+      setLoadingHtml(false);
+    }
+  }, [workspacePath, sessionId, onPreview]);
+
+  const handleOpenNewWindow = useCallback(async () => {
+    if (!workspacePath || !sessionId) return;
+    try {
+      const params = new URLSearchParams();
+      params.set("path", workspacePath);
+      params.set("taskId", sessionId);
+      params.set("file", "prototype/index.html");
+      const res = await agentFetch(`/specs-file?${params.toString()}`);
+      const data = await res.json() as { content: string };
+      if (data.content) {
+        const blob = new Blob([data.content], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        window.open(url, "_blank");
+      }
+    } catch {
+      // 忽略
+    }
+  }, [workspacePath, sessionId]);
+
+  return (
+    <div className="summary-section prototype-section">
+      <div className="summary-section-header">
+        <Eye size={15} />
+        <span>交互原型</span>
+        {prototype.status === "approved" && (
+          <span className="build-badge build-badge-success">✓ 已确认</span>
+        )}
+        {prototype.status === "generating" && (
+          <span className="build-badge build-badge-running">
+            <Loader2 size={11} className="spin-icon" /> 生成中
+          </span>
+        )}
+      </div>
+
+      {prototype.mode !== "none" && (
+        <div className="prototype-mode-info">
+          <span className="build-command-label">原型类型：</span>
+          <code>{prototype.mode === "new-page" ? "新页面" : "已有页面局部修改"}</code>
+        </div>
+      )}
+
+      <div className="build-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button
+          className="todo-submit-btn"
+          type="button"
+          onClick={handlePreview}
+          disabled={loadingHtml || !isAgentConnected}
+        >
+          {loadingHtml ? (
+            <><Loader2 size={14} className="spin-icon" /> 加载中...</>
+          ) : (
+            <><Eye size={14} /> 预览原型</>
+          )}
+        </button>
+        <button
+          className="ghost-button"
+          type="button"
+          onClick={handleOpenNewWindow}
+          disabled={!isAgentConnected}
+        >
+          <ExternalLink size={14} /> 新窗口打开
+        </button>
+        {prototype.status !== "approved" && prototype.htmlPath && (
+          <button
+            className="todo-submit-btn"
+            type="button"
+            style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+            onClick={() => onPatch({ prototype: { ...prototype, status: "approved" } })}
+          >
+            <CheckCircle2 size={14} /> 确认原型，进入技术设计
+          </button>
+        )}
+      </div>
     </div>
   );
 }
