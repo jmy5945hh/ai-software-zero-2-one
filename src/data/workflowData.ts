@@ -5,6 +5,7 @@ import {
   PanelRight,
   TestTube2,
   Rocket,
+  LayoutTemplate,
 } from "lucide-react";
 
 // ── SOP 工作流定义（新增 quality 门禁步骤） ──
@@ -14,6 +15,12 @@ export const workflow: WorkflowStep[] = [
     label: "需求分析",
     detail: "AI 提炼任务目标和边界",
     userRole: "和 DevAgent 一起脑暴，将模糊需求打磨地清晰、可实现",
+  },
+  {
+    id: "prototype",
+    label: "交互原型",
+    detail: "生成中低保真 HTML 原型确认交互",
+    userRole: "预览和确认 UI 原型，确保交互符合预期",
   },
   {
     id: "plan",
@@ -64,29 +71,29 @@ export function getStages(stepIndex: number): Stage[] {
 // ── 质量门禁数据 ────────────────────────────
 export function getGates(state: AppState): Gate[] {
   const { qualityPassed, fixApproved, releaseApproved, stepIndex } = state;
-  const isQuality = stepIndex >= 4;
+  const isQuality = stepIndex >= 5;
   return [
     {
       name: "代码检视",
-      value: isQuality ? 100 : stepIndex >= 4 ? 100 : 0,
-      status: isQuality ? "passed" : stepIndex >= 4 ? "passed" : "queued",
+      value: isQuality ? 100 : stepIndex >= 5 ? 100 : 0,
+      status: isQuality ? "passed" : stepIndex >= 5 ? "passed" : "queued",
     },
     {
       name: "单元测试",
-      value: isQuality ? 100 : stepIndex >= 4 ? 68 : 0,
-      status: isQuality ? "passed" : stepIndex >= 4 ? "running" : "queued",
+      value: isQuality ? 100 : stepIndex >= 5 ? 68 : 0,
+      status: isQuality ? "passed" : stepIndex >= 5 ? "running" : "queued",
     },
     {
       name: "API 测试",
-      value: isQuality ? 80 : stepIndex >= 4 ? 42 : 0,
-      status: isQuality ? "running" : stepIndex >= 4 ? "running" : "queued",
+      value: isQuality ? 80 : stepIndex >= 5 ? 42 : 0,
+      status: isQuality ? "running" : stepIndex >= 5 ? "running" : "queued",
     },
     {
       name: "UI E2E",
-      value: isQuality ? 0 : stepIndex >= 6 || fixApproved ? 100 : 72,
-      status: (stepIndex >= 6 || fixApproved)
+      value: isQuality ? 0 : stepIndex >= 7 || fixApproved ? 100 : 72,
+      status: (stepIndex >= 7 || fixApproved)
         ? "passed"
-        : stepIndex >= 4
+        : stepIndex >= 5
           ? "running"
           : "queued",
     },
@@ -107,11 +114,21 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
       icon: MessageSquareText,
     },
     {
+      name: "Prototype Agent",
+      role: "交互原型",
+      status: stepIndex >= 2 ? "done" : stepIndex === 1 ? "running" : "review",
+      confidence: stepIndex >= 2 ? 88 : 72,
+      task: stepIndex >= 2
+        ? "HTML 原型和交接文档已生成"
+        : "准备分析 UI 变化并生成交互原型",
+      icon: LayoutTemplate,
+    },
+    {
       name: "Architect Agent",
       role: "可执行设计",
-      status: stepIndex >= 2 ? "done" : stepIndex >= 1 ? "running" : "review",
-      confidence: stepIndex >= 2 ? 93 : 82,
-      task: stepIndex >= 2
+      status: stepIndex >= 3 ? "done" : stepIndex >= 2 ? "running" : "review",
+      confidence: stepIndex >= 3 ? 93 : 82,
+      task: stepIndex >= 3
         ? "架构、数据模型和 API 契约已生成"
         : "等待技术方案设计后生成代码",
       icon: Network,
@@ -119,9 +136,9 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
     {
       name: "Frontend Agent",
       role: "交互实现",
-      status: stepIndex >= 3 ? "done" : stepIndex === 2 ? "running" : "review",
-      confidence: stepIndex >= 3 ? 90 : 74,
-      task: stepIndex >= 3
+      status: stepIndex >= 4 ? "done" : stepIndex === 3 ? "running" : "review",
+      confidence: stepIndex >= 4 ? 90 : 74,
+      task: stepIndex >= 4
         ? "页面和 mock 数据已接入"
         : "准备生成列表、详情和提醒工作流",
       icon: PanelRight,
@@ -129,13 +146,13 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
     {
       name: "Test Agent",
       role: "验证矩阵",
-      status: stepIndex >= 4 || fixApproved
+      status: stepIndex >= 5 || fixApproved
         ? "done"
-        : stepIndex >= 3
+        : stepIndex >= 4
           ? "running"
           : "review",
-      confidence: stepIndex >= 4 || fixApproved ? 94 : 78,
-      task: stepIndex >= 4 || fixApproved
+      confidence: stepIndex >= 5 || fixApproved ? 94 : 78,
+      task: stepIndex >= 5 || fixApproved
         ? "E2E、API、单测全部通过"
         : "正在把验收标准转为测试用例",
       icon: TestTube2,
@@ -143,9 +160,9 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
     {
       name: "DevOps Agent",
       role: "交付流水线",
-      status: stepIndex >= 5 ? "running" : "blocked",
-      confidence: stepIndex >= 5 ? 88 : 62,
-      task: stepIndex >= 5
+      status: stepIndex >= 6 ? "running" : "blocked",
+      confidence: stepIndex >= 6 ? 88 : 62,
+      task: stepIndex >= 6
         ? "准备构建、预发验证和交付包"
         : "等待质量门禁通过",
       icon: Rocket,
@@ -160,6 +177,8 @@ export function nextMoveText(state: AppState): string {
   switch (step) {
     case "intent":
       return "先确认 AI 对业务意图的理解,选择本轮交付模式。";
+    case "prototype":
+      return "AI 已识别需求中的 UI 变化，建议生成 HTML 原型进行确认。";
     case "plan":
       return "勾选本轮必须交付的模块,避免一开始范围过大。";
     case "coding":
@@ -230,6 +249,12 @@ export function createDefaultState(): AppState {
     activeTaskCard: null,
     todoAnswers: {},
     initialPrompts: {},
+    prototype: {
+      mode: "none",
+      status: "pending",
+      htmlPath: "",
+      handoffPath: "",
+    },
     qaReview: {
       status: "idle",
       outputLines: [],
