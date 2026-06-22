@@ -71,6 +71,49 @@ export function getIntentContent(): StageContent {
   };
 }
 
+export function getPrototypeContent(): StageContent {
+  return {
+    summary:
+      "AI 已分析需求并识别出 UI 变化类型，交互原型阶段可帮助在编码前确认页面结构和交互流程。",
+    deliverables: [
+      {
+        id: "proto-d1",
+        title: "UI 变化识别",
+        detail: "AI 已判断需求是否包含 UI 变化，以及变化类型",
+        tag: "分析",
+      },
+      {
+        id: "proto-d2",
+        title: "HTML 原型生成",
+        detail: "生成独立的中低保真 HTML 原型，可通过 iframe 直接预览",
+        tag: "原型",
+      },
+      {
+        id: "proto-d3",
+        title: "原型交接文档",
+        detail: "确认范围、保持不变的区域和交互约束",
+        tag: "交接",
+      },
+    ],
+    trajectory: [
+      {
+        id: "t1",
+        agent: "Prototype Agent",
+        action: "分析需求，判断 UI 变化类型",
+        output: "识别到 UI 变化，建议生成 HTML 原型",
+        duration: "2s",
+      },
+      {
+        id: "t2",
+        agent: "Prototype Agent",
+        action: "生成 HTML 原型和交接文档",
+        output: "prototype/index.html + 原型交接.md 已就绪",
+        duration: "5s",
+      },
+    ],
+  };
+}
+
 export function getScopeContent(): StageContent {
   return {
     summary:
@@ -487,9 +530,10 @@ export function getReleaseContent(): StageContent {
 }
 
 export function getContentForStage(stepIndex: number): StageContent {
-  const id = (["intent", "plan", "coding", "quality", "verify", "release"] as const)[stepIndex];
+  const id = (["intent", "prototype", "plan", "coding", "quality", "verify", "release"] as const)[stepIndex];
   switch (id) {
     case "intent": return getIntentContent();
+    case "prototype": return getPrototypeContent();
     case "plan": return getScopeContent();
     case "coding": return getCodingContent();
     case "quality": return getQualityContent();
