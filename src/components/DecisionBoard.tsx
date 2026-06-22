@@ -578,6 +578,7 @@ function DeliveryCollabTab({
                   prototype={state.prototype}
                   onPreview={onPreview}
                   onPatch={onPatch}
+                  onContinue={onContinue}
                   isAgentConnected={isAgentConnected}
                 />
               )}
@@ -611,6 +612,7 @@ function DeliveryCollabTab({
                 onContinue={onContinue}
                 stepIndex={state.stepIndex}
                 agentSession={agentSession}
+                prototypeState={state.prototype}
               />
             </>
           )}
@@ -637,6 +639,7 @@ function DeliveryCollabTab({
                   prototype={state.prototype}
                   onPreview={onPreview}
                   onPatch={onPatch}
+                  onContinue={onContinue}
                   isAgentConnected={isAgentConnected}
                 />
               )}
@@ -670,6 +673,7 @@ function DeliveryCollabTab({
                 onContinue={onContinue}
                 stepIndex={state.stepIndex}
                 agentSession={undefined}
+                prototypeState={state.prototype}
               />
             </>
           )}
@@ -1489,6 +1493,7 @@ function PrototypePreview({
   prototype,
   onPreview,
   onPatch,
+  onContinue,
   isAgentConnected,
 }: {
   workspacePath: string;
@@ -1496,6 +1501,7 @@ function PrototypePreview({
   prototype: import("../data/types").PrototypeState;
   onPreview: (content: DrawerContent) => void;
   onPatch: (patch: Partial<AppState>) => void;
+  onContinue: () => void;
   isAgentConnected: boolean;
 }) {
   const [loadingHtml, setLoadingHtml] = useState(false);
@@ -1586,12 +1592,15 @@ function PrototypePreview({
         >
           <ExternalLink size={14} /> 新窗口打开
         </button>
-        {prototype.status !== "approved" && prototype.htmlPath && (
+        {prototype.status !== "approved" && (
           <button
             className="todo-submit-btn"
             type="button"
             style={{ background: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
-            onClick={() => onPatch({ prototype: { ...prototype, status: "approved" } })}
+            onClick={() => {
+              onPatch({ prototype: { ...prototype, status: "approved" } });
+              onContinue();
+            }}
           >
             <CheckCircle2 size={14} /> 确认原型，进入技术设计
           </button>
@@ -1813,6 +1822,7 @@ function TodoSection({
   onContinue,
   stepIndex,
   agentSession,
+  prototypeState,
 }: {
   todos: TodoItem[];
   todoAnswers: Record<number, string | string[]>;
@@ -1823,6 +1833,7 @@ function TodoSection({
   onContinue: () => void;
   stepIndex: number;
   agentSession?: { id: string; completed?: boolean; isStreaming?: boolean };
+  prototypeState?: import("../data/types").PrototypeState;
 }) {
   if (todos.length === 0) return null;
 
@@ -1858,6 +1869,14 @@ function TodoSection({
         const qualitySessionExists = agentSession && agentSession.id;
         const qualitySessionRunning = qualitySessionExists && !agentSession.completed;
         if (!qualitySessionRunning) {
+          setQaUncheckedWarning(true);
+          return;
+        }
+      }
+
+      // prototype 阶段：若原型未确认，阻止进入下一阶段
+      if (stepId === "prototype" && allChoiceAdvance) {
+        if (!prototypeState || prototypeState.status !== "approved") {
           setQaUncheckedWarning(true);
           return;
         }
@@ -1936,11 +1955,15 @@ function TodoSection({
         />
       </div>
 
-      {/* quality 阶段 QA 未检查警告 */}
+      {/* quality / prototype 阶段未完成警告 */}
       {qaUncheckedWarning && (
         <div className="qa-unchecked-warning">
           <AlertTriangle size={14} />
-          <span>质量 QA 审查尚未执行，请先完成质量审查后再进入下一阶段</span>
+          <span>
+            {stepId === "prototype"
+              ? "交互原型尚未确认，请先预览并确认原型后再进入下一阶段"
+              : "质量 QA 审查尚未执行，请先完成质量审查后再进入下一阶段"}
+          </span>
         </div>
       )}
 
