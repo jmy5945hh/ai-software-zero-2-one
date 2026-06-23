@@ -61,15 +61,24 @@ export const workflow: WorkflowStep[] = [
   },
 ];
 
-export function getWorkflowStepIndex(stepId: string | undefined, fallback?: number): number {
-  const index = workflow.findIndex((step) => step.id === stepId);
+export function getTaskWorkflow(prototype: AppState["prototype"]): WorkflowStep[] {
+  const includesPrototype = prototype.mode !== "none" && prototype.status !== "skipped";
+  return includesPrototype ? workflow : workflow.filter((step) => step.id !== "prototype");
+}
+
+export function getWorkflowStepIndex(
+  stepId: string | undefined,
+  fallback?: number,
+  steps: WorkflowStep[] = workflow,
+): number {
+  const index = steps.findIndex((step) => step.id === stepId);
   if (index >= 0) return index;
-  return Math.max(0, Math.min(fallback ?? 0, workflow.length - 1));
+  return Math.max(0, Math.min(fallback ?? 0, steps.length - 1));
 }
 
 // ── 阶段列表 ────────────────────────────────
-export function getStages(stepIndex: number): Stage[] {
-  return workflow.map((step, index) => ({
+export function getStages(stepIndex: number, steps: WorkflowStep[] = workflow): Stage[] {
+  return steps.map((step, index) => ({
     label: step.label,
     detail: step.detail,
     status: (index < stepIndex
@@ -84,8 +93,9 @@ export function getStages(stepIndex: number): Stage[] {
 // ── 质量门禁数据 ────────────────────────────
 export function getGates(state: AppState): Gate[] {
   const { fixApproved, stepIndex } = state;
-  const qualityIndex = getWorkflowStepIndex("quality");
-  const releaseIndex = getWorkflowStepIndex("release");
+  const steps = getTaskWorkflow(state.prototype);
+  const qualityIndex = getWorkflowStepIndex("quality", undefined, steps);
+  const releaseIndex = getWorkflowStepIndex("release", undefined, steps);
   const isQuality = stepIndex >= qualityIndex;
   return [
     {
@@ -116,19 +126,25 @@ export function getGates(state: AppState): Gate[] {
 }
 
 // ── Agent 数据 ──────────────────────────────
-export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
-  const prototypeIndex = getWorkflowStepIndex("prototype");
-  const planIndex = getWorkflowStepIndex("plan");
-  const codingIndex = getWorkflowStepIndex("coding");
-  const qualityIndex = getWorkflowStepIndex("quality");
-  const releaseIndex = getWorkflowStepIndex("release");
+export function getAgents(
+  stepIndex: number,
+  fixApproved: boolean,
+  steps: WorkflowStep[] = workflow,
+): Agent[] {
+  const hasPrototype = steps.some((step) => step.id === "prototype");
+  const prototypeIndex = getWorkflowStepIndex("prototype", undefined, steps);
+  const planIndex = getWorkflowStepIndex("plan", undefined, steps);
+  const codingIndex = getWorkflowStepIndex("coding", undefined, steps);
+  const qualityIndex = getWorkflowStepIndex("quality", undefined, steps);
+  const releaseIndex = getWorkflowStepIndex("release", undefined, steps);
+  const intentCompletionIndex = hasPrototype ? prototypeIndex : planIndex;
   const agents: Agent[] = [
     {
       name: "Product Agent",
       role: "意图澄清",
-      status: stepIndex >= prototypeIndex ? "done" : "running",
-      confidence: stepIndex >= prototypeIndex ? 96 : 68,
-      task: stepIndex >= prototypeIndex
+      status: stepIndex >= intentCompletionIndex ? "done" : "running",
+      confidence: stepIndex >= intentCompletionIndex ? 96 : 68,
+      task: stepIndex >= intentCompletionIndex
         ? "已沉淀业务目标、角色和边界"
         : "正在从一句话中抽取业务对象",
       icon: MessageSquareText,
@@ -188,12 +204,12 @@ export function getAgents(stepIndex: number, fixApproved: boolean): Agent[] {
       icon: Rocket,
     },
   ];
-  return agents;
+  return hasPrototype ? agents : agents.filter((agent) => agent.name !== "Prototype Agent");
 }
 
 // ── 下一步操作提示 ──────────────────────────
 export function nextMoveText(state: AppState): string {
-  const step = workflow[state.stepIndex].id;
+  const step = getTaskWorkflow(state.prototype)[state.stepIndex]?.id;
   switch (step) {
     case "intent":
       return "先确认 AI 对业务意图的理解,选择本轮交付模式。";

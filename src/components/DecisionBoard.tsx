@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
 import { useStepKey } from "../hooks";
-import { workflow, getContentForStage } from "../data";
+import { workflow, getContentForStage, getTaskWorkflow, parsePrototypeManifest } from "../data";
 import type {
   TrajectoryTurn,
 } from "../data/stageContent";
@@ -131,9 +131,10 @@ export function DecisionBoard({
   workspaceInitStatus,
   onRetryClone,
 }: DecisionBoardProps) {
-  const step = workflow[state.stepIndex];
+  const taskWorkflow = getTaskWorkflow(state.prototype);
+  const step = taskWorkflow[state.stepIndex];
   const stepKey = useStepKey(state.stepIndex);
-  const content = getContentForStage(state.stepIndex);
+  const content = getContentForStage(state.stepIndex, taskWorkflow);
   const hasRestoredHistory = useMemo(
     () => Object.values(restoredSessions).some((s) => s.messages.length > 0),
     [restoredSessions],
@@ -1557,7 +1558,7 @@ function PrototypePreview({
         if (!res.ok) throw new Error("未找到原型产物清单");
         const data = await res.json() as { content?: string };
         const manifest = parsePrototypeManifest(data.content, sessionId);
-        if (!manifest) throw new Error("原型产物清单格式不正确");
+        if (!manifest || manifest.status === "pending") throw new Error("原型产物尚未生成完成");
         if (cancelled) return;
 
         const changed = prototype.mode !== manifest.mode
@@ -1668,32 +1669,6 @@ function PrototypePreview({
       </div>
     </div>
   );
-}
-
-function parsePrototypeManifest(content: string | undefined, sessionId: string): AppState["prototype"] | null {
-  if (!content) return null;
-  try {
-    const value = JSON.parse(content) as Partial<AppState["prototype"]>;
-    const validMode = value.mode === "none" || value.mode === "new-page" || value.mode === "existing-change";
-    const validStatus = value.status === "reviewing" || value.status === "skipped";
-    if (!validMode || !validStatus) return null;
-    if (value.status === "reviewing") {
-      if (value.mode === "none") return null;
-      const expectedHtmlPath = `prototype/${sessionId}/index.html`;
-      const expectedHandoffPath = `prototype/${sessionId}/原型交接.md`;
-      if (value.htmlPath !== expectedHtmlPath || value.handoffPath !== expectedHandoffPath) return null;
-    } else if (value.mode !== "none" || value.htmlPath || value.handoffPath) {
-      return null;
-    }
-    return {
-      mode: value.mode,
-      status: value.status,
-      htmlPath: value.htmlPath || "",
-      handoffPath: value.handoffPath || "",
-    };
-  } catch {
-    return null;
-  }
 }
 
 // ── 文件变更按钮 ─────────────────────────────
@@ -2348,11 +2323,21 @@ function TrajectoryChatTab({
     if (pendingAutoMessage && isAgentConnected) {
       const msg = pendingAutoMessage;
       onConsumeAutoMessage();
-      requestAnimationFrame(() => {
-        agentSteer(stepId, msg);
-      });
+      // 如果有 pending question，走 answer + continue 流程，避免 agentSteer 破坏问答上下文
+      if (hasPendingQuestion(agentSession) && agentAnswerQuestion && agentContinueQuestion) {
+        console.log("[DecisionBoard] pendingAutoMessage — pending question detected, routing as answer + continue");
+        agentAnswerQuestion(stepId, msg).then(() => {
+          return agentContinueQuestion(stepId);
+        }).catch((err) => {
+          console.error("[DecisionBoard] pendingAutoMessage — answer question failed:", err);
+        });
+      } else {
+        requestAnimationFrame(() => {
+          agentSteer(stepId, msg);
+        });
+      }
     }
-  }, [pendingAutoMessage, isAgentConnected, stepId, agentSteer, onConsumeAutoMessage]);
+  }, [pendingAutoMessage, isAgentConnected, stepId, agentSteer, agentAnswerQuestion, agentContinueQuestion, agentSession, onConsumeAutoMessage]);
 
   // 跳转到指定轮次（来自交付协作模块的"跳转到最新一轮"）
   useEffect(() => {
@@ -2376,13 +2361,29 @@ function TrajectoryChatTab({
 
   const handleSend = () => {
     const text = input.trim();
-    console.log("[DecisionBoard] handleSend", { text, stepId, isAgentConnected, hasIntent: !!intent });
+    console.log("[DecisionBoard] handleSend", { text, stepId, isAgentConnected, hasIntent: !!intent, hasPendingQuestion: hasPendingQuestion(agentSession) });
     if (!text) return;
     if (!isAgentConnected) {
       console.warn("[DecisionBoard] handleSend — agent not connected, keeping input");
       return; // 不清空输入，让用户知道未连接
     }
     setInput("");
+
+    // 如果 Agent 正在等待用户回答问题（ask_user_question 工具 running），
+    // 则将聊天输入框的内容作为问题的自定义回答，走 answerQuestion → continueQuestion 流程，
+    // 避免走 agentSteer 导致上下文丢失或流程卡死。
+    if (hasPendingQuestion(agentSession) && agentAnswerQuestion && agentContinueQuestion) {
+      console.log("[DecisionBoard] handleSend — pending question detected, routing as answer + continue");
+      agentAnswerQuestion(stepId, text).then(() => {
+        return agentContinueQuestion(stepId);
+      }).catch((err) => {
+        console.error("[DecisionBoard] handleSend — answer question failed:", err);
+        // 失败时放回输入框，让用户重试
+        setInput(text);
+      });
+      return;
+    }
+
     console.log("[DecisionBoard] handleSend — calling agentSteer", { stepId, text: text.slice(0, 50), intent });
     agentSteer(stepId, text, intent);
   };
@@ -3145,6 +3146,8 @@ function AskUserQuestionCard({
 
   // 如果已有 result（已回答过），显示结果
   const alreadyAnswered = tc.status === "done" && tc.result;
+  // 如果工具执行出错（如超时），问答已不可用
+  const questionErrored = tc.status === "error";
 
   // 自动 resume：仅在组件挂载时（历史恢复场景）触发一次。
   // 使用 useRef 记录初始值，后续 alreadyAnswered 变化（live 流中工具完成）不触发。
@@ -3165,7 +3168,14 @@ function AskUserQuestionCard({
   }, [alreadyAnswered, agentResumeQuestion, stepId, tc.result]);
 
   const handleSelectOption = async (opt: string) => {
-    if (!stepId || !agentAnswerQuestion) return;
+    if (!stepId) {
+      console.warn("[AskUserQuestionCard] handleSelectOption — stepId is missing, cannot answer");
+      return;
+    }
+    if (!agentAnswerQuestion) {
+      console.warn("[AskUserQuestionCard] handleSelectOption — agentAnswerQuestion is missing, cannot answer");
+      return;
+    }
     setAnswer(opt);
     setSubmitting(true);
     try {
@@ -3175,15 +3185,26 @@ function AskUserQuestionCard({
       if (agentContinueQuestion) {
         await agentContinueQuestion(stepId);
       }
-    } catch {
-      // 错误由 ws 层处理
+    } catch (err) {
+      console.error("[AskUserQuestionCard] handleSelectOption failed:", err);
+      // 失败时重置状态，让用户重试
+      setSubmitted(false);
+      setAnswer("");
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleSubmit = async () => {
-    if (!answer.trim() || !stepId || !agentAnswerQuestion) return;
+    if (!answer.trim()) return;
+    if (!stepId) {
+      console.warn("[AskUserQuestionCard] handleSubmit — stepId is missing, cannot answer");
+      return;
+    }
+    if (!agentAnswerQuestion) {
+      console.warn("[AskUserQuestionCard] handleSubmit — agentAnswerQuestion is missing, cannot answer");
+      return;
+    }
     setSubmitting(true);
     try {
       await agentAnswerQuestion(stepId, answer.trim());
@@ -3192,20 +3213,29 @@ function AskUserQuestionCard({
       if (agentContinueQuestion) {
         await agentContinueQuestion(stepId);
       }
-    } catch {
-      // 错误由 ws 层处理
+    } catch (err) {
+      console.error("[AskUserQuestionCard] handleSubmit failed:", err);
+      // 失败时重置状态，让用户重试
+      setSubmitted(false);
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleContinue = async () => {
-    if (!stepId || !agentContinueQuestion) return;
+    if (!stepId) {
+      console.warn("[AskUserQuestionCard] handleContinue — stepId is missing, cannot continue");
+      return;
+    }
+    if (!agentContinueQuestion) {
+      console.warn("[AskUserQuestionCard] handleContinue — agentContinueQuestion is missing, cannot continue");
+      return;
+    }
     setContinuing(true);
     try {
       await agentContinueQuestion(stepId);
-    } catch {
-      // 错误由 ws 层处理
+    } catch (err) {
+      console.error("[AskUserQuestionCard] handleContinue failed:", err);
     } finally {
       setContinuing(false);
     }
@@ -3243,7 +3273,7 @@ function AskUserQuestionCard({
             <span className="tl-tool-name">向您提问</span>
           </div>
           <span className="tl-tool-subtitle">
-            {alreadyAnswered ? "已回答" : submitted ? "已提交，等待继续" : "等待您的回答"}
+            {questionErrored ? "问答已超时/出错" : alreadyAnswered ? "已回答" : submitted ? "已提交，等待继续" : "等待您的回答"}
           </span>
         </div>
         <span className={`tl-tool-status ${tc.status}`}>
@@ -3269,7 +3299,13 @@ function AskUserQuestionCard({
             </div>
             <div className="ask-question-text">{question}</div>
 
-            {alreadyAnswered ? (
+            {questionErrored ? (
+              <div className="ask-question-answered" style={{ opacity: 0.7 }}>
+                <div className="ask-question-answer-label" style={{ color: "var(--color-error, #e74c3c)" }}>
+                  此问答已失效（超时或 Agent 已终止）。请使用下方聊天输入框发送消息继续对话。
+                </div>
+              </div>
+            ) : alreadyAnswered ? (
               <div className="ask-question-answered">
                 <div className="ask-question-answer-label">您的回答：</div>
                 <div className="ask-question-answer-value">{tc.result}</div>

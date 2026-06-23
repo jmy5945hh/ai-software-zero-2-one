@@ -2,7 +2,14 @@ import { useEffect, useMemo, useRef, useCallback, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useStoredState } from "../hooks/useStoredState";
 import { useAgent } from "../agent";
-import { getWorkflowStepIndex, titleFromIntent, workflow } from "../data";
+import {
+  getPrototypeArtifactPaths,
+  getTaskWorkflow,
+  getWorkflowStepIndex,
+  parsePrototypeManifest,
+  titleFromIntent,
+} from "../data";
+import { agentFetch } from "../agent/config";
 
 import type { DrawerContent, AppState } from "../data/types";
 import type { ConnectionStatus } from "../agent/types";
@@ -48,6 +55,13 @@ export function TaskPage() {
     sessionRecords.loadRecord(urlTaskId).then((record) => {
       if (!record) return;
 
+      const prototype = record.prototype || {
+        mode: "none" as const,
+        status: "pending" as const,
+        htmlPath: "",
+        handoffPath: "",
+      };
+      const taskWorkflow = getTaskWorkflow(prototype);
       setState((previous) => ({
         ...previous,
         intent: record.intent,
@@ -55,7 +69,7 @@ export function TaskPage() {
         runtimeMode: (record as any).runtimeMode || "local",
         gitRepo: (record as any).gitRepo,
         localGit: record.localGit,
-        stepIndex: getWorkflowStepIndex(record.activeStage, record.stepIndex),
+        stepIndex: getWorkflowStepIndex(record.activeStage, record.stepIndex, taskWorkflow),
         activeStage: record.activeStage as AppState["activeStage"],
         notes: record.notes,
         todoAnswers: record.todoAnswers,
@@ -98,12 +112,7 @@ export function TaskPage() {
             resultContent: "",
           };
         })(),
-        prototype: record.prototype || {
-          mode: "none",
-          status: "pending",
-          htmlPath: "",
-          handoffPath: "",
-        },
+        prototype,
         view: "workspace",
       }));
     });
@@ -253,14 +262,19 @@ export function TaskPage() {
     [state.intent],
   );
 
+  const taskWorkflow = useMemo(
+    () => getTaskWorkflow(state.prototype),
+    [state.prototype],
+  );
+
   const progress = useMemo(
     () =>
       Math.round(
         ((state.stepIndex + (state.releaseApproved ? 1 : 0)) /
-          workflow.length) *
+          taskWorkflow.length) *
         100,
       ),
-    [state.stepIndex, state.releaseApproved],
+    [state.stepIndex, state.releaseApproved, taskWorkflow.length],
   );
 
   const patchState = useCallback(
@@ -268,6 +282,24 @@ export function TaskPage() {
       setState((previous) => ({ ...previous, ...patch })),
     [setState],
   );
+
+  const readPrototypeDecision = useCallback(async () => {
+    if (!taskId || !state.workspacePath) return null;
+    try {
+      const paths = getPrototypeArtifactPaths(taskId);
+      const params = new URLSearchParams({
+        path: state.workspacePath,
+        taskId,
+        file: paths.manifestPath,
+      });
+      const res = await agentFetch(`/specs-file?${params.toString()}`);
+      if (!res.ok) return null;
+      const data = await res.json() as { content?: string };
+      return parsePrototypeManifest(data.content, taskId);
+    } catch {
+      return null;
+    }
+  }, [taskId, state.workspacePath]);
 
   const openDrawer = useCallback(
     (content: DrawerContent) => setDrawerContent(content),
@@ -280,7 +312,7 @@ export function TaskPage() {
     (report: string) => {
       if (!isAgentConnected) return;
       // 先推进到 verify 阶段
-      const verifyIndex = workflow.findIndex((s) => s.id === "verify");
+      const verifyIndex = taskWorkflow.findIndex((s) => s.id === "verify");
       patchState({
         stepIndex: verifyIndex,
         activeStage: "verify",
@@ -291,7 +323,7 @@ export function TaskPage() {
         agent.prompt("verify", fixPrompt);
       });
     },
-    [isAgentConnected, agent, state.intent, state.workspacePath, state.gitRepo, patchState],
+    [isAgentConnected, agent, state.intent, state.workspacePath, state.gitRepo, patchState, taskWorkflow],
   );
 
   // ── Agent session 生命周期 ──
@@ -307,7 +339,7 @@ export function TaskPage() {
     ) {
       sessionInitRef.current = true;
 
-      const intentPrompt = `请分析以下业务意图，识别核心业务对象、角色和场景：\n\n${state.intent}`;
+      const intentPrompt = getStepPrompt("intent", state.intent, taskId);
       patchState({
         initialPrompts: { ...state.initialPrompts, intent: intentPrompt },
       });
@@ -350,20 +382,48 @@ export function TaskPage() {
     }
   }, [isAgentConnected, state.stepIndex, state.intent, state.initialPrompts, patchState, state.runtimeMode]);
 
+  // 需求分析完成后读取 UI 变化决策，据此决定任务工作流是否包含交互原型。
+  useEffect(() => {
+    const intentSession = agent.sessions.intent;
+    if (!taskId || !state.workspacePath || !intentSession?.completed) return;
+    if (state.prototype.mode !== "none" || state.prototype.status === "skipped") return;
+
+    let cancelled = false;
+    void readPrototypeDecision().then((prototype) => {
+      if (!cancelled && prototype) patchState({ prototype });
+    });
+    return () => { cancelled = true; };
+  }, [agent.sessions.intent, taskId, state.workspacePath, state.prototype, patchState, readPrototypeDecision]);
+
   const continueTask = useCallback(async () => {
-    const nextIndex = Math.min(state.stepIndex + 1, workflow.length - 1);
-    const nextStep = workflow[nextIndex];
+    let effectivePrototype = state.prototype;
+    if (state.activeStage === "intent" && state.prototype.mode === "none" && state.prototype.status === "pending") {
+      const decision = await readPrototypeDecision();
+      if (!decision) {
+        const manifestPath = taskId ? getPrototypeArtifactPaths(taskId).manifestPath : "prototype.json";
+        await agent.prompt(
+          "intent",
+          `需求分析尚未生成工作流决策。请根据当前需求判断是否包含用户可见的 UI 变化，并按初始要求写入 specs/${manifestPath}。`,
+        );
+        return;
+      }
+      effectivePrototype = decision;
+      patchState({ prototype: decision });
+    }
+    const effectiveWorkflow = getTaskWorkflow(effectivePrototype);
+    const nextIndex = Math.min(state.stepIndex + 1, effectiveWorkflow.length - 1);
+    const nextStep = effectiveWorkflow[nextIndex];
 
     if (isAgentConnected && taskId && nextStep.id !== "quality") {
       // quality 阶段不走 Agent session 逻辑，直接触发 CLI 命令
       const prototype = nextStep.id === "prototype"
         ? {
-            mode: "none" as const,
+            mode: effectivePrototype.mode,
             status: "generating" as const,
             htmlPath: `prototype/${taskId}/index.html`,
             handoffPath: `prototype/${taskId}/原型交接.md`,
           }
-        : state.prototype;
+        : effectivePrototype;
       const promptText = getStepPrompt(nextStep.id, state.intent, taskId, prototype);
 
       patchState({
@@ -393,12 +453,12 @@ export function TaskPage() {
       } : {}),
     });
     window.scrollTo({ top: 0 });
-  }, [state.stepIndex, state.intent, state.initialPrompts, state.prototype, isAgentConnected, taskId, agent, patchState, state.codeConfirmed]);
+  }, [state.stepIndex, state.activeStage, state.intent, state.initialPrompts, state.prototype, isAgentConnected, taskId, agent, patchState, state.codeConfirmed, readPrototypeDecision]);
 
   const handleStepClick = (index: number) => {
     // 已完成阶段可回看；未来阶段必须通过当前阶段的门禁顺序推进。
     if (index > state.stepIndex) return;
-    const targetStage = workflow[index].id;
+    const targetStage = taskWorkflow[index].id;
     patchState({
       stepIndex: index,
       activeStage: targetStage,
@@ -445,7 +505,7 @@ export function TaskPage() {
   return (
     <main className="workspace-shell">
       <SopNav
-        workflow={workflow}
+        workflow={taskWorkflow}
         stepIndex={state.stepIndex}
         progress={progress}
         onStepClick={handleStepClick}
@@ -502,6 +562,7 @@ export function TaskPage() {
               intent={state.intent}
               workspacePath={state.workspacePath}
               sessionId={state.sessionId}
+              runtimeMode={state.runtimeMode}
               repoExplorerOpen={repoExplorerOpen}
               onCloseRepoExplorer={() => setRepoExplorerOpen(null)}
             />
@@ -574,9 +635,9 @@ function getStepPrompt(
 ): string {
   switch (step) {
     case "intent":
-      return `请分析以下业务意图，识别核心业务对象、角色和场景，并生成Spec 文档：\n\n${intent}`;
+      return `请分析以下业务意图，识别核心业务对象、角色和场景，并生成 Spec 文档。\n\n同时判断本任务是否包含需要用户确认的 UI 页面或交互变化，并将工作流决策写入 specs/prototype/${taskId || "unknown"}/prototype.json。\n\n如果包含 UI 变化，请写入：\n{\"mode\":\"new-page 或 existing-change\",\"status\":\"pending\",\"htmlPath\":\"prototype/${taskId || "unknown"}/index.html\",\"handoffPath\":\"prototype/${taskId || "unknown"}/原型交接.md\"}\n\n如果不包含 UI 变化，请写入：\n{\"mode\":\"none\",\"status\":\"skipped\",\"htmlPath\":\"\",\"handoffPath\":\"\"}\n\n业务意图：\n${intent}`;
     case "prototype":
-      return `请分析以下需求，判断是否包含 UI 变化。当前任务 ID：${taskId || "unknown"}。\n\n本阶段的产物目录固定为 specs/prototype/${taskId || "unknown"}/，不得写入其他 prototype 目录。\n\n如果**不包含** UI 变化（纯后端/数据/逻辑任务），请写入 prototype.json：\n{\"mode\":\"none\",\"status\":\"skipped\",\"htmlPath\":\"\",\"handoffPath\":\"\"}\n并回复当前需求无需生成交互原型。\n\n如果**包含** UI 变化，请先用 ask_user_question 确认原型模式（新页面 or 已有页面修改），生成 index.html、原型交接.md，并写入 prototype.json：\n{\"mode\":\"new-page 或 existing-change\",\"status\":\"reviewing\",\"htmlPath\":\"${prototype?.htmlPath || ""}\",\"handoffPath\":\"${prototype?.handoffPath || ""}\"}\n\n业务意图：${intent}`;
+      return `需求分析已确认本任务包含 UI 变化，建议原型模式为 ${prototype?.mode || "existing-change"}。当前任务 ID：${taskId || "unknown"}。\n\n本阶段的产物目录固定为 specs/prototype/${taskId || "unknown"}/，不得写入其他 prototype 目录。请先用 ask_user_question 让用户确认原型模式（新页面 or 已有页面修改），然后生成 index.html、原型交接.md，并写入 prototype.json：\n{\"mode\":\"用户确认后的 new-page 或 existing-change\",\"status\":\"reviewing\",\"htmlPath\":\"${prototype?.htmlPath || ""}\",\"handoffPath\":\"${prototype?.handoffPath || ""}\"}\n\n业务意图：${intent}`;
     case "plan":
       return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围，生成对应的技术方案文档。${prototype?.handoffPath ? `\n\n原型已确认，请读取 specs/${prototype.handoffPath} 并遵守其中的确认范围和交互约束。` : ""}\n\n业务意图：${intent}`;
     case "coding":

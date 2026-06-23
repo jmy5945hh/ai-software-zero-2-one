@@ -13,7 +13,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { DiffViewer } from "./DiffViewer";
-import { agentFetch } from "../agent/config";
+import { agentFetch, getAgentHttpOrigin } from "../agent/config";
+import type { RuntimeMode } from "../types/runtime";
 
 type TreeNode = {
   name: string;
@@ -32,6 +33,7 @@ type DiffFileInfo = {
 type RepoExplorerProps = {
   workspacePath: string;
   taskId?: string;
+  runtimeMode?: RuntimeMode;
   initialTab?: RepoTab;
 };
 
@@ -81,7 +83,7 @@ function buildFileTree(files: DiffFileInfo[]): TreeNode[] {
  * RepoExplorer — 浏览项目仓库目录（排除 specs 目录），
  * 支持切换「目录树」和「代码 Diff」两种视图。
  */
-export function RepoExplorer({ workspacePath, taskId, initialTab = "tree" }: RepoExplorerProps) {
+export function RepoExplorer({ workspacePath, taskId, runtimeMode = "local", initialTab = "tree" }: RepoExplorerProps) {
   const [tab, setTab] = useState<RepoTab>(initialTab);
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,19 +99,29 @@ export function RepoExplorer({ workspacePath, taskId, initialTab = "tree" }: Rep
   const [rollbackLoading, setRollbackLoading] = useState(false);
   const [rollbackMessage, setRollbackMessage] = useState("");
   const [rollbackReady, setRollbackReady] = useState(false);
+  const agentUrl = useCallback(
+    (endpoint: string) => `${getAgentHttpOrigin(runtimeMode)}${endpoint}`,
+    [runtimeMode],
+  );
 
   const loadRollbackStatus = useCallback(async () => {
     if (!taskId) return;
     setRollbackLoading(true);
     try {
-      const res = await agentFetch(`/rollback/status?taskId=${encodeURIComponent(taskId)}`);
+      const res = await agentFetch(agentUrl(`/rollback/status?taskId=${encodeURIComponent(taskId)}`), {}, runtimeMode);
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "回退状态加载失败");
       setCheckpoints(data.checkpoints || []);
       setRollbackReady(data.ready === true);
+      setRollbackMessage("");
+    } catch (err) {
+      setCheckpoints([]);
+      setRollbackReady(false);
+      setRollbackMessage(err instanceof Error ? err.message : "回退状态加载失败");
     } finally {
       setRollbackLoading(false);
     }
-  }, [taskId]);
+  }, [taskId, agentUrl, runtimeMode]);
 
   const applyRollback = useCallback(async (
     params: { type: "round" | "file" | "task"; checkpointId?: string; filePath?: string },
@@ -119,18 +131,19 @@ export function RepoExplorer({ workspacePath, taskId, initialTab = "tree" }: Rep
     setRollbackLoading(true);
     setRollbackMessage("");
     try {
-      const res = await agentFetch("/rollback/apply", {
+      const res = await agentFetch(agentUrl("/rollback/apply"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ taskId, ...params }),
-      });
+      }, runtimeMode);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "回退失败");
       setRollbackMessage("已恢复文件状态");
       const diffParams = new URLSearchParams({ path: workspacePath });
       if (taskId) diffParams.set("taskId", taskId);
-      const diffRes = await agentFetch(`/repo-diff-files?${diffParams.toString()}`);
+      const diffRes = await agentFetch(agentUrl(`/repo-diff-files?${diffParams.toString()}`), {}, runtimeMode);
       const diffData = await diffRes.json();
+      if (!diffRes.ok) throw new Error(diffData.error || "文件状态刷新失败");
       const files: DiffFileInfo[] = diffData.files || [];
       setDiffFiles(files);
       setSelectedDiffFile((current) => files.some((file) => file.path === current) ? current : files[0]?.path || null);
@@ -139,7 +152,7 @@ export function RepoExplorer({ workspacePath, taskId, initialTab = "tree" }: Rep
     } finally {
       setRollbackLoading(false);
     }
-  }, [taskId, workspacePath]);
+  }, [taskId, workspacePath, agentUrl, runtimeMode]);
 
   // 拖拽调整左右分栏宽度
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -171,7 +184,7 @@ export function RepoExplorer({ workspacePath, taskId, initialTab = "tree" }: Rep
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    agentFetch(`/repo-tree?path=${encodeURIComponent(workspacePath)}`)
+    agentFetch(agentUrl(`/repo-tree?path=${encodeURIComponent(workspacePath)}`), {}, runtimeMode)
       .then((r) => {
         if (!r.ok) throw new Error("Server error");
         return r.json();
@@ -186,7 +199,7 @@ export function RepoExplorer({ workspacePath, taskId, initialTab = "tree" }: Rep
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [workspacePath]);
+  }, [workspacePath, agentUrl, runtimeMode]);
 
   // 加载 diff
   const loadDiff = useCallback(async () => {
@@ -194,7 +207,8 @@ export function RepoExplorer({ workspacePath, taskId, initialTab = "tree" }: Rep
     try {
       const params = new URLSearchParams({ path: workspacePath });
       if (taskId) params.set("taskId", taskId);
-      const res = await agentFetch(`/repo-diff-files?${params.toString()}`);
+      const res = await agentFetch(agentUrl(`/repo-diff-files?${params.toString()}`), {}, runtimeMode);
+      if (!res.ok) throw new Error("Diff 加载失败");
       const data = await res.json();
       const files: DiffFileInfo[] = data.files || [];
       setDiffFiles(files);
@@ -210,12 +224,13 @@ export function RepoExplorer({ workspacePath, taskId, initialTab = "tree" }: Rep
     } finally {
       setDiffLoading(false);
     }
-  }, [workspacePath, taskId]);
+  }, [workspacePath, taskId, agentUrl, runtimeMode]);
 
   // 切换到 diff tab 时自动加载
   useEffect(() => {
     if (tab === "diff") {
       loadDiff();
+      loadRollbackStatus();
     } else if (tab === "rollback") {
       loadRollbackStatus();
     }
@@ -227,7 +242,9 @@ export function RepoExplorer({ workspacePath, taskId, initialTab = "tree" }: Rep
       setSelectedFile(filePath);
       try {
         const res = await agentFetch(
-          `/repo-file?path=${encodeURIComponent(workspacePath)}&file=${encodeURIComponent(filePath)}`,
+          agentUrl(`/repo-file?path=${encodeURIComponent(workspacePath)}&file=${encodeURIComponent(filePath)}`),
+          {},
+          runtimeMode,
         );
         const data = await res.json();
         setFileContent(data.content || "");
@@ -235,7 +252,7 @@ export function RepoExplorer({ workspacePath, taskId, initialTab = "tree" }: Rep
         setFileContent("// 读取失败");
       }
     },
-    [workspacePath],
+    [workspacePath, agentUrl, runtimeMode],
   );
 
   // Get selected diff content
@@ -388,7 +405,8 @@ export function RepoExplorer({ workspacePath, taskId, initialTab = "tree" }: Rep
                         <button
                           className="ghost-button small"
                           type="button"
-                          disabled={rollbackLoading}
+                          disabled={!rollbackReady || rollbackLoading}
+                          title={rollbackReady ? "恢复到任务开始前" : "当前任务没有可用的文件回退基线"}
                           onClick={() => applyRollback(
                             { type: "file", filePath: selectedDiff.path },
                             `将 ${selectedDiff.path} 恢复到任务开始前？`,

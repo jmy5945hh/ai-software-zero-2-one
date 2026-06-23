@@ -2,12 +2,14 @@ import { useState, useCallback, useEffect } from "react";
 import { FileText, Code2, History, X } from "lucide-react";
 import { SpecsExplorer } from "./SpecsExplorer";
 import { RepoExplorer, type RepoTab } from "./RepoExplorer";
+import type { RuntimeMode } from "../types/runtime";
 
 type ExplorerMode = "specs" | "repo" | null;
 
 type WorkspaceExplorerProps = {
   workspacePath: string;
   taskId?: string;
+  runtimeMode?: RuntimeMode;
   /** 外部触发打开 repo explorer */
   repoExplorerOpen?: RepoTab | null;
   /** 关闭 repo explorer */
@@ -19,7 +21,7 @@ type WorkspaceExplorerProps = {
  * 展示两个按钮：展开 specs 文档 / 展开项目代码仓库。
  * 点击后展开对应的全屏覆盖式页面。
  */
-export function WorkspaceExplorer({ workspacePath, taskId, repoExplorerOpen, onCloseRepoExplorer }: WorkspaceExplorerProps) {
+export function WorkspaceExplorer({ workspacePath, taskId, runtimeMode, repoExplorerOpen, onCloseRepoExplorer }: WorkspaceExplorerProps) {
   const [mode, setMode] = useState<ExplorerMode>(null);
   const [repoTab, setRepoTab] = useState<RepoTab>("tree");
 
@@ -103,7 +105,7 @@ export function WorkspaceExplorer({ workspacePath, taskId, repoExplorerOpen, onC
             </button>
           </div>
           <div className="workspace-explorer-body">
-            <RepoExplorer key={repoTab} workspacePath={workspacePath} taskId={taskId} initialTab={repoTab} />
+            <RepoExplorer key={repoTab} workspacePath={workspacePath} taskId={taskId} runtimeMode={runtimeMode} initialTab={repoTab} />
           </div>
         </div>
       )}

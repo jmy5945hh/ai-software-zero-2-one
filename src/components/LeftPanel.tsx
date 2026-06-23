@@ -6,6 +6,7 @@ import { categoryMeta, priorityLabel } from "../data";
 import type { SessionState } from "../agent/types";
 import { WorkspaceExplorer } from "./WorkspaceExplorer";
 import type { RepoTab } from "./RepoExplorer";
+import type { RuntimeMode } from "../types/runtime";
 
 type LeftPanelProps = {
   activeTaskCard: TaskCard | null;
@@ -20,6 +21,7 @@ type LeftPanelProps = {
   workspacePath?: string;
   /** 当前会话 sessionId */
   sessionId?: string;
+  runtimeMode?: RuntimeMode;
   /** 外部触发打开 repo explorer */
   repoExplorerOpen?: RepoTab | null;
   /** 关闭 repo explorer */
@@ -39,6 +41,7 @@ export function LeftPanel({
   intent,
   workspacePath,
   sessionId,
+  runtimeMode,
   repoExplorerOpen,
   onCloseRepoExplorer,
 }: LeftPanelProps) {
@@ -62,6 +65,7 @@ export function LeftPanel({
           <WorkspaceExplorer
             workspacePath={workspacePath}
             taskId={sessionId}
+            runtimeMode={runtimeMode}
             repoExplorerOpen={repoExplorerOpen}
             onCloseRepoExplorer={onCloseRepoExplorer}
           />

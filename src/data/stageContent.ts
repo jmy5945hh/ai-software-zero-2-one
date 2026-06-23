@@ -1,4 +1,5 @@
 
+import type { WorkflowStep } from "./types";
 import { workflow } from "./workflowData";
 
 export type DeliverableCard = {
@@ -531,8 +532,8 @@ export function getReleaseContent(): StageContent {
   };
 }
 
-export function getContentForStage(stepIndex: number): StageContent {
-  const id = workflow[stepIndex]?.id;
+export function getContentForStage(stepIndex: number, steps: WorkflowStep[] = workflow): StageContent {
+  const id = steps[stepIndex]?.id;
   switch (id) {
     case "intent": return getIntentContent();
     case "prototype": return getPrototypeContent();

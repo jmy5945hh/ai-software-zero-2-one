@@ -16,7 +16,7 @@ import {
   Cloud,
 } from "lucide-react";
 import type { SessionMeta, SessionRecord } from "../hooks/useSessionRecords";
-import { getWorkflowStepIndex, workflow } from "../data";
+import { createDefaultState, getTaskWorkflow, getWorkflowStepIndex, workflow } from "../data";
 
 type SessionHistoryPanelProps = {
   records: SessionMeta[];
@@ -105,9 +105,10 @@ export function SessionHistoryPanel({
         {records.map((record) => {
           const isExpanded = expandedId === record.sessionId;
           const stepLabel = getStepLabel(record.activeStage);
-          const stageIndex = getWorkflowStepIndex(record.activeStage, record.stepIndex);
+          const taskWorkflow = getTaskWorkflow(record.prototype || createDefaultState().prototype);
+          const stageIndex = getWorkflowStepIndex(record.activeStage, record.stepIndex, taskWorkflow);
           const progress = Math.round(
-            ((stageIndex + (record.releaseApproved ? 1 : 0)) / workflow.length) * 100,
+            ((stageIndex + (record.releaseApproved ? 1 : 0)) / taskWorkflow.length) * 100,
           );
           const timeAgo = formatTimeAgo(record.updatedAt);
 

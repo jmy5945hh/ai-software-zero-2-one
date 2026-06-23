@@ -146,7 +146,7 @@ export function SwaggerDiffPage() {
             <Sparkles size={18} />
           </div>
           <div>
-            <strong>AI原生研发平台</strong>
+            <strong>DevAgent Cloud</strong>
             <span>Swagger API 差异对比</span>
           </div>
         </div>

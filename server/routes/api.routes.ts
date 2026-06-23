@@ -29,8 +29,15 @@ export function handleApiRoutes(
 
   if (req.method === "GET" && req.url === "/api/projects") {
     const records = sessionStore.list();
-    const stageIds = ["intent", "prototype", "plan", "coding", "quality", "verify", "release"];
     const projects = records.map((meta) => {
+      const includesPrototype = meta.activeStage === "prototype" || (
+        meta.prototype?.mode !== undefined
+        && meta.prototype.mode !== "none"
+        && meta.prototype.status !== "skipped"
+      );
+      const stageIds = includesPrototype
+        ? ["intent", "prototype", "plan", "coding", "quality", "verify", "release"]
+        : ["intent", "plan", "coding", "quality", "verify", "release"];
       const semanticIndex = stageIds.indexOf(meta.activeStage);
       const stepIndex = semanticIndex >= 0 ? semanticIndex : meta.stepIndex;
       return {

@@ -76,6 +76,7 @@ export async function handleSessionMessage(
       console.log("[session.steer] userPrompt=%.20s step=%s", text.slice(0, 20), step);
       let session = pool.get(taskId, step);
       if (!session) {
+        console.warn("[session.steer] session not in pool, creating new session for step=%s — prior context may be lost", step);
         const intent = (msg.params as { intent?: string }).intent || "";
         const extPath = (msg.params as { workspacePath?: string }).workspacePath;
         const gitRepo = (msg.params as { gitRepo?: { url: string; branch: string } }).gitRepo;

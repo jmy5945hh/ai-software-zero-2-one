@@ -34,7 +34,7 @@ export function LandingPage() {
               <Sparkles size={18} />
             </div>
             <div>
-              <strong>AI原生研发平台</strong>
+              <strong>DevAgent Cloud</strong>
             </div>
           </div>
           <div className="intro-nav-right">

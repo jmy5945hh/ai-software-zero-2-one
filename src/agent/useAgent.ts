@@ -502,6 +502,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   const continueQuestion = useCallback(
     async (step: string) => {
       if (!taskId || !wsRef.current) return;
+      activeStepRef.current = step;
       await wsRef.current.request("session.continueQuestion", { taskId, step });
     },
     [taskId],

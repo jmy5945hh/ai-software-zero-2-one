@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AppState } from "../data/types";
-import { createDefaultState, getWorkflowStepIndex } from "../data";
+import { createDefaultState, getTaskWorkflow, getWorkflowStepIndex } from "../data";
 
 export const STORAGE_KEY = "zero-one-software.prototype.v4";
 
@@ -15,12 +15,14 @@ export function useStoredState() {
       const parsed = JSON.parse(saved) as Partial<AppState>;
       const defaults = createDefaultState();
       const activeStage = parsed.activeStage || defaults.activeStage;
+      const prototype = parsed.prototype || defaults.prototype;
+      const taskWorkflow = getTaskWorkflow(prototype);
       return {
         ...defaults,
         ...parsed,
         activeStage,
-        prototype: parsed.prototype || defaults.prototype,
-        stepIndex: getWorkflowStepIndex(activeStage, parsed.stepIndex),
+        prototype,
+        stepIndex: getWorkflowStepIndex(activeStage, parsed.stepIndex, taskWorkflow),
       };
     } catch {
       return createDefaultState();
