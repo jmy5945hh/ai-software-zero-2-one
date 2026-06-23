@@ -2426,6 +2426,7 @@ function TrajectoryChatTab({
                 return tu ? {
                   inputTokens: tu.input,
                   outputTokens: tu.output,
+                  cacheRead: tu.cacheRead,
                   totalTokens: tu.total,
                   contextWindow: tu.contextWindow ?? 0,
                 } : null;

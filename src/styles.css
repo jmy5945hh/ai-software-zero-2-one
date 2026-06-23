@@ -3101,7 +3101,7 @@ p {
 .token-usage-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0;
   padding: 3px 10px;
   border-radius: var(--radius-full);
   font-size: 0.72rem;
@@ -3114,39 +3114,52 @@ p {
   white-space: nowrap;
 }
 
-.token-usage-ring {
-  position: relative;
-  width: 14px;
-  height: 14px;
+.token-usage-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
-.token-usage-ring svg {
-  transform: rotate(-90deg);
+.token-usage-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
 }
 
-.token-usage-ring-bg {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: 2.5;
+.token-usage-dot.input {
+  background: #60a5fa; /* 蓝色 — 输入 */
 }
 
-.token-usage-ring-fill {
-  fill: none;
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 400ms var(--ease-out), stroke var(--duration-fast);
+.token-usage-dot.output {
+  background: #34d399; /* 绿色 — 输出 */
 }
 
-.token-usage-ring-fill.normal {
-  stroke: var(--primary);
+.token-usage-dot.cache {
+  background: #a78bfa; /* 紫色 — 缓存读取 */
 }
 
-.token-usage-ring-fill.warning {
-  stroke: #E4A854;
+.token-usage-label {
+  color: var(--muted-warm);
+  font-size: 0.65rem;
 }
 
-.token-usage-ring-fill.critical {
-  stroke: var(--terracotta);
+.token-usage-value {
+  color: var(--fg);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-usage-value.total {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.token-usage-sep {
+  width: 1px;
+  height: 12px;
+  background: var(--line);
+  margin: 0 6px;
 }
 
 /* ── 轨迹信息条 ──────────────────────────── */
