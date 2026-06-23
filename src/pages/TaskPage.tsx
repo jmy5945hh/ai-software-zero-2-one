@@ -456,8 +456,6 @@ export function TaskPage() {
   }, [state.stepIndex, state.activeStage, state.intent, state.initialPrompts, state.prototype, isAgentConnected, taskId, agent, patchState, state.codeConfirmed, readPrototypeDecision]);
 
   const handleStepClick = (index: number) => {
-    // 已完成阶段可回看；未来阶段必须通过当前阶段的门禁顺序推进。
-    if (index > state.stepIndex) return;
     const targetStage = taskWorkflow[index].id;
     patchState({
       stepIndex: index,

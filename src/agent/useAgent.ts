@@ -1345,6 +1345,15 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
               [step]: { ...s, isCompacting: false },
             };
 
+          case "token_usage":
+            return {
+              ...prev,
+              [step]: {
+                ...s,
+                totalTokenUsage: event.usage,
+              },
+            };
+
           default:
             return prev;
         }
@@ -1599,6 +1608,24 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       summary?: string;
       turns?: Array<any>;
       messages?: Array<any>;
+      totalTokenUsage?: {
+        input: number;
+        output: number;
+        cacheRead: number;
+        cacheWrite: number;
+        total: number;
+        cost: number;
+        contextWindow?: number;
+        contextPercent?: number;
+      };
+      turnTokenUsage?: Record<number, {
+        input: number;
+        output: number;
+        cacheRead: number;
+        cacheWrite: number;
+        total: number;
+        cost: number;
+      }>;
       summarizationResult?: any;
       buildCommand?: string | null;
       buildResult?: any;
@@ -1622,6 +1649,8 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
             summary: restored.summary || existing.summary,
             messages: restored.messages || existing.messages,
             turns: restored.turns || existing.turns,
+            totalTokenUsage: restored.totalTokenUsage ?? existing.totalTokenUsage,
+            turnTokenUsage: restored.turnTokenUsage ?? existing.turnTokenUsage,
             summarizationResult: restored.summarizationResult ?? existing.summarizationResult,
             summarizationStatus: needsSummary ? "pending" : (restored.summarizationStatus as any) || existing.summarizationStatus,
             buildCommand: restored.buildCommand ?? existing.buildCommand,

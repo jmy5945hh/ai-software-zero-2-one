@@ -38,6 +38,18 @@ export type WsMessage =
 
 export type WsRequestMessage = Extract<WsMessage, { type: "request" }>;
 
+/** Token 用量数据 */
+export type TokenUsage = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  total: number;
+  cost: number;
+  contextWindow?: number;
+  contextPercent?: number;
+};
+
 /** Agent 事件（与 SDK AgentSessionEvent 对齐） */
 export type AgentEvent =
   | { type: "text_delta"; delta: string }
@@ -51,6 +63,7 @@ export type AgentEvent =
   | { type: "agent_end"; summary: string }
   | { type: "turn_start" }
   | { type: "turn_end" }
+  | { type: "token_usage"; usage: TokenUsage }
   | { type: "error"; message: string }
   | { type: "queue_update"; steering: string[]; followUp: string[] }
   | { type: "compaction_start" }

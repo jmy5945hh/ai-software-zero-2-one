@@ -3,16 +3,18 @@
 import type { FC } from "react";
 
 /**
- * Token 用量徽章组件（借鉴 assistant-ui ContextDisplay 理念）
+ * Token 用量徽章组件
  *
- * 展示当前会话的 token 消耗与上下文窗口占比。
- * - 环形进度条颜色：< 65% 绿，65-85% 黄，> 85% 红
- * - 目前 token 数据依赖后端事件，未接入时显示「—」占位
+ * 展示输入 token、输出 token、缓存读取(cacheRead)、总 token 数。
+ * - 输入/输出/缓存用不同颜色区分
+ * - 总 token 数加粗突出
+ * - 无数据时显示「—」占位
  */
 
 type TokenUsageData = {
   inputTokens: number;
   outputTokens: number;
+  cacheRead: number;
   totalTokens: number;
   contextWindow: number;
 };
@@ -22,24 +24,6 @@ type TokenUsageBadgeProps = {
   usage?: TokenUsageData | null;
   className?: string;
 };
-
-const RING_SIZE = 14;
-const RING_STROKE = 2.5;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-function getUsagePercent(total: number, window: number): number {
-  if (!total || !window) return 0;
-  return Math.min((total / window) * 100, 100);
-}
-
-type Severity = "normal" | "warning" | "critical";
-
-function getSeverity(percent: number): Severity {
-  if (percent > 85) return "critical";
-  if (percent >= 65) return "warning";
-  return "normal";
-}
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -51,56 +35,37 @@ export const TokenUsageBadge: FC<TokenUsageBadgeProps> = ({ usage, className }) 
   if (!usage) {
     return (
       <div className={`token-usage-badge ${className ?? ""}`}>
-        <div className="token-usage-ring">
-          <svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}>
-            <circle
-              className="token-usage-ring-bg"
-              cx={RING_SIZE / 2}
-              cy={RING_SIZE / 2}
-              r={RING_RADIUS}
-            />
-            <circle
-              className="token-usage-ring-fill normal"
-              cx={RING_SIZE / 2}
-              cy={RING_SIZE / 2}
-              r={RING_RADIUS}
-              strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-              strokeDashoffset={CIRCUMFERENCE}
-            />
-          </svg>
-        </div>
         <span className="token-usage-text">— tokens</span>
       </div>
     );
   }
 
-  const percent = getUsagePercent(usage.totalTokens, usage.contextWindow);
-  const severity = getSeverity(percent);
-  const dashOffset = CIRCUMFERENCE - (percent / 100) * CIRCUMFERENCE;
-
   return (
-    <div className={`token-usage-badge ${className ?? ""}`} title={`输入: ${formatTokens(usage.inputTokens)} | 输出: ${formatTokens(usage.outputTokens)} | 上下文: ${formatTokens(usage.contextWindow)}`}>
-      <div className="token-usage-ring">
-        <svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}>
-          <circle
-            className="token-usage-ring-bg"
-            cx={RING_SIZE / 2}
-            cy={RING_SIZE / 2}
-            r={RING_RADIUS}
-          />
-          <circle
-            className={`token-usage-ring-fill ${severity}`}
-            cx={RING_SIZE / 2}
-            cy={RING_SIZE / 2}
-            r={RING_RADIUS}
-            strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-            strokeDashoffset={dashOffset}
-          />
-        </svg>
-      </div>
-      <span className="token-usage-text">
-        {formatTokens(usage.totalTokens)}
-        {usage.contextWindow > 0 && ` / ${formatTokens(usage.contextWindow)}`}
+    <div
+      className={`token-usage-badge ${className ?? ""}`}
+      title={`输入: ${usage.inputTokens.toLocaleString()} | 输出: ${usage.outputTokens.toLocaleString()} | 缓存: ${usage.cacheRead.toLocaleString()} | 总计: ${usage.totalTokens.toLocaleString()}${usage.contextWindow > 0 ? ` | 上下文: ${formatTokens(usage.contextWindow)}` : ''}`}
+    >
+      <span className="token-usage-item token-usage-input">
+        <span className="token-usage-dot input" />
+        <span className="token-usage-label">输入</span>
+        <span className="token-usage-value">{formatTokens(usage.inputTokens)}</span>
+      </span>
+      <span className="token-usage-sep" />
+      <span className="token-usage-item token-usage-output">
+        <span className="token-usage-dot output" />
+        <span className="token-usage-label">输出</span>
+        <span className="token-usage-value">{formatTokens(usage.outputTokens)}</span>
+      </span>
+      <span className="token-usage-sep" />
+      <span className="token-usage-item token-usage-cache">
+        <span className="token-usage-dot cache" />
+        <span className="token-usage-label">缓存</span>
+        <span className="token-usage-value">{formatTokens(usage.cacheRead)}</span>
+      </span>
+      <span className="token-usage-sep" />
+      <span className="token-usage-item token-usage-total">
+        <span className="token-usage-label">总计</span>
+        <span className="token-usage-value total">{formatTokens(usage.totalTokens)}</span>
       </span>
     </div>
   );

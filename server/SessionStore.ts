@@ -12,6 +12,18 @@ import crypto from "crypto";
 //     meta.json          ← 任务元信息（intent, workspacePath, stepIndex, runtimeMode 等）
 //     step-{workflowId}.json  ← 各步骤的独立会话快照
 
+/** Token 用量数据（持久化到磁盘） */
+export type TokenUsageSnapshot = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  total: number;
+  cost: number;
+  contextWindow?: number;
+  contextPercent?: number;
+};
+
 /** 单个步骤的会话快照 */
 export type StepSessionSnapshot = {
   messages: Array<{ role: "user" | "assistant"; content: string }>;
@@ -33,6 +45,10 @@ export type StepSessionSnapshot = {
     }>;
   }>;
   summary: string;
+  /** 各轮次的 token 消耗（按 turn index 索引） */
+  turnTokenUsage?: Record<number, TokenUsageSnapshot>;
+  /** 整个步骤的累计 token 消耗 */
+  totalTokenUsage?: TokenUsageSnapshot;
   summarizationResult?: Record<string, unknown> | null;
   /** 模型检测到的项目编译命令（仅 coding 步骤有值） */
   buildCommand?: string | null;
