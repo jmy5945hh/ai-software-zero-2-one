@@ -1,5 +1,17 @@
 // ── Agent 通信层类型定义（前端侧） ──────────
 
+/** Token 用量数据 */
+export type TokenUsage = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  total: number;
+  cost: number;
+  contextWindow?: number;
+  contextPercent?: number;
+};
+
 /** 从 Agent Server 接收的 Agent 事件 */
 export type AgentEvent =
   | { type: "text_delta"; delta: string }
@@ -13,6 +25,7 @@ export type AgentEvent =
   | { type: "agent_end"; summary: string }
   | { type: "turn_start" }
   | { type: "turn_end" }
+  | { type: "token_usage"; usage: TokenUsage }
   | { type: "error"; message: string }
   | { type: "queue_update"; steering: string[]; followUp: string[] }
   | { type: "compaction_start" }
@@ -107,6 +120,10 @@ export type SessionState = {
   error?: string;
   isCompacting: boolean;
   queue: { steering: string[]; followUp: string[] };
+  /** 各轮次的 token 消耗（按 turn index 索引） */
+  turnTokenUsage?: Record<number, TokenUsage>;
+  /** 整个步骤的累计 token 消耗 */
+  totalTokenUsage?: TokenUsage;
   /** 结构化总结状态 */
   summarizationStatus: "idle" | "pending" | "loading" | "done" | "error";
   /** 解析后的结构化总结结果 */

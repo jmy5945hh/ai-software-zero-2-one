@@ -148,6 +148,24 @@ export type AppState = {
       }>;
     }>;
     summary: string;
+    totalTokenUsage?: {
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+      total: number;
+      cost: number;
+      contextWindow?: number;
+      contextPercent?: number;
+    };
+    turnTokenUsage?: Record<number, {
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+      total: number;
+      cost: number;
+    }>;
     summarizationResult?: AgentSummary | null;
   }>;
 };

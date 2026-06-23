@@ -154,10 +154,56 @@ export function buildStepSnapshot(session: unknown): import("../SessionStore").S
     }
   }
 
+  // 收集 token 用量
+  let totalTokenUsage: import("../SessionStore").TokenUsageSnapshot | undefined;
+  const turnTokenUsage: Record<number, import("../SessionStore").TokenUsageSnapshot> = {};
+  try {
+    const sdkSession = session as any;
+    if (typeof sdkSession.getSessionStats === "function") {
+      const stats = sdkSession.getSessionStats();
+      if (stats?.tokens) {
+        const ctxUsage = sdkSession.getContextUsage?.();
+        totalTokenUsage = {
+          input: stats.tokens.input,
+          output: stats.tokens.output,
+          cacheRead: stats.tokens.cacheRead,
+          cacheWrite: stats.tokens.cacheWrite,
+          total: stats.tokens.total,
+          cost: stats.cost,
+          contextWindow: ctxUsage?.contextWindow,
+          contextPercent: ctxUsage?.percent ?? undefined,
+        };
+      }
+    }
+    // 按 turn 粒度统计：遍历 assistant 消息的 usage
+    const entries = (sdkSession as any).sessionManager?.getBranch?.() || [];
+    let assistantMsgIndex = 0;
+    for (const entry of entries) {
+      if (entry.type === "message" && entry.message?.role === "assistant") {
+        const usage = entry.message?.usage;
+        if (usage && typeof usage.totalTokens === "number") {
+          turnTokenUsage[assistantMsgIndex] = {
+            input: usage.input || 0,
+            output: usage.output || 0,
+            cacheRead: usage.cacheRead || 0,
+            cacheWrite: usage.cacheWrite || 0,
+            total: usage.totalTokens || 0,
+            cost: usage.cost?.total || 0,
+          };
+        }
+        assistantMsgIndex++;
+      }
+    }
+  } catch {
+    // token 统计不可用时静默忽略
+  }
+
   return {
     messages: mappedMessages,
     turns,
     summary: extractAgentSummary(messages),
+    turnTokenUsage: Object.keys(turnTokenUsage).length > 0 ? turnTokenUsage : undefined,
+    totalTokenUsage,
   };
 }
 
@@ -192,6 +238,24 @@ export function ensureSubscription(
     if (sessionStore && (event.type === "turn_end" || event.type === "agent_end")) {
       const snapshot = buildStepSnapshot(session);
       sessionStore.saveStep((session as any).sessionId as string, step, snapshot);
+
+      // 发送 token 用量事件到前端
+      if (snapshot.totalTokenUsage) {
+        const tokenEvent: import("../protocol").AgentEvent = {
+          type: "token_usage",
+          usage: {
+            input: snapshot.totalTokenUsage.input,
+            output: snapshot.totalTokenUsage.output,
+            cacheRead: snapshot.totalTokenUsage.cacheRead,
+            cacheWrite: snapshot.totalTokenUsage.cacheWrite,
+            total: snapshot.totalTokenUsage.total,
+            cost: snapshot.totalTokenUsage.cost,
+            contextWindow: snapshot.totalTokenUsage.contextWindow,
+            contextPercent: snapshot.totalTokenUsage.contextPercent,
+          },
+        };
+        ws.send(JSON.stringify({ type: "event", id: msgId, event: tokenEvent }));
+      }
     }
   });
   pool.setUnsub(taskId, step, unsub);

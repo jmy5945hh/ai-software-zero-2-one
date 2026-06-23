@@ -59,6 +59,27 @@ export async function handleSessionMessage(
         if (event.type === "turn_end" || event.type === "agent_end") {
           const snapshot = buildStepSnapshot(session);
           sessionStore.saveStep(session.sessionId, step, snapshot);
+
+          // 发送 token 用量事件到前端
+          if (snapshot.totalTokenUsage) {
+            ws.send(JSON.stringify({
+              type: "event",
+              id: msg.id,
+              event: {
+                type: "token_usage",
+                usage: {
+                  input: snapshot.totalTokenUsage.input,
+                  output: snapshot.totalTokenUsage.output,
+                  cacheRead: snapshot.totalTokenUsage.cacheRead,
+                  cacheWrite: snapshot.totalTokenUsage.cacheWrite,
+                  total: snapshot.totalTokenUsage.total,
+                  cost: snapshot.totalTokenUsage.cost,
+                  contextWindow: snapshot.totalTokenUsage.contextWindow,
+                  contextPercent: snapshot.totalTokenUsage.contextPercent,
+                },
+              },
+            }));
+          }
         }
       });
       pool.setUnsub(taskId, step, unsub);
@@ -224,6 +245,27 @@ export async function handleSessionMessage(
         if (event.type === "turn_end" || event.type === "agent_end") {
           const snapshot = buildStepSnapshot(session);
           sessionStore.saveStep(session.sessionId, step, snapshot);
+
+          // 发送 token 用量事件到前端
+          if (snapshot.totalTokenUsage) {
+            ws.send(JSON.stringify({
+              type: "event",
+              id: msg.id,
+              event: {
+                type: "token_usage",
+                usage: {
+                  input: snapshot.totalTokenUsage.input,
+                  output: snapshot.totalTokenUsage.output,
+                  cacheRead: snapshot.totalTokenUsage.cacheRead,
+                  cacheWrite: snapshot.totalTokenUsage.cacheWrite,
+                  total: snapshot.totalTokenUsage.total,
+                  cost: snapshot.totalTokenUsage.cost,
+                  contextWindow: snapshot.totalTokenUsage.contextWindow,
+                  contextPercent: snapshot.totalTokenUsage.contextPercent,
+                },
+              },
+            }));
+          }
         }
       });
       pool.setUnsub(taskId, step, unsub);
@@ -302,6 +344,27 @@ export async function handleSessionMessage(
         if (event.type === "turn_end" || event.type === "agent_end") {
           const snapshot = buildStepSnapshot(session);
           sessionStore.saveStep(session.sessionId, step, snapshot);
+
+          // 发送 token 用量事件到前端
+          if (snapshot.totalTokenUsage) {
+            ws.send(JSON.stringify({
+              type: "event",
+              id: msg.id,
+              event: {
+                type: "token_usage",
+                usage: {
+                  input: snapshot.totalTokenUsage.input,
+                  output: snapshot.totalTokenUsage.output,
+                  cacheRead: snapshot.totalTokenUsage.cacheRead,
+                  cacheWrite: snapshot.totalTokenUsage.cacheWrite,
+                  total: snapshot.totalTokenUsage.total,
+                  cost: snapshot.totalTokenUsage.cost,
+                  contextWindow: snapshot.totalTokenUsage.contextWindow,
+                  contextPercent: snapshot.totalTokenUsage.contextPercent,
+                },
+              },
+            }));
+          }
         }
       });
       pool.setUnsub(taskId, step, unsub);

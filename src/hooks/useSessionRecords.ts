@@ -33,6 +33,26 @@ export type StepSessionSnapshot = {
   }>;
   /** Agent 原始总结文本 */
   summary: string;
+  /** 各轮次的 token 消耗（按 turn index 索引） */
+  turnTokenUsage?: Record<number, {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    total: number;
+    cost: number;
+  }>;
+  /** 整个步骤的累计 token 消耗 */
+  totalTokenUsage?: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    total: number;
+    cost: number;
+    contextWindow?: number;
+    contextPercent?: number;
+  };
   /** 结构化总结结果 */
   summarizationResult?: import("../data/types").AgentSummary | null;
   /** 模型检测到的项目编译命令（仅 coding 步骤有值） */
@@ -266,6 +286,24 @@ export function useSessionRecords() {
           }>;
         }>;
         summary: string;
+        totalTokenUsage?: {
+          input: number;
+          output: number;
+          cacheRead: number;
+          cacheWrite: number;
+          total: number;
+          cost: number;
+          contextWindow?: number;
+          contextPercent?: number;
+        };
+        turnTokenUsage?: Record<number, {
+          input: number;
+          output: number;
+          cacheRead: number;
+          cacheWrite: number;
+          total: number;
+          cost: number;
+        }>;
         summarizationResult?: import("../data/types").AgentSummary | null;
         buildCommand?: string | null;
         buildResult?: import("../data/types").BuildResult | null;
@@ -339,6 +377,9 @@ export function useSessionRecords() {
               })),
             })),
             summary: session.summary || "",
+            // 持久化 token 用量
+            totalTokenUsage: session.totalTokenUsage,
+            turnTokenUsage: session.turnTokenUsage,
             summarizationResult: session.summarizationResult || null,
             // 保留模型检测到的编译命令
             buildCommand: session.buildCommand ?? restoredStep?.buildCommand ?? null,

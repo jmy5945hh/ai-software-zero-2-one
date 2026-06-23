@@ -2273,6 +2273,8 @@ function TrajectoryChatTab({
       }>;
     }>;
     summary: string;
+    totalTokenUsage?: import("../agent/types").TokenUsage;
+    turnTokenUsage?: Record<number, import("../agent/types").TokenUsage>;
     summarizationResult?: import("../data/types").AgentSummary | null;
   };
   isAgentConnected: boolean;
@@ -2418,7 +2420,17 @@ function TrajectoryChatTab({
         {/* 信息条 */}
         {displayTurns.length > 0 && (
           <div className="trajectory-infobar">
-            <TokenUsageBadge usage={null} />
+            <TokenUsageBadge
+              usage={(() => {
+                const tu = agentSession?.totalTokenUsage ?? restoredSession?.totalTokenUsage;
+                return tu ? {
+                  inputTokens: tu.input,
+                  outputTokens: tu.output,
+                  totalTokens: tu.total,
+                  contextWindow: tu.contextWindow ?? 0,
+                } : null;
+              })()}
+            />
             <span className="trajectory-turn-summary">
               {agentSession?.turns.length || displayTurns.length} 轮对话
             </span>
@@ -2631,6 +2643,18 @@ function TrajectoryChatTab({
                           <span className="round-group-badge">
                             <Wrench size={10} />
                             {group.toolCount} 工具
+                          </span>
+                        )}
+                        {(agentSession?.turnTokenUsage ?? restoredSession?.turnTokenUsage)?.[group.index] && (
+                          <span
+                            className="round-group-badge token-badge"
+                            title={`输入: ${(() => { const tu = (agentSession?.turnTokenUsage ?? restoredSession?.turnTokenUsage)?.[group.index]; return tu ? tu.input.toLocaleString() : '0'; })()} | 输出: ${(() => { const tu = (agentSession?.turnTokenUsage ?? restoredSession?.turnTokenUsage)?.[group.index]; return tu ? tu.output.toLocaleString() : '0'; })()} | 总计: ${(() => { const tu = (agentSession?.turnTokenUsage ?? restoredSession?.turnTokenUsage)?.[group.index]; return tu ? tu.total.toLocaleString() : '0'; })()}`}
+                          >
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"/>
+                              <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            {(() => { const tu = (agentSession?.turnTokenUsage ?? restoredSession?.turnTokenUsage)?.[group.index]; return tu ? tu.total.toLocaleString() : '0'; })()}
                           </span>
                         )}
                         <span className={`round-group-chevron ${isExpanded ? "open" : ""}`}>
