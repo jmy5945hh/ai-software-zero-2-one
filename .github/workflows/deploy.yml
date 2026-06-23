@@ -21,4 +21,7 @@ jobs:
           script: |
             cd /home/deploy/code/ai-software-zero-2-one
             git pull origin master
+            npm install
             pm2 restart agent-app
+            npm run build
+            pm2 restart agent-ui

@@ -26,8 +26,8 @@ export function parsePrototypeManifest(content: string | undefined, taskId: stri
     }
 
     return {
-      mode: value.mode,
-      status: value.status,
+      mode: value.mode!,
+      status: value.status!,
       htmlPath: value.htmlPath || "",
       handoffPath: value.handoffPath || "",
     };
