@@ -11,7 +11,7 @@ jobs:
       - name: ⬇️ 拉取代码
         uses: actions/checkout@v4
 
-      - name: 🔐 配置 SSH
+      - name: 🚀 部署到 VM
         uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.HOST }}
@@ -22,6 +22,5 @@ jobs:
             cd /home/deploy/code/ai-software-zero-2-one
             git pull origin master
             npm install
-            pm2 restart agent-app
             npm run build
-            pm2 restart agent-ui
+            pm2 restart agent-app
