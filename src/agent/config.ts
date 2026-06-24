@@ -57,7 +57,20 @@ function getWsUrl(mode: RuntimeMode): string {
 
   // 本地模式
   const url = import.meta.env.VITE_LOCAL_AGENT_WS_URL as string | undefined;
-  if (url) return url;
+  if (url) {
+    // 远程部署场景：浏览器从公网访问 VM，但 env 变量仍指向 localhost
+    // 此时自动替换为浏览器实际访问的主机名，确保请求能到达 VM 上的 agent server
+    try {
+      const parsed = new URL(url);
+      const targetIsLocal = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+      const browserIsRemote = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+      if (targetIsLocal && browserIsRemote) {
+        parsed.hostname = window.location.hostname;
+        return parsed.toString();
+      }
+    } catch { /* URL 解析失败时直接返回原值 */ }
+    return url;
+  }
   // 默认值：ws://localhost:3100/agent
   return "ws://localhost:3100/agent";
 }
