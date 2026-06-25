@@ -18,7 +18,8 @@ export function resolveHttpRouteGroup(url: string | undefined): HttpRouteGroup {
   if (url?.startsWith("/project-build") || url?.startsWith("/read-file") ||
       url?.startsWith("/qa-review")) return "build";
   if (url?.startsWith("/specs-") || url?.startsWith("/workspace-") ||
-      url?.startsWith("/repo-") || url?.startsWith("/git-")) return "workspace";
+      url?.startsWith("/repo-") || url?.startsWith("/git-") ||
+      url?.startsWith("/session-file")) return "workspace";
   return null;
 }
 

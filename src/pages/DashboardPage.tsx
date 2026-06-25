@@ -221,7 +221,7 @@ export function DashboardPage() {
       }
 
       const prototype = fullRecord.prototype || {
-        mode: "none" as const,
+        mode: "pending" as const,
         status: "pending" as const,
         htmlPath: "",
         handoffPath: "",

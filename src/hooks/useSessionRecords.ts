@@ -446,7 +446,7 @@ export function useSessionRecords() {
           status: state.qaReview.status === "running" ? "idle" as const : state.qaReview.status,
         },
         prototype: state.prototype || {
-          mode: "none",
+          mode: "pending",
           status: "pending",
           htmlPath: "",
           handoffPath: "",

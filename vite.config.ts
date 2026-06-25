@@ -33,6 +33,9 @@ export default defineConfig({
       "/qa-review": {
         target: "http://localhost:3100",
       },
+      "/session-file": {
+        target: "http://localhost:3100",
+      },
     },
   },
 });

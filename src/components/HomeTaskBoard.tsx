@@ -1,9 +1,10 @@
 import { useState, useRef } from "react";
-import { Play, Eye, Rocket, ChevronDown, ChevronUp, FileText, X, Paperclip } from "lucide-react";
+import { Play, Eye, Rocket, ChevronDown, ChevronUp, FileText, X, Paperclip, Plus } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import type { AppState, TaskCard, TaskCategory } from "../data/types";
 import type { BrowseEntry } from "./WorkspaceSelector";
 import { taskCards, categoryMeta, priorityLabel } from "../data";
+import { AddStoryCardModal } from "./AddStoryCardModal";
 
 type HomeTaskBoardProps = {
   state: AppState;
@@ -36,6 +37,11 @@ export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask, on
   const [selectedFile, setSelectedFile] = useState<{ name: string; content: string } | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 新增卡片弹窗
+  const [showAddModal, setShowAddModal] = useState(false);
+  // 用于在新增卡片后强制重新渲染（taskCards 是模块级可变引用）
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const toggleCategory = (cat: TaskCategory) => {
     setExpandedCategories((prev) => {
@@ -88,6 +94,11 @@ export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask, on
     }
   };
 
+  const handleCardAdded = () => {
+    setShowAddModal(false);
+    setRefreshKey((k) => k + 1);
+  };
+
   const previewTask = state.previewTaskId
     ? taskCards.find((t) => t.id === state.previewTaskId) ?? null
     : null;
@@ -100,6 +111,8 @@ export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask, on
             const meta = categoryMeta[category];
             const Icon = meta.icon;
             const allCards = taskCards.filter((c) => c.category === category);
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const _ = refreshKey; // 依赖 refreshKey 以在新增卡片后重新渲染
             const isExpanded = expandedCategories.has(category);
             const shouldCollapse = allCards.length > 3;
             const visibleCards = shouldCollapse && !isExpanded ? allCards.slice(0, 3) : allCards;
@@ -109,6 +122,18 @@ export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask, on
                   <Icon size={16} />
                   <strong>{meta.label}</strong>
                   <span>{allCards.length} 项</span>
+                  {category === "story" && (
+                    <div className="swimlane-header-actions">
+                      <button
+                        className="add-card-header-btn"
+                        type="button"
+                        onClick={() => setShowAddModal(true)}
+                      >
+                        <Plus size={13} />
+                        新增
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="swimlane-cards">
                   {visibleCards.map((card) => {
@@ -328,6 +353,14 @@ export function HomeTaskBoard({ state, setState, onPatch, onRequestStartTask, on
             </div>
           </div>
         </div>
+      )}
+
+      {/* 新增卡片弹窗 */}
+      {showAddModal && (
+        <AddStoryCardModal
+          onClose={() => setShowAddModal(false)}
+          onAdded={handleCardAdded}
+        />
       )}
     </>
   );

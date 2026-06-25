@@ -1603,6 +1603,36 @@
   color: #F9F8F4;
 }
 
+/* ── 交付板块：工作通知操作区 ──────────────── */
+.working-notice-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.working-notice-skip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+  align-self: flex-start;
+}
+
+.working-notice-skip-btn:hover {
+  border-color: var(--danger, #e53e3e);
+  color: var(--danger, #e53e3e);
+  background: rgba(229, 62, 62, 0.06);
+}
+
 /* ── 交付板块：结构化总结 ──────────────── */
 .summary-loading {
   display: flex;
@@ -2609,6 +2639,22 @@
 .todo-submit-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 原型取消按钮：次级样式，hover 变红色 */
+.todo-submit-btn.prototype-skip-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.todo-submit-btn.prototype-skip-btn:hover:not(:disabled) {
+  border-color: var(--danger, #e53e3e);
+  color: var(--danger, #e53e3e);
+  background: rgba(229, 62, 62, 0.06);
+  opacity: 1;
+  transform: none;
+  box-shadow: none;
 }
 
 /* ── 任务轨迹：轮次展示（基础样式，详见 styles.css） ── */

@@ -122,7 +122,7 @@ export function handleBuildRoutes(
 
     res.write(`data: ${JSON.stringify({ type: "start", message: "QA 审查开始执行...", outputFile })}\n\n`);
 
-    const cliCommand = `qa-review --output ${outputFile}`;
+    const cliCommand = `qa-review --scope untracked --output ${outputFile}`;
 
     const child = spawn("sh", ["-c", cliCommand], {
       cwd: resolvedPath,

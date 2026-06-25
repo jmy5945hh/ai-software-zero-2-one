@@ -909,7 +909,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
                 ...prev,
                 [snapshot.step]: {
                   ...s,
-                  summarizationStatus: "pending" as const,
+                  summarizationStatus: (snapshot.step === "quality" ? "idle" : "pending") as "pending" | "idle",
                   buildStatus: (snapshot.step === "coding" ? "pending" : "idle") as "pending" | "idle",
                 },
               };
@@ -1186,8 +1186,8 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
                 messages,
                 streamingText: "",
                 turns: updatedTurns,
-                // 标记待触发独立总结
-                summarizationStatus: "pending" as const,
+                // quality 阶段的修复 session 不触发独立总结
+                summarizationStatus: (step === "quality" ? "idle" : "pending") as "pending" | "idle",
                 // coding 步骤标记待触发编译
                 buildStatus: (step === "coding" ? "pending" : "idle") as "pending" | "idle",
               },
@@ -1652,7 +1652,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
             totalTokenUsage: restored.totalTokenUsage ?? existing.totalTokenUsage,
             turnTokenUsage: restored.turnTokenUsage ?? existing.turnTokenUsage,
             summarizationResult: restored.summarizationResult ?? existing.summarizationResult,
-            summarizationStatus: needsSummary ? "pending" : (restored.summarizationStatus as any) || existing.summarizationStatus,
+            summarizationStatus: needsSummary && step !== "quality" ? "pending" : (restored.summarizationStatus as any) || existing.summarizationStatus,
             buildCommand: restored.buildCommand ?? existing.buildCommand,
             buildResult: restored.buildResult ?? existing.buildResult,
             buildStatus: (restored.buildStatus as any) || existing.buildStatus,

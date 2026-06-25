@@ -28,7 +28,7 @@ export const workflow: WorkflowStep[] = [
     id: "plan",
     label: "技术设计",
     detail: "选择本轮交付模块和风险边界",
-    detailLong: "基于需求范围和代码仓库现状，进行模块依赖分析、技术方案选型，产出可执行的技术设计文档",
+    detailLong: "基于需求规格文档，进行技术预研，技术架构分析以及详细，产出可执行的技术设计文档",
     userRole: "作为 Tech Leader，评审 DevAgent 的技术详设材料",
   },
   {
@@ -40,16 +40,16 @@ export const workflow: WorkflowStep[] = [
   },
   {
     id: "quality",
-    label: "质量QA",
-    detail: "代码检视、单测、API测试、E2E 集中审查",
-    detailLong: "自动触发质量门禁，执行代码检视、单元测试、API 测试和 UI E2E 测试，汇总质量报告供用户决策",
+    label: "质量审查与修复",
+    detail: "使用质量Agent 检查项目的规范问题",
+    detailLong: "手动触发质量门禁，执行质量Agent，基于代码仓库Diff分析质量问题，并汇总质量报告供用户决策",
     userRole: "走读软件质量报告，决定放行或修复",
   },
   {
     id: "verify",
     label: "验证修复",
-    detail: "授权自动修复并复测",
-    detailLong: "分析质量门禁中的失败项，生成修复方案，授权 Agent 自动修复并重新执行测试验证",
+    detail: "生成单元测试案例，并编写对应单测代码",
+    detailLong: "基于需求文档、技术方案文档、当前代码仓库，生成对应的单测案例以及单测代码",
     userRole: "授权修复和复测",
   },
   {
@@ -286,7 +286,7 @@ export function createDefaultState(): AppState {
     todoAnswers: {},
     initialPrompts: {},
     prototype: {
-      mode: "none",
+      mode: "pending",
       status: "pending",
       htmlPath: "",
       handoffPath: "",

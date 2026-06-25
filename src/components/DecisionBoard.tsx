@@ -216,12 +216,14 @@ export function DecisionBoard({
             agentResumeQuestion={agentResumeQuestion}
             agentPrompt={agentPrompt}
             agentSteer={agentSteer}
+            agentAbort={agentAbort}
             triggerBuild={triggerBuild}
             detectBuildCommand={detectBuildCommand}
             restoredSession={restoredSessions[step.id]}
             onOpenRepoExplorer={onOpenRepoExplorer}
             onBuildUpdate={handleBuildUpdate}
             onFixIssues={onFixIssues}
+            qualitySession={agentSessions["quality"]}
           />
         )}
         {activeTab === "trajectory" && (
@@ -304,12 +306,14 @@ function DeliveryCollabTab({
   agentResumeQuestion,
   agentPrompt,
   agentSteer,
+  agentAbort,
   triggerBuild,
   detectBuildCommand,
   restoredSession,
   onOpenRepoExplorer,
   onBuildUpdate,
   onFixIssues,
+  qualitySession,
 }: {
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
@@ -324,6 +328,7 @@ function DeliveryCollabTab({
   agentResumeQuestion?: (step: string, answer: string) => Promise<void>;
   agentPrompt: (step: string, text: string) => Promise<void>;
   agentSteer: (step: string, text: string, intent?: string) => void;
+  agentAbort: (step: string) => void;
   triggerBuild: (workspacePath: string, command?: string) => Promise<{ success: boolean; output: string; command: string }>;
   detectBuildCommand?: (workspacePath: string) => Promise<string>;
   /** 从历史记录恢复的当前步骤会话快照 */
@@ -359,6 +364,7 @@ function DeliveryCollabTab({
   onOpenRepoExplorer?: (tab: RepoTab) => void;
   onBuildUpdate?: (command: string, result: import("../data/types").BuildResult) => void;
   onFixIssues?: (report: string) => void;
+  qualitySession?: import("../agent/types").SessionState;
 }) {
   const agentCompleted = isAgentConnected && agentSession?.completed && !agentSession?.isStreaming;
   const agentWorking = isAgentConnected && agentSession && !agentCompleted;
@@ -584,6 +590,7 @@ function DeliveryCollabTab({
                   onPatch={onPatch}
                   onContinue={onContinue}
                   isAgentConnected={isAgentConnected}
+                  agentAbort={agentAbort}
                 />
               )}
               {/* intent / plan 阶段展示交付Spec 目录，其他阶段展示跳转到项目代码仓库的按钮 */}
@@ -645,6 +652,7 @@ function DeliveryCollabTab({
                   onPatch={onPatch}
                   onContinue={onContinue}
                   isAgentConnected={isAgentConnected}
+                  agentAbort={agentAbort}
                 />
               )}
               {(stepId === "intent" || stepId === "plan")
@@ -768,6 +776,7 @@ function DeliveryCollabTab({
           agentSteer={agentSteer}
           stepId={stepId}
           onSwitchToTrajectory={onSwitchToTrajectory}
+          qualitySession={qualitySession}
         />
       )}
     </div>
@@ -1149,6 +1158,7 @@ function QaReviewSection({
   agentSteer,
   stepId,
   onSwitchToTrajectory,
+  qualitySession,
 }: {
   qaReview: import("../data/types").QaReviewState;
   sessionId: string;
@@ -1159,12 +1169,25 @@ function QaReviewSection({
   agentSteer?: (step: string, text: string, intent?: string, workspacePath?: string) => void;
   stepId?: string;
   onSwitchToTrajectory?: (msg?: string, roundIndex?: number) => void;
+  qualitySession?: import("../agent/types").SessionState;
 }) {
   const [outputExpanded, setOutputExpanded] = useState(true);
   const outputEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const startedRef = useRef(false);
   const outputLinesRef = useRef<string[]>([]);
+  const [fixCompleted, setFixCompleted] = useState(false);
+  const prevQualityCompletedRef = useRef(false);
+
+  // 检测 quality 修复 session 完成
+  useEffect(() => {
+    const prev = prevQualityCompletedRef.current;
+    const now = qualitySession?.completed ?? false;
+    if (!prev && now && (qualitySession?.turns?.length ?? 0) > 0) {
+      setFixCompleted(true);
+    }
+    prevQualityCompletedRef.current = now;
+  }, [qualitySession?.completed, qualitySession?.turns?.length]);
 
   console.log("[QaReviewSection] render", { status: qaReview.status, outputLines: qaReview.outputLines.length, resultContent: qaReview.resultContent?.length });
 
@@ -1183,6 +1206,7 @@ function QaReviewSection({
     console.log("[QaReviewSection] 手动触发 qa-review CLI", { workspacePath, sessionId });
     startedRef.current = true;
     outputLinesRef.current = [];
+    setFixCompleted(false);
 
     const outputDir = `~/.aiNativeDevPlatform/sessions/${sessionId}`;
     const outputFile = `${outputDir}/quality_result.toml`;
@@ -1477,6 +1501,28 @@ function QaReviewSection({
             </div>
           )}
 
+          {/* 修复完成提示 — 独立于 QA 状态，始终展示 */}
+          {fixCompleted && (
+            <div className="qa-review-fix-done" style={{ marginTop: 16 }}>
+              <div className="build-status build-success">
+                <CheckCircle2 size={16} /> 修复完成
+              </div>
+              <p style={{ margin: "8px 0 12px", fontSize: 13, color: "var(--text-secondary)" }}>
+                代码已根据质量审查报告完成修复，请重新执行 QA 审查验证修复结果。
+              </p>
+              <button
+                className="todo-submit-btn"
+                type="button"
+                onClick={() => {
+                  startedRef.current = false;
+                  startQaReview();
+                }}
+              >
+                <Play size={14} /> 重新开始质量审查
+              </button>
+            </div>
+          )}
+
           {/* 操作按钮 — 所有状态下都支持进入下一阶段 */}
           {(isRunning || isDone || isError) && (
             <>
@@ -1530,6 +1576,7 @@ function PrototypePreview({
   onPatch,
   onContinue,
   isAgentConnected,
+  agentAbort,
 }: {
   workspacePath: string;
   sessionId: string;
@@ -1538,6 +1585,7 @@ function PrototypePreview({
   onPatch: (patch: Partial<AppState>) => void;
   onContinue: () => void;
   isAgentConnected: boolean;
+  agentAbort: (step: string) => void;
 }) {
   const [loadingHtml, setLoadingHtml] = useState(false);
   const [hasPreviewed, setHasPreviewed] = useState(false);
@@ -1550,11 +1598,10 @@ function PrototypePreview({
     const loadManifest = async () => {
       try {
         const params = new URLSearchParams({
-          path: workspacePath,
           taskId: sessionId,
-          file: `prototype/${sessionId}/prototype.json`,
+          file: `prototype.json`,
         });
-        const res = await agentFetch(`/specs-file?${params.toString()}`);
+        const res = await agentFetch(`/session-file?${params.toString()}`);
         if (!res.ok) throw new Error("未找到原型产物清单");
         const data = await res.json() as { content?: string };
         const manifest = parsePrototypeManifest(data.content, sessionId);
@@ -1584,10 +1631,9 @@ function PrototypePreview({
     setError("");
     try {
       const params = new URLSearchParams();
-      params.set("path", workspacePath);
       params.set("taskId", sessionId);
       params.set("file", prototype.htmlPath);
-      const res = await agentFetch(`/specs-file?${params.toString()}`);
+      const res = await agentFetch(`/session-file?${params.toString()}`);
       if (!res.ok) throw new Error("原型文件不存在或无法读取");
       const data = await res.json() as { content?: string };
       if (!data.content) throw new Error("原型文件内容为空");
@@ -1636,6 +1682,19 @@ function PrototypePreview({
       )}
 
       <div className="build-actions prototype-actions">
+        {prototype.status === "generating" && (
+          <button
+            className="todo-submit-btn prototype-skip-btn"
+            type="button"
+            onClick={() => {
+              agentAbort("prototype");
+              onPatch({ prototype: { ...prototype, status: "skipped", mode: "none" } });
+              onContinue();
+            }}
+          >
+            <span>取消生成，进入下一阶段</span>
+          </button>
+        )}
         <button
           className="todo-submit-btn"
           type="button"

@@ -1,5 +1,6 @@
 import http from "http";
 import path from "path";
+import os from "os";
 import { readSpecsTree, readRepoTree, readFileSafe, writeFileSafe, existsSync } from "../utils/fileOps";
 import type { WorkspaceManager } from "../WorkspaceManager";
 
@@ -97,6 +98,29 @@ export function handleWorkspaceRoutes(
         res.end(JSON.stringify({ error: err instanceof Error ? err.message : "Save failed" }));
       }
     });
+    return true;
+  }
+
+  // 读取 ~/.aiNativeDevPlatform/sessions/{taskId}/ 目录下的文件
+  if (req.method === "GET" && req.url?.startsWith("/session-file")) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const taskId = url.searchParams.get("taskId");
+    const filePath = url.searchParams.get("file");
+    if (!taskId || !filePath) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing 'taskId' or 'file' query parameter" }));
+      return true;
+    }
+    try {
+      const sessionDir = path.join(os.homedir(), ".aiNativeDevPlatform", "sessions", taskId);
+      const content = readFileSafe(sessionDir, filePath);
+      const isMarkdown = /\.md$/i.test(filePath);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ content, isMarkdown }));
+    } catch {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "File not found" }));
+    }
     return true;
   }
 

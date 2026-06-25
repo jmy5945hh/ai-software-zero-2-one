@@ -7,5 +7,6 @@ export { TypewriterText } from "./TypewriterText";
 export { ContentModal } from "./ContentModal";
 export { WorkspaceSelector } from "./WorkspaceSelector";
 export { AgentStatusBadge } from "./AgentStatusBadge";
+export { AddStoryCardModal } from "./AddStoryCardModal";
 export type { ModalContent } from "./ContentModal";
 export type { BrowseEntry } from "./WorkspaceSelector";

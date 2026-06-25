@@ -56,7 +56,7 @@ export function TaskPage() {
       if (!record) return;
 
       const prototype = record.prototype || {
-        mode: "none" as const,
+        mode: "pending" as const,
         status: "pending" as const,
         htmlPath: "",
         handoffPath: "",
@@ -284,22 +284,21 @@ export function TaskPage() {
   );
 
   const readPrototypeDecision = useCallback(async () => {
-    if (!taskId || !state.workspacePath) return null;
+    if (!taskId) return null;
     try {
       const paths = getPrototypeArtifactPaths(taskId);
       const params = new URLSearchParams({
-        path: state.workspacePath,
         taskId,
         file: paths.manifestPath,
       });
-      const res = await agentFetch(`/specs-file?${params.toString()}`);
+      const res = await agentFetch(`/session-file?${params.toString()}`);
       if (!res.ok) return null;
       const data = await res.json() as { content?: string };
       return parsePrototypeManifest(data.content, taskId);
     } catch {
       return null;
     }
-  }, [taskId, state.workspacePath]);
+  }, [taskId]);
 
   const openDrawer = useCallback(
     (content: DrawerContent) => setDrawerContent(content),
@@ -311,19 +310,22 @@ export function TaskPage() {
   const handleFixQaIssues = useCallback(
     (report: string) => {
       if (!isAgentConnected) return;
-      // 先推进到 verify 阶段
-      const verifyIndex = taskWorkflow.findIndex((s) => s.id === "verify");
+      // 清空上次 QA 审查结果
       patchState({
-        stepIndex: verifyIndex,
-        activeStage: "verify",
+        qaReview: {
+          status: "idle",
+          outputLines: [],
+          resultFilePath: "",
+          resultContent: "",
+        },
       });
-      // 创建 verify session 并触发 Agent 执行修复
+      // 在 quality 阶段内执行修复，不推进到下一阶段
       const fixPrompt = `请根据以下质量审查报告修复代码中的问题：\n\n${report}`;
-      agent.createSession("verify", state.intent, state.workspacePath, state.gitRepo).then(() => {
-        agent.prompt("verify", fixPrompt);
+      agent.createSession("quality", state.intent, state.workspacePath, state.gitRepo).then(() => {
+        agent.prompt("quality", fixPrompt);
       });
     },
-    [isAgentConnected, agent, state.intent, state.workspacePath, state.gitRepo, patchState, taskWorkflow],
+    [isAgentConnected, agent, state.intent, state.workspacePath, state.gitRepo, patchState],
   );
 
   // ── Agent session 生命周期 ──
@@ -386,7 +388,7 @@ export function TaskPage() {
   useEffect(() => {
     const intentSession = agent.sessions.intent;
     if (!taskId || !state.workspacePath || !intentSession?.completed) return;
-    if (state.prototype.mode !== "none" || state.prototype.status === "skipped") return;
+    if (state.prototype.mode !== "pending" || state.prototype.status === "skipped") return;
 
     let cancelled = false;
     void readPrototypeDecision().then((prototype) => {
@@ -395,20 +397,23 @@ export function TaskPage() {
     return () => { cancelled = true; };
   }, [agent.sessions.intent, taskId, state.workspacePath, state.prototype, patchState, readPrototypeDecision]);
 
-  const continueTask = useCallback(async () => {
-    let effectivePrototype = state.prototype;
-    if (state.activeStage === "intent" && state.prototype.mode === "none" && state.prototype.status === "pending") {
+  const continueTask = useCallback(async (prototypeOverride?: PrototypeState) => {
+    let effectivePrototype = prototypeOverride ?? state.prototype;
+    if (state.activeStage === "intent" && state.prototype.mode === "pending" && state.prototype.status === "pending") {
+      // 优先从文件读取最新决策（可能 useEffect 因时序问题未及时更新 state）
       const decision = await readPrototypeDecision();
-      if (!decision) {
+      if (decision) {
+        effectivePrototype = decision;
+        patchState({ prototype: decision });
+      } else {
+        // 文件不存在或内容无效，提示 agent 重新生成
         const manifestPath = taskId ? getPrototypeArtifactPaths(taskId).manifestPath : "prototype.json";
         await agent.prompt(
           "intent",
-          `需求分析尚未生成工作流决策。请根据当前需求判断是否包含用户可见的 UI 变化，并按初始要求写入 specs/${manifestPath}。`,
+          `需求分析尚未生成工作流决策。请根据当前需求判断是否包含用户可见的 UI 变化，并按初始要求写入 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/${manifestPath}。`,
         );
         return;
       }
-      effectivePrototype = decision;
-      patchState({ prototype: decision });
     }
     const effectiveWorkflow = getTaskWorkflow(effectivePrototype);
     const nextIndex = Math.min(state.stepIndex + 1, effectiveWorkflow.length - 1);
@@ -420,8 +425,8 @@ export function TaskPage() {
         ? {
             mode: effectivePrototype.mode,
             status: "generating" as const,
-            htmlPath: `prototype/${taskId}/index.html`,
-            handoffPath: `prototype/${taskId}/原型交接.md`,
+            htmlPath: `index.html`,
+            handoffPath: `原型交接.md`,
           }
         : effectivePrototype;
       const promptText = getStepPrompt(nextStep.id, state.intent, taskId, prototype);
@@ -460,8 +465,8 @@ export function TaskPage() {
     patchState({
       stepIndex: index,
       activeStage: targetStage,
-      // 点击 quality 阶段且不是当前步骤时重置 QA 审查状态
-      ...(targetStage === "quality" && index !== state.stepIndex ? {
+      // 切换到 quality 阶段时，仅当尚无审查结果时才重置（避免切换 tab 丢失已有结果）
+      ...(targetStage === "quality" && index !== state.stepIndex && state.qaReview.status === "idle" ? {
         qaReview: {
           status: "idle" as const,
           outputLines: [],
@@ -633,13 +638,13 @@ function getStepPrompt(
 ): string {
   switch (step) {
     case "intent":
-      return `请分析以下业务意图，识别核心业务对象、角色和场景，并生成 Spec 文档。\n\n同时判断本任务是否包含需要用户确认的 UI 页面或交互变化，并将工作流决策写入 specs/prototype/${taskId || "unknown"}/prototype.json。\n\n如果包含 UI 变化，请写入：\n{\"mode\":\"new-page 或 existing-change\",\"status\":\"pending\",\"htmlPath\":\"prototype/${taskId || "unknown"}/index.html\",\"handoffPath\":\"prototype/${taskId || "unknown"}/原型交接.md\"}\n\n如果不包含 UI 变化，请写入：\n{\"mode\":\"none\",\"status\":\"skipped\",\"htmlPath\":\"\",\"handoffPath\":\"\"}\n\n业务意图：\n${intent}`;
+      return `请分析以下业务意图，识别核心业务对象、角色和场景，并生成 Spec 文档。\n\n同时判断本任务是否包含需要用户确认的 UI 页面或交互变化，并将工作流决策写入 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/prototype.json。\n\n如果包含 UI 变化，请写入：\n{\"mode\":\"new-page 或 existing-change\",\"status\":\"pending\",\"htmlPath\":\"index.html\",\"handoffPath\":\"原型交接.md\"}\n\n如果不包含 UI 变化，请写入：\n{\"mode\":\"none\",\"status\":\"skipped\",\"htmlPath\":\"\",\"handoffPath\":\"\"}\n\n业务意图：\n${intent}`;
     case "prototype":
-      return `需求分析已确认本任务包含 UI 变化，建议原型模式为 ${prototype?.mode || "existing-change"}。当前任务 ID：${taskId || "unknown"}。\n\n本阶段的产物目录固定为 specs/prototype/${taskId || "unknown"}/，不得写入其他 prototype 目录。请先用 ask_user_question 让用户确认原型模式（新页面 or 已有页面修改），然后生成 index.html、原型交接.md，并写入 prototype.json：\n{\"mode\":\"用户确认后的 new-page 或 existing-change\",\"status\":\"reviewing\",\"htmlPath\":\"${prototype?.htmlPath || ""}\",\"handoffPath\":\"${prototype?.handoffPath || ""}\"}\n\n业务意图：${intent}`;
+      return `需求分析已确认本任务包含 UI 变化，建议原型模式为 ${prototype?.mode || "existing-change"}。当前任务 ID：${taskId || "unknown"}。\n\n本阶段的产物目录固定为 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/，不得写入其他目录。请先用 ask_user_question 让用户确认原型模式（新页面 or 已有页面修改），然后生成 index.html、原型交接.md，并写入 prototype.json：\n{\"mode\":\"用户确认后的 new-page 或 existing-change\",\"status\":\"reviewing\",\"htmlPath\":\"${prototype?.htmlPath || "index.html"}\",\"handoffPath\":\"${prototype?.handoffPath || "原型交接.md"}\"}\n\n业务意图：${intent}`;
     case "plan":
-      return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围，生成对应的技术方案文档。${prototype?.handoffPath ? `\n\n原型已确认，请读取 specs/${prototype.handoffPath} 并遵守其中的确认范围和交互约束。` : ""}\n\n业务意图：${intent}`;
+      return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围，生成对应的技术方案文档。${prototype?.handoffPath ? `\n\n原型已确认，请读取 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/${prototype.handoffPath} 并遵守其中的确认范围和交互约束。` : ""}\n\n业务意图：${intent}`;
     case "coding":
-      return `基于技术方案设计，生成可运行的代码骨架。${prototype?.handoffPath ? `\n\n编码前必须读取 specs/${prototype.handoffPath} 和 specs/${prototype.htmlPath}。原型用于表达已确认的交互，不得直接复制其 HTML。` : ""}\n\n业务意图：${intent}`;
+      return `基于技术方案设计，生成可运行的代码骨架。${prototype?.handoffPath ? `\n\n编码前必须读取 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/${prototype.handoffPath} 和 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/${prototype.htmlPath}。原型用于表达已确认的交互，不得直接复制其 HTML。` : ""}\n\n业务意图：${intent}`;
     case "quality":
       return `请执行代码检视、检查测试覆盖率，运行测试并输出质量报告。`;
     case "verify":

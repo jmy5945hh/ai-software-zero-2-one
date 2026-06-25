@@ -1,11 +1,11 @@
 import type { PrototypeState } from "./types";
 
 export function getPrototypeArtifactPaths(taskId: string) {
-  const directory = `prototype/${taskId}`;
+  // 原型产物写入 ~/.aiNativeDevPlatform/sessions/{taskId}/ 目录
   return {
-    manifestPath: `${directory}/prototype.json`,
-    htmlPath: `${directory}/index.html`,
-    handoffPath: `${directory}/原型交接.md`,
+    manifestPath: `prototype.json`,
+    htmlPath: `index.html`,
+    handoffPath: `原型交接.md`,
   };
 }
 

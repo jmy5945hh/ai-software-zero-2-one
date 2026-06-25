@@ -2574,6 +2574,185 @@ p {
   border-top: 1px solid var(--line);
 }
 
+/* ── 新增故事卡弹窗 ──────────────────────── */
+.add-card-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: rgba(45, 58, 49, 0.42);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fadeInBackdrop 0.25s var(--ease-gentle);
+}
+
+.add-card-modal {
+  width: min(520px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--panel);
+  box-shadow: var(--shadow-xl);
+  padding: 28px 32px;
+  animation: modalSlideUp 0.35s var(--ease-out);
+}
+
+.add-card-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.add-card-modal-header h2 {
+  margin-top: 6px;
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.add-card-modal-body {
+  display: grid;
+  gap: 20px;
+}
+
+.add-card-field {
+  display: grid;
+  gap: 6px;
+}
+
+.add-card-field label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.add-card-input {
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  color: var(--text);
+  background: var(--panel);
+  font-size: 0.88rem;
+  transition: border-color var(--duration-fast) var(--ease-gentle);
+}
+
+.add-card-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.add-card-input::placeholder {
+  color: var(--muted);
+}
+
+.add-card-textarea {
+  min-height: 120px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  outline: 0;
+  color: var(--text);
+  background: var(--panel);
+  font-size: 0.88rem;
+  line-height: 1.6;
+  resize: vertical;
+  transition: border-color var(--duration-fast) var(--ease-gentle);
+}
+
+.add-card-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.add-card-textarea::placeholder {
+  color: var(--muted);
+}
+
+.add-card-category-row,
+.add-card-priority-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.add-card-category-btn,
+.add-card-priority-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.add-card-category-btn:hover,
+.add-card-priority-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.add-card-category-btn.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.add-card-priority-btn.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.add-card-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+/* ── 泳道头部新增按钮 ────────────────────── */
+.swimlane-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.add-card-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.add-card-header-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
 /* ── Responsive ──────────────────────────── */
 @media (max-width: 1260px) {
   .guided-grid {
