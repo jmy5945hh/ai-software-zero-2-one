@@ -1699,7 +1699,7 @@ function PrototypePreview({
           className="todo-submit-btn"
           type="button"
           onClick={handlePreview}
-          disabled={loadingHtml || !isAgentConnected || prototype.status !== "reviewing" || !prototype.htmlPath}
+          disabled={loadingHtml || !isAgentConnected || (prototype.status !== "reviewing" && prototype.status !== "approved") || !prototype.htmlPath}
         >
           {loadingHtml ? (
             <><Loader2 size={14} className="spin-icon" /> 加载中...</>

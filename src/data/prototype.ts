@@ -14,15 +14,13 @@ export function parsePrototypeManifest(content: string | undefined, taskId: stri
   try {
     const value = JSON.parse(content) as Partial<PrototypeState>;
     const validMode = value.mode === "none" || value.mode === "new-page" || value.mode === "existing-change";
-    const validStatus = value.status === "pending" || value.status === "reviewing" || value.status === "skipped";
+    const validStatus = value.status === "pending" || value.status === "generating" || value.status === "reviewing" || value.status === "approved" || value.status === "skipped";
     if (!validMode || !validStatus) return null;
 
     if (value.status === "skipped") {
-      if (value.mode !== "none" || value.htmlPath || value.handoffPath) return null;
-    } else {
-      if (value.mode === "none") return null;
-      const expected = getPrototypeArtifactPaths(taskId);
-      if (value.htmlPath !== expected.htmlPath || value.handoffPath !== expected.handoffPath) return null;
+      if (value.mode !== "none") return null;
+    } else if (value.mode === "none") {
+      return null;
     }
 
     return {
