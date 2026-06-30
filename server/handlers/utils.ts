@@ -1,12 +1,12 @@
 import type { WebSocket } from "ws";
 import fs from "fs";
-import type { AgentRunner } from "../AgentRunner";
-import type { SessionPool } from "../SessionPool";
-import type { SummaryStore } from "../SummaryStore";
-import type { WorkspaceManager } from "../WorkspaceManager";
-import type { SessionStore } from "../SessionStore";
-import type { RollbackManager } from "../RollbackManager";
-import type { AgentEvent } from "../protocol";
+import type { AgentRunner } from "../AgentRunner.js";
+import type { SessionPool } from "../SessionPool.js";
+import type { SummaryStore } from "../SummaryStore.js";
+import type { WorkspaceManager } from "../WorkspaceManager.js";
+import type { SessionStore } from "../SessionStore.js";
+import type { RollbackManager } from "../RollbackManager.js";
+import type { AgentEvent } from "../protocol.js";
 
 /** 所有 handler 共享的依赖注入类型 */
 export type HandlerDeps = {
@@ -129,7 +129,7 @@ export function mapSdkEvent(raw: unknown): AgentEvent | null {
 /**
  * 从 session 中提取 StepSessionSnapshot（用于持久化）。
  */
-export function buildStepSnapshot(session: unknown): import("../SessionStore").StepSessionSnapshot {
+export function buildStepSnapshot(session: unknown): import("../SessionStore.js").StepSessionSnapshot {
   const messages = (session as any).agent?.state?.messages || [];
   const mappedMessages = messages
     .filter((m: any) => m.role === "user" || m.role === "assistant")
@@ -138,7 +138,7 @@ export function buildStepSnapshot(session: unknown): import("../SessionStore").S
       content: typeof m.content === "string" ? m.content : "",
     }));
 
-  const turns: import("../SessionStore").StepSessionSnapshot["turns"] = [];
+  const turns: import("../SessionStore.js").StepSessionSnapshot["turns"] = [];
   let turnIndex = 0;
   for (const msg of messages) {
     if (msg.role === "assistant") {
@@ -155,8 +155,8 @@ export function buildStepSnapshot(session: unknown): import("../SessionStore").S
   }
 
   // 收集 token 用量
-  let totalTokenUsage: import("../SessionStore").TokenUsageSnapshot | undefined;
-  const turnTokenUsage: Record<number, import("../SessionStore").TokenUsageSnapshot> = {};
+  let totalTokenUsage: import("../SessionStore.js").TokenUsageSnapshot | undefined;
+  const turnTokenUsage: Record<number, import("../SessionStore.js").TokenUsageSnapshot> = {};
   try {
     const sdkSession = session as any;
     if (typeof sdkSession.getSessionStats === "function") {
@@ -241,7 +241,7 @@ export function ensureSubscription(
 
       // 发送 token 用量事件到前端
       if (snapshot.totalTokenUsage) {
-        const tokenEvent: import("../protocol").AgentEvent = {
+        const tokenEvent: import("../protocol.js").AgentEvent = {
           type: "token_usage",
           usage: {
             input: snapshot.totalTokenUsage.input,

@@ -1,15 +1,15 @@
 import "dotenv/config";
 import http from "http";
 import { WebSocketServer, type WebSocket } from "ws";
-import { AgentRunner } from "./AgentRunner";
-import { SessionPool } from "./SessionPool";
-import { SummaryStore } from "./SummaryStore";
-import { WorkspaceManager } from "./WorkspaceManager";
-import { SessionStore } from "./SessionStore";
-import { RollbackManager } from "./RollbackManager";
-import { handleHttpRequest } from "./httpRoutes";
-import { handleWsMessage } from "./wsHandler";
-import { isHttpRequestAuthorized, rejectUnauthorizedRequest } from "./httpAuth";
+import { AgentRunner } from "./AgentRunner.js";
+import { SessionPool } from "./SessionPool.js";
+import { SummaryStore } from "./SummaryStore.js";
+import { WorkspaceManager } from "./WorkspaceManager.js";
+import { SessionStore } from "./SessionStore.js";
+import { RollbackManager } from "./RollbackManager.js";
+import { handleHttpRequest } from "./httpRoutes.js";
+import { handleWsMessage } from "./wsHandler.js";
+import { isHttpRequestAuthorized, rejectUnauthorizedRequest } from "./httpAuth.js";
 
 const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 

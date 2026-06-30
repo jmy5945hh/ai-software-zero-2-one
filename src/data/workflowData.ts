@@ -28,7 +28,7 @@ export const workflow: WorkflowStep[] = [
     id: "plan",
     label: "技术设计",
     detail: "选择本轮交付模块和风险边界",
-    detailLong: "基于需求规格文档，进行技术预研，技术架构分析以及详细，产出可执行的技术设计文档",
+    detailLong: "基于需求规格文档，进行技术预研，技术架构分析以及详细方案，产出可执行的技术设计文档",
     userRole: "作为 Tech Leader，评审 DevAgent 的技术详设材料",
   },
   {

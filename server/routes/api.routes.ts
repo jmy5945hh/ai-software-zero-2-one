@@ -1,6 +1,6 @@
 import http from "http";
-import type { SessionPool } from "../SessionPool";
-import type { SessionStore } from "../SessionStore";
+import type { SessionPool } from "../SessionPool.js";
+import type { SessionStore } from "../SessionStore.js";
 
 /**
  * Cloud Runtime REST API 路由

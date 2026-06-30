@@ -2,9 +2,9 @@ import http from "http";
 import path from "path";
 import fs from "fs";
 import { spawn } from "child_process";
-import { existsSync } from "../utils/fileOps";
-import { executeBuildCommand } from "../utils/buildCommand";
-import type { WorkspaceManager } from "../WorkspaceManager";
+import { existsSync } from "../utils/fileOps.js";
+import { executeBuildCommand } from "../utils/buildCommand.js";
+import type { WorkspaceManager } from "../WorkspaceManager.js";
 
 const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 

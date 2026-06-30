@@ -1,5 +1,5 @@
 import type { WebSocket } from "ws";
-import type { HandlerDeps } from "./utils";
+import type { HandlerDeps } from "./utils.js";
 import {
   resolveWorkspaceDir,
   ensureSubscription,
@@ -7,9 +7,9 @@ import {
   mapSdkEvent,
   sendResponse,
   sendWorkspaceInitializing,
-} from "./utils";
-import { rejectQuestion, pendingQuestions, resolveQuestion, continueQuestion } from "../customTools";
-import type { WsRequestMessage, SessionSnapshot } from "../protocol";
+} from "./utils.js";
+import { rejectQuestion, pendingQuestions, resolveQuestion, continueQuestion } from "../customTools.js";
+import type { WsRequestMessage, SessionSnapshot } from "../protocol.js";
 
 /**
  * Session 相关消息处理
@@ -380,7 +380,7 @@ export async function handleSessionMessage(
       const { sessionId, stepId, snapshot } = msg.params as {
         sessionId: string;
         stepId: string;
-        snapshot: import("../SessionStore").StepSessionSnapshot;
+        snapshot: import("../SessionStore.js").StepSessionSnapshot;
       };
       sessionStore.saveStep(sessionId, stepId, snapshot);
       sendResponse(ws, msg.id, {});
@@ -389,7 +389,7 @@ export async function handleSessionMessage(
 
     case "session.saveRecord": {
       const record = msg.params as Record<string, unknown>;
-      sessionStore.save(record as import("../SessionStore").SessionRecord);
+      sessionStore.save(record as import("../SessionStore.js").SessionRecord);
       sendResponse(ws, msg.id, {});
       break;
     }

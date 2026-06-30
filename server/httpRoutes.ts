@@ -1,12 +1,12 @@
 import http from "http";
-import { SessionPool } from "./SessionPool";
-import { SessionStore } from "./SessionStore";
-import { RollbackManager } from "./RollbackManager";
-import { WorkspaceManager } from "./WorkspaceManager";
-import { handleWorkspaceRoutes } from "./routes/workspace.routes";
-import { handleSessionRoutes } from "./routes/session.routes";
-import { handleBuildRoutes } from "./routes/build.routes";
-import { handleApiRoutes } from "./routes/api.routes";
+import { SessionPool } from "./SessionPool.js";
+import { SessionStore } from "./SessionStore.js";
+import { RollbackManager } from "./RollbackManager.js";
+import { WorkspaceManager } from "./WorkspaceManager.js";
+import { handleWorkspaceRoutes } from "./routes/workspace.routes.js";
+import { handleSessionRoutes } from "./routes/session.routes.js";
+import { handleBuildRoutes } from "./routes/build.routes.js";
+import { handleApiRoutes } from "./routes/api.routes.js";
 
 export type HttpRouteGroup = "api" | "session" | "build" | "workspace" | null;
 

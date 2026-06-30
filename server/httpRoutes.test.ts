@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveHttpRouteGroup } from "./httpRoutes";
+import { resolveHttpRouteGroup } from "./httpRoutes.js";
 
 test("HTTP endpoints keep their transport modules", () => {
   const cases = [
