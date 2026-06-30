@@ -18,6 +18,8 @@ type WorkspaceSelectorProps = {
   initialPath?: string;
   /** 运行时模式：本地显示文件路径，云端显示 Git 仓库信息 */
   mode?: RuntimeMode;
+  /** 已配置的云端仓库，用于再次打开时回显 */
+  initialGitRepo?: { url: string; branch: string };
   /** 列出 Git 分支的回调 */
   onListBranches?: (dirPath: string) => Promise<{ branches: string[]; current: string | null; isRepo: boolean }>;
 };
@@ -34,6 +36,7 @@ export function WorkspaceSelector({
   onBrowse,
   initialPath,
   mode = "local",
+  initialGitRepo,
   onListBranches,
 }: WorkspaceSelectorProps) {
   // ── 本地模式状态 ──
@@ -47,8 +50,8 @@ export function WorkspaceSelector({
   const [internalMode, setInternalMode] = useState<RuntimeMode>(mode);
 
   // ── 云端模式状态 ──
-  const [gitUrl, setGitUrl] = useState("https://github.com/jmy5945hh/ant-design-pro-for-edd.git");
-  const [gitBranch, setGitBranch] = useState("001_chatbot");
+  const [gitUrl, setGitUrl] = useState(initialGitRepo?.url || "https://github.com/jmy5945hh/ant-design-pro-for-edd.git");
+  const [gitBranch, setGitBranch] = useState(initialGitRepo?.branch || "001_chatbot");
 
   // ── 本地模式 Git 检测状态 ──
   const [isGitRepo, setIsGitRepo] = useState(false);

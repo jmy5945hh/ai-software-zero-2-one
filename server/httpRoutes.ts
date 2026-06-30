@@ -16,7 +16,8 @@ export function resolveHttpRouteGroup(url: string | undefined): HttpRouteGroup {
       url?.startsWith("/repo-diff") || url?.startsWith("/step-snapshot") ||
       url?.startsWith("/rollback/")) return "session";
   if (url?.startsWith("/project-build") || url?.startsWith("/read-file") ||
-      url?.startsWith("/qa-review")) return "build";
+      url?.startsWith("/qa-review") || url?.startsWith("/verification-plan") ||
+      url?.startsWith("/verification-run") || url?.startsWith("/delivery-report")) return "build";
   if (url?.startsWith("/specs-") || url?.startsWith("/workspace-") ||
       url?.startsWith("/repo-") || url?.startsWith("/git-") ||
       url?.startsWith("/session-file")) return "workspace";

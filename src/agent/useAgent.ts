@@ -215,22 +215,25 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   // ── 初始化任务环境（HTTP 接口） ──
   const initTask = useCallback(
     async (params: {
+      taskId?: string;
       intent: string;
       workspacePath: string;
       runtimeMode: "local" | "cloud";
       notes: string;
       todoAnswers: Record<number, string | string[]>;
       initialPrompts: Record<string, string>;
+      deliveryConfig?: import("../data/types").DeliveryConfig;
       gitRepo?: { url: string; branch: string };
       localGit?: { branch: string; shouldPull: boolean };
     }) => {
-      if (!taskId) return;
+      const effectiveTaskId = params.taskId || taskId;
+      if (!effectiveTaskId) return;
       const origin = getAgentWsOrigin(params.runtimeMode);
       try {
         const res = await agentFetch(`${origin}/task/init`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ taskId, ...params }),
+          body: JSON.stringify({ ...params, taskId: effectiveTaskId }),
         }, params.runtimeMode);
         if (!res.ok) {
           console.warn("[useAgent] initTask HTTP error:", res.status, await res.text());
@@ -244,7 +247,13 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
 
   // ── 创建 session ──
   const createSession = useCallback(
-    async (step: string, intent: string, workspacePath?: string, gitRepo?: { url: string; branch: string }) => {
+    async (
+      step: string,
+      intent: string,
+      workspacePath?: string,
+      gitRepo?: { url: string; branch: string },
+      modelId?: string,
+    ) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
       const params: Record<string, unknown> = {
@@ -252,6 +261,9 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
         step,
         intent,
       };
+      if (modelId && modelId !== "auto") {
+        params.modelId = modelId;
+      }
       if (workspacePath) {
         params.workspacePath = workspacePath;
       }

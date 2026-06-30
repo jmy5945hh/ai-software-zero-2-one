@@ -53,6 +53,7 @@ export function handleSessionRoutes(
           intent: params.intent,
           workspacePath: resolvedWorkspacePath,
           runtimeMode: params.runtimeMode,
+          deliveryConfig: params.deliveryConfig || undefined,
           gitRepo: params.gitRepo || undefined,
           localGit: params.localGit || undefined,
           stepIndex: 0,

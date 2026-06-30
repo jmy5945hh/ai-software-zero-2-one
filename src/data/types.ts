@@ -4,6 +4,26 @@ import type { LucideIcon } from "lucide-react";
 export type View = "home" | "workspace";
 export type HomeTab = "tasks" | "build" | "history";
 
+// ── v0.2 交付配置 ───────────────────────────
+export type DeliveryMode = "app" | "project-change" | "bugfix" | "verification";
+export type AutonomyMode = "fast" | "collaborative" | "strict";
+export type VerificationProfile = "full" | "smoke" | "api-web";
+export type ModelPolicy = "balanced" | "quality" | "cost";
+export type DeliveryInteractionMode = "plan" | "builder" | "workflow";
+
+export type DeliveryConfig = {
+  interactionMode: DeliveryInteractionMode;
+  modelId: "auto" | string;
+  mode: DeliveryMode;
+  autonomy: AutonomyMode;
+  verification: VerificationProfile;
+  modelPolicy: ModelPolicy;
+  skills: string[];
+  mcpServers: string[];
+  autoRepair: boolean;
+  confirmRiskyActions: boolean;
+};
+
 // ── 任务卡片 ────────────────────────────────
 export type TaskCategory = "story" | "defect" | "governance";
 
@@ -102,6 +122,8 @@ export type AppState = {
   workspacePath: string;
   /** 当前运行时模式（local / cloud），持久化到 localStorage */
   runtimeMode: "local" | "cloud";
+  /** v0.2: 一站式入口选择的交付策略，供 Agent runtime / SOP 节点消费 */
+  deliveryConfig: DeliveryConfig;
   /** Git 仓库配置（仅云端模式使用） */
   gitRepo?: GitRepoConfig;
   /** 本地模式 Git 分支配置（分支切换 + pull） */
@@ -128,6 +150,12 @@ export type AppState = {
   initialPrompts: Record<string, string>;
   /** QA 质量审查状态 */
   qaReview: QaReviewState;
+  /** v0.2: 系统级验证计划 */
+  verificationPlan: VerificationArtifactState;
+  /** v0.2: 系统级验证执行结果 */
+  verificationResult: VerificationArtifactState;
+  /** v0.2: 测试后交付报告 */
+  deliveryReport: VerificationArtifactState;
   /** 从历史记录恢复的会话快照（stepId → 会话数据），用于继续执行时恢复上下文 */
   restoredSessions: Record<string, {
     messages: Array<{ role: "user" | "assistant"; content: string }>;
@@ -271,9 +299,20 @@ export type QaReviewState = {
   error?: string;
 };
 
+// ── v0.2 验证与交付证据 ─────────────────────
+
+export type VerificationArtifactStatus = "idle" | "running" | "done" | "error";
+
+export type VerificationArtifactState = {
+  status: VerificationArtifactStatus;
+  filePath: string;
+  content: string;
+  error?: string;
+};
+
 // ── 原型设计 ─────────────────────────────────
 
-export type PrototypeMode = "none" | "new-page" | "existing-change";
+export type PrototypeMode = "pending" | "none" | "new-page" | "existing-change";
 export type PrototypeStatus =
   | "pending"
   | "generating"

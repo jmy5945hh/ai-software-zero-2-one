@@ -87,6 +87,8 @@ export type SessionMeta = {
   workspacePath: string;
   /** 运行时模式：local 或 cloud */
   runtimeMode: "local" | "cloud";
+  /** v0.2 一站式交付策略 */
+  deliveryConfig?: AppState["deliveryConfig"];
   /** Git 仓库配置（云端模式），用于 session 恢复时重建 workspace */
   gitRepo?: { url: string; branch: string; subdirectory?: string };
   /** 本地模式使用的 Git 分支配置 */
@@ -109,6 +111,12 @@ export type SessionMeta = {
   qaReview?: {
     status: "idle" | "running" | "done" | "error";
   };
+  /** v0.2 系统级验证计划 */
+  verificationPlan?: AppState["verificationPlan"];
+  /** v0.2 系统级验证执行结果 */
+  verificationResult?: AppState["verificationResult"];
+  /** v0.2 测试后交付报告 */
+  deliveryReport?: AppState["deliveryReport"];
   /** 交互原型状态 */
   prototype?: PrototypeState;
 };
@@ -426,6 +434,7 @@ export function useSessionRecords() {
         intent: state.intent,
         workspacePath: state.workspacePath,
         runtimeMode: state.runtimeMode || "local",
+        deliveryConfig: state.deliveryConfig,
         gitRepo: state.gitRepo,
         localGit: state.localGit,
         stepIndex: state.stepIndex,
@@ -445,6 +454,15 @@ export function useSessionRecords() {
         qaReview: {
           status: state.qaReview.status === "running" ? "idle" as const : state.qaReview.status,
         },
+        verificationPlan: state.verificationPlan.status === "running"
+          ? { ...state.verificationPlan, status: "idle" as const }
+          : state.verificationPlan,
+        verificationResult: state.verificationResult.status === "running"
+          ? { ...state.verificationResult, status: "idle" as const }
+          : state.verificationResult,
+        deliveryReport: state.deliveryReport.status === "running"
+          ? { ...state.deliveryReport, status: "idle" as const }
+          : state.deliveryReport,
         prototype: state.prototype || {
           mode: "pending",
           status: "pending",

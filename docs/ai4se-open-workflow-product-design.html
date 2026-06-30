@@ -1,0 +1,1202 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI4SE 开放工作流体系产品设计</title>
+  <style>
+    :root {
+      --bg: #f9f8f4;
+      --bg-soft: #f2f0eb;
+      --panel: #ffffff;
+      --panel-soft: #fbfaf7;
+      --line: #e6e2da;
+      --text: #2d3a31;
+      --muted: #8c9a84;
+      --muted-warm: #a89b8c;
+      --primary: #8c9a84;
+      --primary-light: rgba(140, 154, 132, 0.13);
+      --terracotta: #c27b66;
+      --terracotta-light: rgba(194, 123, 102, 0.13);
+      --ink-soft: rgba(45, 58, 49, 0.74);
+      --shadow: 0 18px 44px -28px rgba(45, 58, 49, 0.34);
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 22px;
+      --font-heading: Georgia, "Times New Roman", "Noto Serif SC", serif;
+      --font-body: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font-family: var(--font-body);
+      line-height: 1.72;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.018;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      z-index: 20;
+    }
+
+    .shell {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 70px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border: 1px solid var(--primary);
+      border-radius: var(--radius-sm);
+      background: var(--primary-light);
+      font-family: var(--font-heading);
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 15px;
+      letter-spacing: 0.01em;
+    }
+
+    .brand span,
+    .meta {
+      color: var(--muted-warm);
+      font-size: 12px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+      gap: 34px;
+      align-items: end;
+      padding: 58px 0 38px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3 {
+      font-family: var(--font-heading);
+      line-height: 1.14;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      margin: 12px 0 16px;
+      font-size: clamp(38px, 6vw, 72px);
+      font-weight: 600;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(27px, 3vw, 40px);
+      font-weight: 600;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    .lead {
+      max-width: 760px;
+      color: var(--ink-soft);
+      font-size: 18px;
+    }
+
+    .hero-panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-soft);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 28px;
+      padding: 0 11px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--terracotta);
+    }
+
+    .prompt-box {
+      margin: 18px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--bg);
+      color: var(--ink-soft);
+    }
+
+    .generated-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding: 0 18px 18px;
+    }
+
+    .mini-card {
+      min-height: 92px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: #fff;
+    }
+
+    .mini-card b {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .mini-card span {
+      color: var(--muted-warm);
+      font-size: 12px;
+    }
+
+    .section {
+      margin-top: 42px;
+      padding-top: 42px;
+      border-top: 1px solid var(--line);
+    }
+
+    .section-intro {
+      display: grid;
+      grid-template-columns: 0.75fr 1.25fr;
+      gap: 28px;
+      align-items: start;
+      margin-bottom: 22px;
+    }
+
+    .section-intro p {
+      color: var(--ink-soft);
+      font-size: 16px;
+    }
+
+    .grid-2,
+    .grid-3,
+    .grid-4 {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .grid-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    .card-body p,
+    .card-body li {
+      color: var(--ink-soft);
+    }
+
+    .label {
+      display: inline-block;
+      margin-bottom: 10px;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .quote {
+      padding: 24px;
+      border-left: 4px solid var(--terracotta);
+      border-radius: var(--radius-sm);
+      background: var(--terracotta-light);
+      font-family: var(--font-heading);
+      font-size: 25px;
+      line-height: 1.42;
+    }
+
+    .journey {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .step {
+      min-width: 150px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: #fff;
+      position: relative;
+    }
+
+    .step::after {
+      content: "";
+      position: absolute;
+      right: -12px;
+      top: 34px;
+      width: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .step:last-child::after {
+      display: none;
+    }
+
+    .step-num {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      margin-bottom: 12px;
+      border-radius: 999px;
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .step b {
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .step p {
+      color: var(--ink-soft);
+      font-size: 13px;
+    }
+
+    .wireframe {
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr) 300px;
+      gap: 14px;
+      min-height: 520px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--bg-soft);
+    }
+
+    .pane {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .pane-title {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-soft);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .pane-body {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+    }
+
+    .method-item,
+    .agent-item,
+    .config-row {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--panel-soft);
+    }
+
+    .method-item.active,
+    .agent-item.active {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+
+    .flow-canvas {
+      display: grid;
+      align-content: start;
+      gap: 12px;
+      padding: 14px;
+    }
+
+    .node {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: #fff;
+      box-shadow: 0 8px 24px -22px rgba(45, 58, 49, 0.5);
+    }
+
+    .node-icon {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: var(--radius-sm);
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 900;
+    }
+
+    .node small,
+    .muted {
+      color: var(--muted-warm);
+      font-size: 12px;
+    }
+
+    .gate {
+      justify-self: center;
+      padding: 6px 12px;
+      border: 1px dashed var(--terracotta);
+      border-radius: 999px;
+      color: var(--terracotta);
+      background: var(--terracotta-light);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .decision-map {
+      display: grid;
+      grid-template-columns: 0.85fr 1.15fr;
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .ladder {
+      display: grid;
+      gap: 10px;
+    }
+
+    .ladder-row {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: #fff;
+    }
+
+    .matrix {
+      display: grid;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .matrix-row {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr 1.4fr 1fr;
+    }
+
+    .matrix-row > div {
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+    }
+
+    .matrix-row > div:last-child {
+      border-right: 0;
+    }
+
+    .matrix-row:last-child > div {
+      border-bottom: 0;
+    }
+
+    .matrix-head {
+      background: var(--panel-soft);
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    .principle-list {
+      display: grid;
+      gap: 12px;
+      counter-reset: principle;
+    }
+
+    .principle {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 14px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: #fff;
+      counter-increment: principle;
+    }
+
+    .principle::before {
+      content: counter(principle);
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 900;
+    }
+
+    .prototype-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .screen {
+      min-height: 250px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: #fff;
+    }
+
+    .screen-top {
+      height: 12px;
+      width: 46%;
+      margin-bottom: 16px;
+      border-radius: 999px;
+      background: var(--line);
+    }
+
+    .screen-line {
+      height: 10px;
+      margin-bottom: 9px;
+      border-radius: 999px;
+      background: var(--bg-soft);
+    }
+
+    .screen-line.short {
+      width: 62%;
+    }
+
+    .screen-action {
+      display: inline-flex;
+      margin-top: 12px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: var(--text);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .risk-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .risk {
+      display: grid;
+      grid-template-columns: 26px 1fr;
+      gap: 10px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: #fff;
+    }
+
+    .risk span:first-child {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: var(--terracotta-light);
+      color: var(--terracotta);
+      font-weight: 900;
+      font-size: 12px;
+    }
+
+    .footer-note {
+      margin-top: 46px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--text);
+      color: #f9f8f4;
+    }
+
+    .footer-note p {
+      color: rgba(249, 248, 244, 0.78);
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+
+    @media (max-width: 980px) {
+      .hero,
+      .section-intro,
+      .decision-map,
+      .wireframe {
+        grid-template-columns: 1fr;
+      }
+
+      .grid-3,
+      .grid-4,
+      .prototype-strip {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .wireframe {
+        min-height: auto;
+      }
+    }
+
+    @media (max-width: 680px) {
+      .shell {
+        width: min(100% - 24px, 1180px);
+        padding-top: 18px;
+      }
+
+      .topbar,
+      .generated-row,
+      .grid-2,
+      .grid-3,
+      .grid-4,
+      .prototype-strip,
+      .matrix-row,
+      .ladder-row {
+        grid-template-columns: 1fr;
+      }
+
+      .topbar {
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">01</div>
+        <div>
+          <strong>Zero-One Software</strong>
+          <span>AI4SE 开放工作流体系产品设计材料</span>
+        </div>
+      </div>
+      <div class="meta">版本草案 / 2026-06-24</div>
+    </header>
+
+    <section class="hero">
+      <div>
+        <div class="eyebrow"><span class="dot"></span> Product Owner View</div>
+        <h1>把研发流程变成用户可拥有的 AI 团队</h1>
+        <p class="lead">
+          开放 workflow 的价值不是让用户配置更多字段，而是让 CTO、技术负责人、产品负责人把自己的研发方法复制给平台，
+          并在真实任务中不断校准。用户要获得的不是一个流程编辑器，而是一个可以被训练、被解释、被治理、被复用的交付系统。
+        </p>
+      </div>
+
+      <aside class="hero-panel">
+        <div class="panel-head">
+          <strong>一句话创建体验</strong>
+          <span class="status-pill"><span class="dot"></span>草案待确认</span>
+        </div>
+        <div class="prompt-box">
+          “我想要一个偏前端体验验证的研发流程：需求后先做竞品和用户路径分析，再生成交互原型，确认后编码，最后跑 E2E 和发布检查。”
+        </div>
+        <div class="generated-row">
+          <div class="mini-card">
+            <b>Workflow 草案</b>
+            <span>6 个节点，2 个用户确认关口，1 个可跳过分支。</span>
+          </div>
+          <div class="mini-card">
+            <b>Agent 节点</b>
+            <span>新增 UX Analyst，复用 Prototype / Coding / QA。</span>
+          </div>
+          <div class="mini-card">
+            <b>运行预览</b>
+            <span>展示输入、产物、权限、失败恢复和预计耗时。</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="section">
+      <div class="section-intro">
+        <div>
+          <span class="label">01 / Product Thesis</span>
+          <h2>用户真正购买的是“可复制的研发判断力”</h2>
+        </div>
+        <p>
+          固定 AI4SE workflow 证明了平台能跑通一个标准研发任务；开放体系要证明平台能承载不同团队的研发方法。
+          产品应把复杂配置折叠成用户熟悉的语言：团队方法、角色分工、交付关口、可验证产物。
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card"><div class="card-body">
+          <span class="label">用户痛点</span>
+          <h3>AI 会做事，但不懂我的团队方法</h3>
+          <p>不同组织有自己的评审节奏、合规要求、设计偏好和交付标准。固定流程只能演示能力，无法沉淀组织经验。</p>
+        </div></div>
+        <div class="card"><div class="card-body">
+          <span class="label">产品机会</span>
+          <h3>让方法从“口头经验”变成“可运行资产”</h3>
+          <p>用户不需要从零设计 Agent。他只要描述方法，平台生成可读、可改、可试跑的团队流程。</p>
+        </div></div>
+        <div class="card"><div class="card-body">
+          <span class="label">差异化</span>
+          <h3>不是自动化编排，而是研发组织建模</h3>
+          <p>节点不是脚本步骤，而是带有职责、技能、工具、产物、权限和用户协作方式的 AI 成员。</p>
+        </div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-intro">
+        <div>
+          <span class="label">02 / Users</span>
+          <h2>先服务“会定义研发方式”的人</h2>
+        </div>
+        <p>
+          早期不要面向所有用户做全量自由配置。优先服务能清楚表达研发方法、同时又希望降低执行成本的人。
+          他们不是为了玩配置，而是为了让团队稳定复用一套更好的交付方式。
+        </p>
+      </div>
+
+      <div class="matrix">
+        <div class="matrix-row matrix-head">
+          <div>角色</div>
+          <div>他们想完成的工作</div>
+          <div>最怕什么</div>
+          <div>产品应承诺</div>
+        </div>
+        <div class="matrix-row">
+          <div>CTO / 技术负责人</div>
+          <div>把团队工程标准、质量门禁、评审机制固化成可运行流程。</div>
+          <div>AI 交付不可控、每次风格漂移、无法追责。</div>
+          <div>可解释、可审计、可回滚、可复用。</div>
+        </div>
+        <div class="matrix-row">
+          <div>产品负责人</div>
+          <div>让需求、原型、验收标准在编码前被充分对齐。</div>
+          <div>工程直接开做，最后发现交互和业务理解偏差。</div>
+          <div>低门槛参与，每个关口都能看懂并决策。</div>
+        </div>
+        <div class="matrix-row">
+          <div>平台管理员</div>
+          <div>管理 Agent、Skills、MCP、权限和团队模板。</div>
+          <div>开放配置后权限失控，工具调用不可见。</div>
+          <div>默认安全，按角色授权，敏感动作需确认。</div>
+        </div>
+        <div class="matrix-row">
+          <div>高级开发者</div>
+          <div>创建专精 Agent，复用在多个工作流中。</div>
+          <div>每个任务都要重复写 Prompt 和约束。</div>
+          <div>一次创建，多处复用，运行后持续优化。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-intro">
+        <div>
+          <span class="label">03 / Core Journey</span>
+          <h2>从“使用模板”到“拥有自己的 AI 研发组织”</h2>
+        </div>
+        <p>
+          用户旅程要像搭建团队，而不是像配置流水线。每一步都给用户一个明确的收益，并让复杂度只在需要时展开。
+        </p>
+      </div>
+
+      <div class="journey">
+        <div class="step">
+          <div class="step-num">1</div>
+          <b>选择起点</b>
+          <p>从 AI4SE 默认模板、团队模板、历史任务或一句话开始。</p>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <b>描述方法</b>
+          <p>用自然语言说明想要新增的角色、关口、产物或质量标准。</p>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <b>AI 生成草案</b>
+          <p>平台输出 workflow、Agent、Skills/MCP 建议和运行预览。</p>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <b>试跑校准</b>
+          <p>在一个真实任务中观察每个节点是否有价值，快速调整。</p>
+        </div>
+        <div class="step">
+          <div class="step-num">5</div>
+          <b>发布复用</b>
+          <p>保存为团队方法，后续任务可直接选择并持续积累版本。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-intro">
+        <div>
+          <span class="label">04 / Experience Principles</span>
+          <h2>降低认知负担的 6 条产品原则</h2>
+        </div>
+        <p>
+          开放能力会天然变复杂。产品必须把自由度包在清晰的默认路径里，让用户先获得结果，再逐步理解和控制细节。
+        </p>
+      </div>
+
+      <div class="principle-list">
+        <div class="principle">
+          <div>
+            <h3>先问目标，不先问配置</h3>
+            <p>入口文案应该是“你想让 AI 团队如何工作？”，不是“请选择节点类型”。</p>
+          </div>
+        </div>
+        <div class="principle">
+          <div>
+            <h3>草案先行，配置后置</h3>
+            <p>一句话生成的结果先进入草案态。用户看懂后确认，才发布成正式模板。</p>
+          </div>
+        </div>
+        <div class="principle">
+          <div>
+            <h3>每个节点都必须解释自己的价值</h3>
+            <p>节点卡片默认显示职责、输入、输出、用户何时介入、为什么需要这个节点。</p>
+          </div>
+        </div>
+        <div class="principle">
+          <div>
+            <h3>画布不是第一界面</h3>
+            <p>先用“流程预览 + Agent 详情抽屉”承载主要体验；画布只服务复杂流程编辑。</p>
+          </div>
+        </div>
+        <div class="principle">
+          <div>
+            <h3>把工具名翻译成能力语言</h3>
+            <p>用户选择“读取 Figma”“查数据库”“跑浏览器测试”，而不是先理解 MCP server 名称。</p>
+          </div>
+        </div>
+        <div class="principle">
+          <div>
+            <h3>运行时比设计时更重要</h3>
+            <p>用户最终信任的不是模板编辑页，而是真实任务中每步产物、决策、权限和回退都清楚。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-intro">
+        <div>
+          <span class="label">05 / Product Shape</span>
+          <h2>核心界面：AI 团队工作台</h2>
+        </div>
+        <p>
+          推荐把开放体系命名为“AI 团队工作台”或“研发方法工作台”。用户管理的不是低层 workflow JSON，
+          而是一组可运行、可治理、可演化的团队方法。
+        </p>
+      </div>
+
+      <div class="wireframe">
+        <div class="pane">
+          <div class="pane-title">方法库</div>
+          <div class="pane-body">
+            <div class="method-item active"><b>AI4SE 标准交付</b><br><span class="muted">平台默认 / 7 节点</span></div>
+            <div class="method-item"><b>前端体验优先</b><br><span class="muted">团队模板 / 8 节点</span></div>
+            <div class="method-item"><b>安全审计优先</b><br><span class="muted">草案 / 待试跑</span></div>
+            <div class="method-item"><b>从一句话创建</b><br><span class="muted">描述你的研发方式</span></div>
+          </div>
+        </div>
+
+        <div class="pane">
+          <div class="pane-title">运行预览</div>
+          <div class="flow-canvas">
+            <div class="node">
+              <div class="node-icon">P</div>
+              <div><b>需求分析</b><br><small>澄清目标、边界、验收标准</small></div>
+              <span class="status-pill">默认</span>
+            </div>
+            <div class="node">
+              <div class="node-icon">U</div>
+              <div><b>UX Analyst</b><br><small>分析用户路径、竞品参照、关键体验风险</small></div>
+              <span class="status-pill">新增</span>
+            </div>
+            <div class="gate">用户确认：体验方向是否正确</div>
+            <div class="node">
+              <div class="node-icon">H</div>
+              <div><b>交互原型</b><br><small>生成 HTML 原型和交接说明</small></div>
+              <span class="status-pill">条件执行</span>
+            </div>
+            <div class="node">
+              <div class="node-icon">A</div>
+              <div><b>技术设计</b><br><small>拆解模块、风险、数据和工程方案</small></div>
+              <span class="status-pill">默认</span>
+            </div>
+            <div class="node">
+              <div class="node-icon">Q</div>
+              <div><b>质量 QA</b><br><small>代码检视、测试、E2E、交付检查</small></div>
+              <span class="status-pill">增强</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="pane">
+          <div class="pane-title">Agent 详情</div>
+          <div class="pane-body">
+            <div class="agent-item active"><b>使命</b><br><span class="muted">在编码前识别体验风险，避免做出“功能正确但不好用”的方案。</span></div>
+            <div class="config-row"><b>读取材料</b><br><span class="muted">需求规格、现有页面、用户反馈、竞品链接。</span></div>
+            <div class="config-row"><b>产物</b><br><span class="muted">用户路径图、关键交互假设、原型输入清单。</span></div>
+            <div class="config-row"><b>Skills / MCP</b><br><span class="muted">网页观察、截图分析、设计规范检索。</span></div>
+            <div class="config-row"><b>高级配置</b><br><span class="muted">Sys Prompt、模型、权限、工具白名单。</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-intro">
+        <div>
+          <span class="label">06 / Key Interaction</span>
+          <h2>一句话创建不是魔法按钮，而是协同设计流程</h2>
+        </div>
+        <p>
+          AI 生成 workflow/agent 的体验应该包含“生成、解释、模拟、确认”四步。用户不需要相信黑盒，平台要把 AI 的设计理由显性化。
+        </p>
+      </div>
+
+      <div class="decision-map">
+        <div class="card"><div class="card-body">
+          <div class="quote">“我想让平台像一个懂我们团队习惯的研发负责人，而不是每次都像新来的实习生。”</div>
+        </div></div>
+        <div class="ladder">
+          <div class="ladder-row">
+            <b>1. 生成</b>
+            <p>从一句话提取交付目标、关键角色、必要关口、质量标准和约束。</p>
+          </div>
+          <div class="ladder-row">
+            <b>2. 解释</b>
+            <p>每个节点说明“为什么需要、如果删除会损失什么、什么任务会跳过”。</p>
+          </div>
+          <div class="ladder-row">
+            <b>3. 模拟</b>
+            <p>用一个示例任务预演：节点顺序、用户介入点、预计产物、风险提示。</p>
+          </div>
+          <div class="ladder-row">
+            <b>4. 发布</b>
+            <p>先试跑，再发布。发布后成为团队模板，进入版本管理。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-intro">
+        <div>
+          <span class="label">07 / Agent Node Model</span>
+          <h2>创建 Agent 节点时，用户看见的是“职责卡”</h2>
+        </div>
+        <p>
+          Agent 节点不应以 Prompt 编辑器开场。用户先定义职责、产物、判断边界，再由平台生成可编辑 Prompt。
+          高级用户仍可进入 Sys Prompt、Skills、MCP、模型和权限。
+        </p>
+      </div>
+
+      <div class="grid-4">
+        <div class="card"><div class="card-body">
+          <span class="label">Role</span>
+          <h3>它是谁</h3>
+          <p>角色名称、专业领域、适用任务类型、与其他 Agent 的边界。</p>
+        </div></div>
+        <div class="card"><div class="card-body">
+          <span class="label">Mission</span>
+          <h3>它负责什么</h3>
+          <p>一句话使命、成功标准、必须避免的行为、需要用户确认的事项。</p>
+        </div></div>
+        <div class="card"><div class="card-body">
+          <span class="label">Materials</span>
+          <h3>它读写什么</h3>
+          <p>输入材料、上下文来源、输出产物、交接给下游节点的格式。</p>
+        </div></div>
+        <div class="card"><div class="card-body">
+          <span class="label">Powers</span>
+          <h3>它能调用什么</h3>
+          <p>Skills、MCP、文件权限、命令权限、外部系统权限和审批要求。</p>
+        </div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-intro">
+        <div>
+          <span class="label">08 / Skills & MCP</span>
+          <h2>把工具市场设计成“能力货架”</h2>
+        </div>
+        <p>
+          大多数用户不关心 MCP 协议细节。他们关心某个 Agent 是否能访问设计稿、查需求系统、跑浏览器、读数据库、发 PR。
+          因此配置入口应按能力组织，再映射到底层 Skills / MCP。
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card"><div class="card-body">
+          <span class="label">Discover</span>
+          <h3>按任务发现能力</h3>
+          <p>当用户创建“UX Analyst”，系统推荐设计观察、截图分析、竞品网页读取，而不是给一串工具列表。</p>
+        </div></div>
+        <div class="card"><div class="card-body">
+          <span class="label">Trust</span>
+          <h3>每项能力有风险等级</h3>
+          <p>只读、写文件、执行命令、访问外部系统、产生费用等风险要清晰标识，默认最小授权。</p>
+        </div></div>
+        <div class="card"><div class="card-body">
+          <span class="label">Audit</span>
+          <h3>运行后可追踪</h3>
+          <p>任务记录中展示每个 Agent 用过哪些能力、读取了什么、写了什么、哪些操作经过用户确认。</p>
+        </div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-intro">
+        <div>
+          <span class="label">09 / Runtime Experience</span>
+          <h2>真正建立信任的是运行中的可见性</h2>
+        </div>
+        <p>
+          Workflow 设计页只是入口。用户真正判断平台是否可靠，是在一次真实任务中：每步为什么开始、做了什么、需要我决定什么、出了问题怎么退。
+        </p>
+      </div>
+
+      <div class="prototype-strip">
+        <div class="screen">
+          <div class="screen-top"></div>
+          <h3>当前节点</h3>
+          <div class="screen-line"></div>
+          <div class="screen-line short"></div>
+          <p class="muted">说明这个 Agent 的目标、输入和预期产物。</p>
+          <span class="screen-action">查看职责</span>
+        </div>
+        <div class="screen">
+          <div class="screen-top"></div>
+          <h3>用户关口</h3>
+          <div class="screen-line"></div>
+          <div class="screen-line"></div>
+          <p class="muted">用选择题或预设选项降低决策成本。</p>
+          <span class="screen-action">确认方向</span>
+        </div>
+        <div class="screen">
+          <div class="screen-top"></div>
+          <h3>运行证据</h3>
+          <div class="screen-line"></div>
+          <div class="screen-line short"></div>
+          <p class="muted">产物、工具调用、文件变更、回退点集中展示。</p>
+          <span class="screen-action">查看记录</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-intro">
+        <div>
+          <span class="label">10 / MVP Scope</span>
+          <h2>建议先做“模板化开放”，不要一步到全自由画布</h2>
+        </div>
+        <p>
+          第一版要证明用户能把固定 AI4SE 流程改造成自己的方法，并能真实跑起来。复杂画布、市场生态、团队权限可以逐步加。
+        </p>
+      </div>
+
+      <div class="matrix">
+        <div class="matrix-row matrix-head">
+          <div>阶段</div>
+          <div>用户价值</div>
+          <div>核心能力</div>
+          <div>暂不做</div>
+        </div>
+        <div class="matrix-row">
+          <div>MVP</div>
+          <div>从默认 AI4SE 模板复制，新增/调整 Agent 节点，并在真实任务中运行。</div>
+          <div>方法库、流程预览、Agent 职责卡、Sys Prompt 高级编辑、已有 Skills/MCP 绑定、run manifest。</div>
+          <div>自由画布、多租户市场、复杂 DAG、自动优化。</div>
+        </div>
+        <div class="matrix-row">
+          <div>V1</div>
+          <div>一句话生成 workflow/agent，支持试跑和发布。</div>
+          <div>AI 草案生成、解释理由、模拟运行、版本管理、模板发布。</div>
+          <div>跨组织模板市场、复杂权限继承。</div>
+        </div>
+        <div class="matrix-row">
+          <div>V2</div>
+          <div>团队级治理和生态扩展。</div>
+          <div>能力货架、审批策略、模板评分、运行效果分析、团队共享。</div>
+          <div>不受控的任意代码插件。</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-intro">
+        <div>
+          <span class="label">11 / Architecture Mapping</span>
+          <h2>技术只是把产品语言翻译成可执行资产</h2>
+        </div>
+        <p>
+          架构上保留当前固定 workflow 的成功经验，把“任务级路由契约”升级成通用运行清单。产品语言是团队方法，
+          技术语言才是 definition、node、resource、session。
+        </p>
+      </div>
+
+      <div class="grid-3">
+        <div class="card"><div class="card-body">
+          <span class="label">Workflow Definition</span>
+          <h3>团队方法模板</h3>
+          <p>节点顺序、条件、用户关口、默认 Agent、适用范围、版本和发布状态。</p>
+        </div></div>
+        <div class="card"><div class="card-body">
+          <span class="label">Agent Definition</span>
+          <h3>AI 成员定义</h3>
+          <p>职责卡、Sys Prompt、Prompt Template、Skills、MCP、权限、输入输出契约。</p>
+        </div></div>
+        <div class="card"><div class="card-body">
+          <span class="label">Run Manifest</span>
+          <h3>任务运行快照</h3>
+          <p>某次任务实际使用的 workflow 版本、节点状态、跳过原因、产物路径、session 映射和回退点。</p>
+        </div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-intro">
+        <div>
+          <span class="label">12 / Risks</span>
+          <h2>开放体系的最大风险不是做不出来，而是让用户不敢用</h2>
+        </div>
+        <p>
+          越开放越需要默认治理。产品必须让用户知道：AI 为什么这么做、能做什么、不能做什么、做坏了怎么恢复。
+        </p>
+      </div>
+
+      <div class="risk-list">
+        <div class="risk">
+          <span>!</span>
+          <div><b>配置过载</b><br><span class="muted">用“一句话创建 + 草案解释 + 渐进高级配置”降低进入门槛。</span></div>
+        </div>
+        <div class="risk">
+          <span>!</span>
+          <div><b>Agent 权限失控</b><br><span class="muted">每个能力绑定风险等级，默认只读，写入/命令/外部动作可审批。</span></div>
+        </div>
+        <div class="risk">
+          <span>!</span>
+          <div><b>Workflow 跑完但价值不明</b><br><span class="muted">每个节点必须有产物、评价标准和下游消费方；无产物节点默认不建议保留。</span></div>
+        </div>
+        <div class="risk">
+          <span>!</span>
+          <div><b>模板越改越乱</b><br><span class="muted">草案、试跑、发布、版本回退分层；运行时冻结配置，避免历史任务漂移。</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="footer-note">
+      <h2>一句话结论</h2>
+      <p>
+        AI4SE 开放体系的产品目标不是“让用户自定义流程”，而是“让用户把自己的研发组织能力产品化”。
+        最好的第一版，是从当前标准 workflow 出发，让用户用自然语言调整团队方法、生成可解释草案、在真实任务中试跑，并把有效方法沉淀为可复用模板。
+      </p>
+    </section>
+  </main>
+</body>
+</html>

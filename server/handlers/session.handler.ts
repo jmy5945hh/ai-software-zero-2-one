@@ -11,6 +11,16 @@ import {
 import { rejectQuestion, pendingQuestions, resolveQuestion, continueQuestion } from "../customTools";
 import type { WsRequestMessage, SessionSnapshot } from "../protocol";
 
+function selectedModelId(
+  sessionStore: HandlerDeps["sessionStore"],
+  taskId: string,
+  requestedModelId?: string,
+): string | undefined {
+  const modelId = requestedModelId
+    || sessionStore.loadMeta(taskId)?.deliveryConfig?.modelId;
+  return modelId && modelId !== "auto" ? modelId : undefined;
+}
+
 /**
  * Session 相关消息处理
  */
@@ -23,9 +33,10 @@ export async function handleSessionMessage(
 
   switch (msg.method as string) {
     case "session.create": {
-      const { taskId, step } = msg.params as {
+      const { taskId, step, modelId } = msg.params as {
         taskId: string;
         step: string;
+        modelId?: string;
         intent?: string;
         workspacePath?: string;
         gitRepo?: { url: string; branch: string };
@@ -44,7 +55,13 @@ export async function handleSessionMessage(
         break;
       }
 
-      const session = await runner.createSession(taskId, step, workspaceDir);
+      const session = await runner.createSession(
+        taskId,
+        step,
+        workspaceDir,
+        undefined,
+        selectedModelId(sessionStore, taskId, modelId),
+      );
       pool.set(taskId, step, session);
       try { rollback.ensureBaseline(taskId, workspaceDir); } catch { /* 快照不可用不阻断任务 */ }
 
@@ -110,7 +127,13 @@ export async function handleSessionMessage(
           sendWorkspaceInitializing(ws, msg.id, workspace, taskId);
           break;
         }
-        session = await runner.createSession(taskId, step, workspaceDir);
+        session = await runner.createSession(
+          taskId,
+          step,
+          workspaceDir,
+          undefined,
+          selectedModelId(sessionStore, taskId),
+        );
         pool.set(taskId, step, session);
       }
 
@@ -233,7 +256,13 @@ export async function handleSessionMessage(
 
       pool.dispose(taskId, step);
 
-      const session = await runner.createSession(taskId, step, workspaceDir);
+      const session = await runner.createSession(
+        taskId,
+        step,
+        workspaceDir,
+        undefined,
+        selectedModelId(sessionStore, taskId),
+      );
       pool.set(taskId, step, session);
       try { rollback.ensureBaseline(taskId, workspaceDir); } catch { /* 快照不可用不阻断任务 */ }
 
@@ -329,7 +358,13 @@ export async function handleSessionMessage(
         break;
       }
 
-      const session = await runner.createSession(taskId, step, workspaceDir);
+      const session = await runner.createSession(
+        taskId,
+        step,
+        workspaceDir,
+        undefined,
+        selectedModelId(sessionStore, taskId),
+      );
       pool.set(taskId, step, session);
       try { rollback.ensureBaseline(taskId, workspaceDir); } catch { /* 快照不可用不阻断任务 */ }
 

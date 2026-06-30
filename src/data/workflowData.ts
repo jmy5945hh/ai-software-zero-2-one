@@ -1,4 +1,4 @@
-import type { WorkflowStep, AppState, Stage, Gate, Agent } from "./types";
+import type { WorkflowStep, AppState, Stage, Gate, Agent, DeliveryConfig } from "./types";
 import {
   MessageSquareText,
   Network,
@@ -41,16 +41,16 @@ export const workflow: WorkflowStep[] = [
   {
     id: "quality",
     label: "质量审查与修复",
-    detail: "使用质量Agent 检查项目的规范问题",
-    detailLong: "手动触发质量门禁，执行质量Agent，基于代码仓库Diff分析质量问题，并汇总质量报告供用户决策",
-    userRole: "走读软件质量报告，决定放行或修复",
+    detail: "运行质量门禁并归因失败",
+    detailLong: "自动执行静态质量检查、代码审查和失败归因，将风险、证据和修复建议汇总成质量报告",
+    userRole: "只在高风险问题或修复策略不确定时介入",
   },
   {
     id: "verify",
-    label: "验证修复",
-    detail: "生成单元测试案例，并编写对应单测代码",
-    detailLong: "基于需求文档、技术方案文档、当前代码仓库，生成对应的单测案例以及单测代码",
-    userRole: "授权修复和复测",
+    label: "黑盒验证",
+    detail: "执行 Web、API 和业务场景测试",
+    detailLong: "基于验收标准生成系统级黑盒测试计划，执行 Web E2E、API 合约、业务场景和异常恢复验证",
+    userRole: "查看验证证据，决定是否接受自动修复后的结果",
   },
   {
     id: "release",
@@ -114,8 +114,17 @@ export function getGates(state: AppState): Gate[] {
       status: isQuality ? "running" : "queued",
     },
     {
-      name: "UI E2E",
+      name: "Web E2E",
       value: stepIndex >= releaseIndex || fixApproved ? 100 : isQuality ? 72 : 0,
+      status: (stepIndex >= releaseIndex || fixApproved)
+        ? "passed"
+        : isQuality
+          ? "running"
+          : "queued",
+    },
+    {
+      name: "业务场景",
+      value: stepIndex >= releaseIndex || fixApproved ? 100 : isQuality ? 64 : 0,
       status: (stepIndex >= releaseIndex || fixApproved)
         ? "passed"
         : isQuality
@@ -181,7 +190,7 @@ export function getAgents(
     },
     {
       name: "Test Agent",
-      role: "验证矩阵",
+      role: "系统级验证",
       status: stepIndex >= qualityIndex || fixApproved
         ? "done"
         : stepIndex >= codingIndex
@@ -189,8 +198,8 @@ export function getAgents(
           : "review",
       confidence: stepIndex >= qualityIndex || fixApproved ? 94 : 78,
       task: stepIndex >= qualityIndex || fixApproved
-        ? "E2E、API、单测全部通过"
-        : "正在把验收标准转为测试用例",
+        ? "Web、API、业务场景和冒烟验证已通过"
+        : "正在把验收标准转为黑盒测试计划",
       icon: TestTube2,
     },
     {
@@ -223,12 +232,12 @@ export function nextMoveText(state: AppState): string {
         : "检查生成的代码骨架，确认类型定义、API 接口和组件结构后再进入开发。";
     case "quality":
       return state.qualityPassed
-        ? "质量门禁已通过,可以进入验证修复环节。"
-        : "审查质量报告,API 测试和 E2E 还有未通过项。";
+        ? "质量门禁已通过，可以进入系统级黑盒验证。"
+        : "审查质量报告，失败项会先由 Agent 归因并尝试修复。";
     case "verify":
       return state.fixApproved
         ? "修复已授权,可以推进到发布准备。"
-        : "E2E 发现权限边界问题,授权 Agent 自动修复。";
+        : "查看 Web、API 和业务场景验证证据，必要时授权 Agent 自动修复。";
     case "release":
       return state.releaseApproved
         ? "交付包已生成,可预览应用查看结果。"
@@ -264,13 +273,36 @@ export function statusLabel(
 }
 
 // ── 默认应用状态 ────────────────────────────
+const defaultDeliveryConfig: DeliveryConfig = {
+  interactionMode: "builder",
+  modelId: "auto",
+  mode: "project-change",
+  autonomy: "collaborative",
+  verification: "full",
+  modelPolicy: "balanced",
+  skills: [],
+  mcpServers: [],
+  autoRepair: true,
+  confirmRiskyActions: true,
+};
+
+export function normalizeDeliveryConfig(config?: Partial<DeliveryConfig>): DeliveryConfig {
+  return {
+    ...defaultDeliveryConfig,
+    ...config,
+    skills: config?.skills || [],
+    mcpServers: config?.mcpServers || [],
+  };
+}
+
 export function createDefaultState(): AppState {
   return {
     view: "home",
-    homeTab: "tasks",
+    homeTab: "build",
     intent: "",
     workspacePath: "",
     runtimeMode: "local",
+    deliveryConfig: normalizeDeliveryConfig(),
     gitRepo: undefined,
     activeStage: "intent",
     stepIndex: 0,
@@ -296,6 +328,21 @@ export function createDefaultState(): AppState {
       outputLines: [],
       resultFilePath: "",
       resultContent: "",
+    },
+    verificationPlan: {
+      status: "idle",
+      filePath: "",
+      content: "",
+    },
+    verificationResult: {
+      status: "idle",
+      filePath: "",
+      content: "",
+    },
+    deliveryReport: {
+      status: "idle",
+      filePath: "",
+      content: "",
     },
     restoredSessions: {},
   };

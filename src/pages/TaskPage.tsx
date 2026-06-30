@@ -8,14 +8,16 @@ import {
   getWorkflowStepIndex,
   parsePrototypeManifest,
   titleFromIntent,
+  createDefaultState,
+  normalizeDeliveryConfig,
 } from "../data";
 import { agentFetch } from "../agent/config";
 
-import type { DrawerContent, AppState } from "../data/types";
+import type { DrawerContent, AppState, DeliveryConfig, PrototypeState } from "../data/types";
 import type { ConnectionStatus } from "../agent/types";
 import { useSessionRecords } from "../hooks/useSessionRecords";
 
-import { WifiOff } from "lucide-react";
+import { Bot, Code2, FileText, Gauge, Globe, ShieldCheck, Sparkles, Terminal, TestTube2, WifiOff } from "lucide-react";
 
 import { SopNav } from "../components/SopNav";
 import { LeftPanel } from "../components/LeftPanel";
@@ -34,6 +36,8 @@ export function TaskPage() {
   const [state, setState] = useStoredState();
   const [drawerContent, setDrawerContent] = useState<DrawerContent>(null);
   const [repoExplorerOpen, setRepoExplorerOpen] = useState<RepoTab | null>(null);
+  const [viewingStepIndex, setViewingStepIndex] = useState(state.stepIndex);
+  const [workbenchTab, setWorkbenchTab] = useState<"preview" | "code" | "terminal" | "artifacts">("preview");
 
   // ── URL taskId 恢复 ──
   // 如果 URL 携带 taskId 且与 localStorage 中的不一致，说明是刷新后首次加载，
@@ -67,6 +71,7 @@ export function TaskPage() {
         intent: record.intent,
         workspacePath: record.workspacePath,
         runtimeMode: (record as any).runtimeMode || "local",
+        deliveryConfig: normalizeDeliveryConfig(record.deliveryConfig),
         gitRepo: (record as any).gitRepo,
         localGit: record.localGit,
         stepIndex: getWorkflowStepIndex(record.activeStage, record.stepIndex, taskWorkflow),
@@ -78,6 +83,9 @@ export function TaskPage() {
         fixApproved: record.fixApproved,
         releaseApproved: record.releaseApproved,
         qualityPassed: record.qualityPassed,
+        verificationPlan: record.verificationPlan || createDefaultState().verificationPlan,
+        verificationResult: record.verificationResult || createDefaultState().verificationResult,
+        deliveryReport: record.deliveryReport || createDefaultState().deliveryReport,
         createdAt: record.createdAt,
         sessionId: record.sessionId,
         restoredSessions: record.stepSessions || {},
@@ -320,12 +328,12 @@ export function TaskPage() {
         },
       });
       // 在 quality 阶段内执行修复，不推进到下一阶段
-      const fixPrompt = `请根据以下质量审查报告修复代码中的问题：\n\n${report}`;
-      agent.createSession("quality", state.intent, state.workspacePath, state.gitRepo).then(() => {
+      const fixPrompt = `${buildDeliveryPolicyPrompt(state.deliveryConfig)}\n\n请根据以下质量审查报告修复代码中的问题。修复后按本任务的验证范围说明需要复测哪些 Web/API/业务场景路径：\n\n${report}`;
+      agent.createSession("quality", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId).then(() => {
         agent.prompt("quality", fixPrompt);
       });
     },
-    [isAgentConnected, agent, state.intent, state.workspacePath, state.gitRepo, patchState],
+    [isAgentConnected, agent, state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig, patchState],
   );
 
   // ── Agent session 生命周期 ──
@@ -341,7 +349,7 @@ export function TaskPage() {
     ) {
       sessionInitRef.current = true;
 
-      const intentPrompt = getStepPrompt("intent", state.intent, taskId);
+      const intentPrompt = getStepPrompt("intent", state.intent, taskId, undefined, state.deliveryConfig);
       patchState({
         initialPrompts: { ...state.initialPrompts, intent: intentPrompt },
       });
@@ -358,7 +366,7 @@ export function TaskPage() {
                 clearInterval(pollInterval);
                 if (s?.stage === "ready") {
                   // 创建 session
-                  await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo);
+                  await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId);
                   if (taskId && state.intent) {
                     sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
                   }
@@ -372,7 +380,7 @@ export function TaskPage() {
         }
 
         // 本地模式或云端已就绪
-        await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo);
+        await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId);
         // 首次 session 创建后立即保存，确保初始状态不丢失
         if (taskId && state.intent) {
           sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
@@ -382,7 +390,7 @@ export function TaskPage() {
       };
       startIntent();
     }
-  }, [isAgentConnected, state.stepIndex, state.intent, state.initialPrompts, patchState, state.runtimeMode]);
+  }, [isAgentConnected, state.stepIndex, state.intent, state.initialPrompts, state.deliveryConfig, patchState, state.runtimeMode]);
 
   // 需求分析完成后读取 UI 变化决策，据此决定任务工作流是否包含交互原型。
   useEffect(() => {
@@ -429,13 +437,13 @@ export function TaskPage() {
             handoffPath: `原型交接.md`,
           }
         : effectivePrototype;
-      const promptText = getStepPrompt(nextStep.id, state.intent, taskId, prototype);
+      const promptText = getStepPrompt(nextStep.id, state.intent, taskId, prototype, state.deliveryConfig);
 
       patchState({
         initialPrompts: { ...state.initialPrompts, [nextStep.id]: promptText },
         ...(nextStep.id === "prototype" ? { prototype } : {}),
       });
-      agent.createSession(nextStep.id, state.intent, state.workspacePath, state.gitRepo).then(() => {
+      agent.createSession(nextStep.id, state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId).then(() => {
         agent.prompt(nextStep.id, promptText);
         agent.getFileTree();
       });
@@ -458,25 +466,15 @@ export function TaskPage() {
       } : {}),
     });
     window.scrollTo({ top: 0 });
-  }, [state.stepIndex, state.activeStage, state.intent, state.initialPrompts, state.prototype, isAgentConnected, taskId, agent, patchState, state.codeConfirmed, readPrototypeDecision]);
+  }, [state.stepIndex, state.activeStage, state.intent, state.initialPrompts, state.prototype, state.deliveryConfig, isAgentConnected, taskId, agent, patchState, state.codeConfirmed, readPrototypeDecision]);
 
   const handleStepClick = (index: number) => {
-    const targetStage = taskWorkflow[index].id;
-    patchState({
-      stepIndex: index,
-      activeStage: targetStage,
-      // 切换到 quality 阶段时，仅当尚无审查结果时才重置（避免切换 tab 丢失已有结果）
-      ...(targetStage === "quality" && index !== state.stepIndex && state.qaReview.status === "idle" ? {
-        qaReview: {
-          status: "idle" as const,
-          outputLines: [],
-          resultFilePath: "",
-          resultContent: "",
-        },
-      } : {}),
-    });
-    window.scrollTo({ top: 0 });
+    if (index <= state.stepIndex) setViewingStepIndex(index);
   };
+
+  useEffect(() => {
+    setViewingStepIndex(state.stepIndex);
+  }, [state.stepIndex]);
 
   const handleFileClick = useCallback(
     async (path: string, name: string) => {
@@ -507,17 +505,6 @@ export function TaskPage() {
 
   return (
     <main className="workspace-shell">
-      <SopNav
-        workflow={taskWorkflow}
-        stepIndex={state.stepIndex}
-        progress={progress}
-        onStepClick={handleStepClick}
-        goHome={goHome}
-        taskTitle={taskTitle}
-        createdAt={state.createdAt}
-        statusBadge={<AgentStatusBadge status={connectionStatus} quality={connectionQuality} />}
-      />
-
       {!isAgentConnected ? (
         <div className="workspace-no-agent">
           <div className="no-agent-card">
@@ -568,9 +555,20 @@ export function TaskPage() {
               runtimeMode={state.runtimeMode}
               repoExplorerOpen={repoExplorerOpen}
               onCloseRepoExplorer={() => setRepoExplorerOpen(null)}
+              workflow={taskWorkflow}
+              executionStepIndex={state.stepIndex}
+              viewingStepIndex={viewingStepIndex}
+              onViewStep={handleStepClick}
             />
-            <DecisionBoard
-              state={state}
+            <section className="conversation-column">
+              <header className="conversation-header">
+                <div><strong>{taskTitle}</strong><span className="workflow-status-pill">Workflow · {taskWorkflow[state.stepIndex].label} {state.stepIndex + 1}/{taskWorkflow.length}</span></div>
+                {viewingStepIndex !== state.stepIndex && <button type="button" onClick={() => setViewingStepIndex(state.stepIndex)}>历史产出 · 返回当前</button>}
+                <AgentStatusBadge status={connectionStatus} quality={connectionQuality} />
+              </header>
+              <DecisionBoard
+              fixedTab="trajectory"
+              state={{ ...state, stepIndex: viewingStepIndex }}
               onPatch={patchState}
               onContinue={continueTask}
               onPreview={openDrawer}
@@ -609,6 +607,42 @@ export function TaskPage() {
               workspaceInitStatus={agent.workspaceInitStatus}
               onRetryClone={() => agent.retryWorkspaceInit(state.gitRepo)}
             />
+            </section>
+            <section className="execution-workbench">
+              <header className="workbench-tabs">
+                {[
+                  ["preview", Globe, "预览"],
+                  ["code", Code2, "代码"],
+                  ["terminal", Terminal, "终端"],
+                  ["artifacts", FileText, "产出"],
+                ].map(([id, Icon, label]) => <button key={id as string} type="button"
+                  className={workbenchTab === id ? "active" : ""}
+                  onClick={() => {
+                    setWorkbenchTab(id as typeof workbenchTab);
+                    if (id === "code") setRepoExplorerOpen("tree");
+                  }}>
+                  <Icon size={14} />{label as string}
+                </button>)}
+              </header>
+              {workbenchTab === "artifacts" ? <DecisionBoard
+                fixedTab="delivery"
+                state={{ ...state, stepIndex: viewingStepIndex }}
+                onPatch={patchState} onContinue={continueTask} onPreview={openDrawer}
+                agentSessions={agent.sessions} restoredSessions={state.restoredSessions}
+                stepSummaries={stepSummaries} agentSteer={agent.steer} agentAbort={agent.abort}
+                agentPrompt={agent.prompt} agentAnswerQuestion={agent.answerQuestion}
+                agentContinueQuestion={agent.continueQuestion} agentResumeQuestion={agent.resumeQuestion}
+                isAgentConnected={isAgentConnected} triggerBuild={agent.triggerBuild}
+                detectBuildCommand={agent.detectBuildCommand} taskId={taskId}
+                onOpenRepoExplorer={(tab) => setRepoExplorerOpen(tab)}
+                onFixIssues={handleFixQaIssues} workspaceInitStatus={agent.workspaceInitStatus}
+                onRetryClone={() => agent.retryWorkspaceInit(state.gitRepo)}
+              /> : <div className="workbench-canvas">
+                {workbenchTab === "preview" && <><Globe size={28}/><strong>应用预览</strong><p>运行中的 Web 应用将在这里保持可见。</p></>}
+                {workbenchTab === "code" && <><Code2 size={28}/><strong>代码工作区已打开</strong><p>查看文件、Diff 与回退操作。</p></>}
+                {workbenchTab === "terminal" && <><Terminal size={28}/><strong>Terminal</strong><p>构建、测试与验证输出将在这里汇总。</p></>}
+              </div>}
+            </section>
           </div>
 
           <Drawer content={drawerContent} onClose={closeDrawer} />
@@ -630,27 +664,145 @@ function getLanguageFromPath(path: string): string {
   return map[ext] || ext;
 }
 
+function DeliveryStrategyBanner({
+  config,
+  runtimeMode,
+}: {
+  config: DeliveryConfig;
+  runtimeMode: AppState["runtimeMode"];
+}) {
+  const items = [
+    { icon: Sparkles, label: "交付模式", value: deliveryModeLabel(config.mode) },
+    { icon: Gauge, label: "自治等级", value: autonomyLabel(config.autonomy) },
+    { icon: TestTube2, label: "验证范围", value: verificationLabel(config.verification) },
+    {
+      icon: Bot,
+      label: "模型",
+      value: config.modelId === "auto"
+        ? `Auto · ${modelPolicyLabel(config.modelPolicy)}`
+        : config.modelId,
+    },
+  ];
+
+  return (
+    <section className="delivery-strategy-strip" aria-label="v0.2 交付策略">
+      <div className="delivery-strategy-main">
+        <div className="delivery-strategy-icon">
+          <ShieldCheck size={17} />
+        </div>
+        <div>
+          <strong>测试验证后交付</strong>
+          <span>{runtimeMode === "cloud" ? "云端运行" : "本地运行"} · {config.autoRepair ? "失败自动修复复测" : "失败后等待确认"} · {config.confirmRiskyActions ? "高风险操作前确认" : "按自治等级自动推进"}</span>
+        </div>
+      </div>
+      <div className="delivery-strategy-items">
+        {items.map(({ icon: Icon, label, value }) => (
+          <div className="delivery-strategy-item" key={label}>
+            <Icon size={14} />
+            <span>{label}</span>
+            <strong>{value}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function deliveryModeLabel(mode: DeliveryConfig["mode"]): string {
+  return {
+    app: "一句话做应用",
+    "project-change": "改现有项目",
+    bugfix: "修复 Bug",
+    verification: "运行测试",
+  }[mode];
+}
+
+function autonomyLabel(mode: DeliveryConfig["autonomy"]): string {
+  return {
+    fast: "极速交付",
+    collaborative: "协作模式",
+    strict: "严格审查",
+  }[mode];
+}
+
+function verificationLabel(profile: DeliveryConfig["verification"]): string {
+  return {
+    full: "完整验证",
+    "api-web": "API + Web",
+    smoke: "冒烟验证",
+  }[profile];
+}
+
+function modelPolicyLabel(policy: DeliveryConfig["modelPolicy"]): string {
+  return {
+    balanced: "平衡",
+    quality: "质量优先",
+    cost: "成本优先",
+  }[policy];
+}
+
+function buildDeliveryPolicyPrompt(config: DeliveryConfig): string {
+  const interactionGuide = {
+    plan: "先澄清目标、边界和验收标准，未经用户触发不直接修改代码。",
+    builder: "围绕当前目标端到端实现，按风险策略自动推进到测试后交付。",
+    workflow: "按既定 SOP 分阶段执行，并保留节点产物和验证证据。",
+  }[config.interactionMode];
+
+  const verificationGuide = {
+    full: "必须覆盖 Web E2E、API 合约、核心业务场景、异常恢复、数据持久化和可观测性证据。",
+    "api-web": "必须覆盖 API 合约和 Web 主路径，业务场景可聚焦最高价值链路。",
+    smoke: "必须覆盖构建/启动/关键路径冒烟验证，避免扩展到低价值长尾用例。",
+  }[config.verification];
+
+  const autonomyGuide = {
+    fast: "默认自动推进；仅在需求歧义、高风险操作、验证失败但建议放行、成本/时间超阈值时询问用户。",
+    collaborative: "关键决策询问用户；低风险实现、检查、修复和复测自动推进。",
+    strict: "架构变更、范围变化、依赖新增、删除/覆盖文件、验证失败修复都需要用户确认。",
+  }[config.autonomy];
+
+  const modelGuide = {
+    balanced: "常规任务优先中等推理；复杂架构/失败归因/最终审查可升档。",
+    quality: "优先保证可靠性；复杂节点、失败归因、最终交付审查使用更强推理。",
+    cost: "优先控制成本；分类、摘要、简单检查使用低成本模型，失败或高风险时再升档。",
+  }[config.modelPolicy];
+
+  return `v0.2 交付策略：
+  - 交互模式：${config.interactionMode}。${interactionGuide}
+  - 交付模式：${deliveryModeLabel(config.mode)}
+- 自治等级：${autonomyLabel(config.autonomy)}。${autonomyGuide}
+- 验证范围：${verificationLabel(config.verification)}。${verificationGuide}
+  - 指定模型：${config.modelId === "auto" ? "Auto（按节点自动选择）" : config.modelId}
+  - 模型策略：${modelPolicyLabel(config.modelPolicy)}。${modelGuide}
+  - 挂载 Skills：${config.skills.length ? config.skills.join("、") : "无额外挂载"}
+  - 连接 MCP：${config.mcpServers.length ? config.mcpServers.join("、") : "无额外连接"}
+- 自动修复：${config.autoRepair ? "验证或质量检查失败后，优先自动修复并复测。" : "失败后先汇报证据和修复方案，等待用户授权。"}
+- 风险确认：${config.confirmRiskyActions ? "删除/覆盖文件、数据库/鉴权/部署/生产配置、新依赖、大范围重构前必须确认。" : "按自治等级推进，但仍需记录高风险操作证据。"}
+- 最终交付必须包含：变更摘要、测试验证证据、未覆盖风险、建议后续动作。`;
+}
+
 function getStepPrompt(
   step: string,
   intent: string,
   taskId?: string | null,
   prototype?: AppState["prototype"],
+  deliveryConfig: DeliveryConfig = createDefaultState().deliveryConfig,
 ): string {
+  const deliveryPolicy = buildDeliveryPolicyPrompt(deliveryConfig);
   switch (step) {
     case "intent":
-      return `请分析以下业务意图，识别核心业务对象、角色和场景，并生成 Spec 文档。\n\n同时判断本任务是否包含需要用户确认的 UI 页面或交互变化，并将工作流决策写入 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/prototype.json。\n\n如果包含 UI 变化，请写入：\n{\"mode\":\"new-page 或 existing-change\",\"status\":\"pending\",\"htmlPath\":\"index.html\",\"handoffPath\":\"原型交接.md\"}\n\n如果不包含 UI 变化，请写入：\n{\"mode\":\"none\",\"status\":\"skipped\",\"htmlPath\":\"\",\"handoffPath\":\"\"}\n\n业务意图：\n${intent}`;
+      return `${deliveryPolicy}\n\n请分析以下业务意图，识别核心业务对象、角色和场景，并生成 Spec 文档。Spec 必须包含验收标准和系统级验证计划草案。\n\n同时判断本任务是否包含需要用户确认的 UI 页面或交互变化，并将工作流决策写入 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/prototype.json。\n\n如果包含 UI 变化，请写入：\n{\"mode\":\"new-page 或 existing-change\",\"status\":\"pending\",\"htmlPath\":\"index.html\",\"handoffPath\":\"原型交接.md\"}\n\n如果不包含 UI 变化，请写入：\n{\"mode\":\"none\",\"status\":\"skipped\",\"htmlPath\":\"\",\"handoffPath\":\"\"}\n\n业务意图：\n${intent}`;
     case "prototype":
-      return `需求分析已确认本任务包含 UI 变化，建议原型模式为 ${prototype?.mode || "existing-change"}。当前任务 ID：${taskId || "unknown"}。\n\n本阶段的产物目录固定为 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/，不得写入其他目录。请先用 ask_user_question 让用户确认原型模式（新页面 or 已有页面修改），然后生成 index.html、原型交接.md，并写入 prototype.json：\n{\"mode\":\"用户确认后的 new-page 或 existing-change\",\"status\":\"reviewing\",\"htmlPath\":\"${prototype?.htmlPath || "index.html"}\",\"handoffPath\":\"${prototype?.handoffPath || "原型交接.md"}\"}\n\n业务意图：${intent}`;
+      return `${deliveryPolicy}\n\n需求分析已确认本任务包含 UI 变化，建议原型模式为 ${prototype?.mode || "existing-change"}。当前任务 ID：${taskId || "unknown"}。\n\n本阶段的产物目录固定为 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/，不得写入其他目录。请根据自治等级决定是否询问用户确认原型模式；若必须确认，请用 ask_user_question。然后生成 index.html、原型交接.md，并写入 prototype.json：\n{\"mode\":\"用户确认后的 new-page 或 existing-change\",\"status\":\"reviewing\",\"htmlPath\":\"${prototype?.htmlPath || "index.html"}\",\"handoffPath\":\"${prototype?.handoffPath || "原型交接.md"}\"}\n\n业务意图：${intent}`;
     case "plan":
-      return `基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围，生成对应的技术方案文档。${prototype?.handoffPath ? `\n\n原型已确认，请读取 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/${prototype.handoffPath} 并遵守其中的确认范围和交互约束。` : ""}\n\n业务意图：${intent}`;
+      return `${deliveryPolicy}\n\n基于意图分析结果，请拆解功能模块、分析依赖关系、评估风险，并建议本轮交付范围，生成对应的技术方案文档。技术方案必须明确黑盒验证入口、测试数据、接口契约和失败修复策略。${prototype?.handoffPath ? `\n\n原型已确认，请读取 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/${prototype.handoffPath} 并遵守其中的确认范围和交互约束。` : ""}\n\n业务意图：${intent}`;
     case "coding":
-      return `基于技术方案设计，生成可运行的代码骨架。${prototype?.handoffPath ? `\n\n编码前必须读取 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/${prototype.handoffPath} 和 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/${prototype.htmlPath}。原型用于表达已确认的交互，不得直接复制其 HTML。` : ""}\n\n业务意图：${intent}`;
+      return `${deliveryPolicy}\n\n基于技术方案设计，生成可运行的代码骨架。编码完成后必须说明建议执行的构建、API、Web 和业务场景验证命令。${prototype?.handoffPath ? `\n\n编码前必须读取 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/${prototype.handoffPath} 和 ~/.aiNativeDevPlatform/sessions/${taskId || "unknown"}/${prototype.htmlPath}。原型用于表达已确认的交互，不得直接复制其 HTML。` : ""}\n\n业务意图：${intent}`;
     case "quality":
-      return `请执行代码检视、检查测试覆盖率，运行测试并输出质量报告。`;
+      return `${deliveryPolicy}\n\n请执行代码检视、检查测试覆盖率，运行可用的质量门禁，并输出质量报告。报告必须区分代码质量问题、测试缺口、业务验证缺口和交付风险。`;
     case "verify":
-      return `请分析质量报告中的未通过项，生成修复方案并执行修复和复测。`;
+      return `${deliveryPolicy}\n\n请根据验证范围执行系统级黑盒验证：Web 页面、API 合约、核心业务场景、异常恢复和必要的冒烟测试。若失败且允许自动修复，请修复并复测；否则输出失败证据、根因和修复建议。`;
     case "release":
-      return `请汇总所有产出文件，生成变更摘要、CHANGELOG.md 和 DELIVERY.md。`;
+      return `${deliveryPolicy}\n\n请汇总所有产出文件，生成变更摘要、CHANGELOG.md 和 DELIVERY.md。DELIVERY.md 必须包含已执行验证、通过/失败证据、未覆盖风险、回退方案和建议后续动作。`;
     default:
       return `继续当前任务。`;
   }

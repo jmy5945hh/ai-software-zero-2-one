@@ -1,31 +1,27 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStoredState, STORAGE_KEY } from "../hooks/useStoredState";
-import { createDefaultState, getTaskWorkflow, getWorkflowStepIndex } from "../data";
+import { createDefaultState, getTaskWorkflow, getWorkflowStepIndex, normalizeDeliveryConfig } from "../data";
 import type { AppState, HomeTab } from "../data/types";
 import { useSessionRecords } from "../hooks/useSessionRecords";
 import type { SessionMeta, SessionRecord } from "../hooks/useSessionRecords";
 
 import {
   Sparkles,
-  Play,
-  ListTodo,
   UserCircle,
   FileText,
   History,
   Monitor,
   Cloud,
-  Check,
   SignalHigh,
   SignalMedium,
   Loader2,
   AlertTriangle,
 } from "lucide-react";
 
-import { HomeTaskBoard } from "../components/HomeTaskBoard";
-import { TypewriterText } from "../components/TypewriterText";
 import { WorkspaceSelector } from "../components/WorkspaceSelector";
 import { SessionHistoryPanel } from "../components/SessionHistoryPanel";
+import { UnifiedDeliveryWorkspace } from "../components/UnifiedDeliveryWorkspace";
 import { useAgent } from "../agent";
 import { generateId } from "../utils/id";
 import { useRuntimeState, useRuntimeActions } from "../stores/runtimeStore";
@@ -38,11 +34,10 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const [state, setState] = useStoredState();
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
+  const [workspacePickerPurpose, setWorkspacePickerPurpose] = useState<"configure" | "launch">("launch");
   const [docsError, setDocsError] = useState<string | null>(null);
   const [preflightError, setPreflightError] = useState<string | null>(null);
   const sessionRecords = useSessionRecords();
-
-  const [pendingRecord, setPendingRecord] = useState<SessionRecord | null>(null);
 
   const runtimeState = useRuntimeState();
   const runtimeActions = useRuntimeActions();
@@ -52,8 +47,6 @@ export function DashboardPage() {
     ? state.sessionId
     : null;
   const agent = useAgent(taskIdForPicker, undefined, undefined, runtimeState.mode);
-  const agentAvailable = agent.connectionStatus === "connected" || agent.connectionStatus === "reconnecting";
-
   const patchState = useCallback(
     (patch: Partial<AppState>) =>
       setState((previous) => ({ ...previous, ...patch })),
@@ -67,18 +60,48 @@ export function DashboardPage() {
     (intent: string, notes: string, activeTaskCard: AppState["activeTaskCard"]) => {
       setDocsError(null);
       const sessionId = generateId();
-      setState((previous) => ({
+      const nextState: AppState = {
         ...createDefaultState(),
+        deliveryConfig: state.deliveryConfig,
         intent,
         notes,
         activeTaskCard,
         createdAt: new Date().toISOString(),
         sessionId,
         runtimeMode: dashboardMode,
-      }));
+        workspacePath: dashboardMode === "local" ? state.workspacePath : "",
+        localGit: dashboardMode === "local" ? state.localGit : undefined,
+        gitRepo: dashboardMode === "cloud" ? state.gitRepo : undefined,
+      };
+      setState(nextState);
+
+      const hasConfiguredWorkspace = dashboardMode === "cloud"
+        ? Boolean(nextState.gitRepo?.url)
+        : Boolean(nextState.workspacePath);
+      if (hasConfiguredWorkspace) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+        } catch { /* storage is best effort */ }
+        agent.initTask({
+          taskId: sessionId,
+          intent,
+          workspacePath: nextState.workspacePath,
+          runtimeMode: dashboardMode,
+          notes,
+          todoAnswers: nextState.todoAnswers,
+          initialPrompts: nextState.initialPrompts,
+          deliveryConfig: nextState.deliveryConfig,
+          gitRepo: nextState.gitRepo,
+          localGit: nextState.localGit,
+        }).catch((err: Error) => console.warn("[DashboardPage] task.init failed:", err));
+        navigate(`/task?taskId=${sessionId}`);
+        return;
+      }
+
+      setWorkspacePickerPurpose("launch");
       setShowWorkspacePicker(true);
     },
-    [setState, dashboardMode],
+    [agent, dashboardMode, navigate, setState, state.deliveryConfig, state.gitRepo, state.localGit, state.workspacePath],
   );
 
   const confirmWorkspace = useCallback(
@@ -103,7 +126,8 @@ export function DashboardPage() {
           ...previous,
           workspacePath: "",
           gitRepo: gitRepoConfig,
-          view: "workspace",
+          runtimeMode: mode,
+          view: workspacePickerPurpose === "launch" ? "workspace" : previous.view,
         }));
         setShowWorkspacePicker(false);
 
@@ -116,21 +140,26 @@ export function DashboardPage() {
             ...currentState,
             gitRepo: gitRepoConfig,
             workspacePath: "",
-            view: "workspace",
+            view: workspacePickerPurpose === "launch" ? "workspace" : currentState.view,
             runtimeMode: mode,
           }));
         } catch (err) {
           console.warn("[DashboardPage] Failed to persist cloud workspace:", err);
         }
 
+        setDashboardMode(mode);
+        if (workspacePickerPurpose === "configure") return;
+
         // 初始化任务环境（HTTP 接口，不依赖 WebSocket 连接）
         agent.initTask({
+          taskId: state.sessionId,
           intent: state.intent,
           workspacePath: "",
           runtimeMode: mode,
           notes: state.notes,
           todoAnswers: state.todoAnswers,
           initialPrompts: state.initialPrompts,
+          deliveryConfig: state.deliveryConfig,
           gitRepo: gitRepoConfig,
         }).catch((err: Error) => console.warn("[DashboardPage] task.init failed:", err));
 
@@ -157,7 +186,8 @@ export function DashboardPage() {
         ...previous,
         workspacePath: path,
         localGit: gitConfig ? { branch: gitConfig.branch, shouldPull: gitConfig.shouldPull } : undefined,
-        view: "workspace",
+        runtimeMode: mode,
+        view: workspacePickerPurpose === "launch" ? "workspace" : previous.view,
       }));
       setShowWorkspacePicker(false);
       try {
@@ -168,32 +198,38 @@ export function DashboardPage() {
           ...currentState,
           workspacePath: path,
           localGit: gitConfig ? { branch: gitConfig.branch, shouldPull: gitConfig.shouldPull } : undefined,
-          view: "workspace",
+          view: workspacePickerPurpose === "launch" ? "workspace" : currentState.view,
           runtimeMode: mode,
         }));
       } catch (err) {
         console.warn("[DashboardPage] Failed to persist local workspace:", err);
       }
 
+      setDashboardMode(mode);
+      if (workspacePickerPurpose === "configure") return;
+
       // 初始化任务环境（HTTP 接口，不依赖 WebSocket 连接）
       agent.initTask({
+        taskId: state.sessionId,
         intent: state.intent,
         workspacePath: path,
         runtimeMode: mode,
         notes: state.notes,
         todoAnswers: state.todoAnswers,
         initialPrompts: state.initialPrompts,
+        deliveryConfig: state.deliveryConfig,
         localGit: gitConfig ? { branch: gitConfig.branch, shouldPull: gitConfig.shouldPull } : undefined,
       }).catch((err: Error) => console.warn("[DashboardPage] task.init failed:", err));
 
       navigate(`/task?taskId=${state.sessionId}`);
     },
-    [setState, navigate, state, agentAvailable, agent, runtimeState.mode, runtimeActions],
+    [setState, navigate, state, agent, runtimeState.mode, runtimeActions, workspacePickerPurpose],
   );
 
   const cancelWorkspacePicker = useCallback(() => {
     setShowWorkspacePicker(false);
     setDocsError(null);
+    if (workspacePickerPurpose === "configure") return;
     setState((previous) => ({
       ...previous,
       intent: "",
@@ -201,7 +237,7 @@ export function DashboardPage() {
       activeTaskCard: null,
       createdAt: new Date().toISOString(),
     }));
-  }, [setState]);
+  }, [setState, workspacePickerPurpose]);
 
   const updateHomeTab = (tab: HomeTab) =>
     patchState({ homeTab: tab, previewTaskId: null });
@@ -240,10 +276,14 @@ export function DashboardPage() {
         notes: fullRecord.notes,
         todoAnswers: fullRecord.todoAnswers,
         initialPrompts: fullRecord.initialPrompts,
+        deliveryConfig: normalizeDeliveryConfig(fullRecord.deliveryConfig),
         codeConfirmed: fullRecord.codeConfirmed,
         fixApproved: fullRecord.fixApproved,
         releaseApproved: fullRecord.releaseApproved,
         qualityPassed: fullRecord.qualityPassed,
+        verificationPlan: fullRecord.verificationPlan || createDefaultState().verificationPlan,
+        verificationResult: fullRecord.verificationResult || createDefaultState().verificationResult,
+        deliveryReport: fullRecord.deliveryReport || createDefaultState().deliveryReport,
         prototype,
         createdAt: fullRecord.createdAt,
         sessionId: fullRecord.sessionId,
@@ -264,8 +304,16 @@ export function DashboardPage() {
 
   const startTaskFromIntent = () => {
     if (!state.intent.trim()) return;
-    requestStartTask(state.intent.trim(), state.notes, null);
+    requestStartTask(state.intent.trim(), state.notes, state.activeTaskCard);
   };
+
+  const workspaceLabel = dashboardMode === "cloud"
+    ? state.gitRepo
+      ? `${state.gitRepo.url.split("/").pop()?.replace(/\.git$/, "") || "云端仓库"} · ${state.gitRepo.branch}`
+      : "选择云端仓库"
+    : state.workspacePath
+      ? `${state.workspacePath.split("/").filter(Boolean).pop() || state.workspacePath}${state.localGit?.branch ? ` · ${state.localGit.branch}` : ""}`
+      : "选择本地仓库";
 
   return (
     <>
@@ -311,20 +359,12 @@ export function DashboardPage() {
           <aside className="home-sidebar">
             <nav className="home-tabs">
               <button
-                className={`home-tab ${state.homeTab === "tasks" ? "active" : ""}`}
-                type="button"
-                onClick={() => updateHomeTab("tasks")}
-              >
-                <ListTodo size={18} />
-                任务交付
-              </button>
-              <button
-                className={`home-tab ${state.homeTab === "build" ? "active" : ""}`}
+                className={`home-tab ${state.homeTab !== "history" ? "active" : ""}`}
                 type="button"
                 onClick={() => updateHomeTab("build")}
               >
                 <Sparkles size={18} />
-                想法实现
+                交付工作台
               </button>
               <button
                 className={`home-tab ${state.homeTab === "history" ? "active" : ""}`}
@@ -338,51 +378,17 @@ export function DashboardPage() {
           </aside>
 
           <div className="home-content">
-            {state.homeTab === "tasks" ? (
-              <HomeTaskBoard state={state} setState={setState} onPatch={patchState} onRequestStartTask={requestStartTask} onBrowseDir={agentAvailable ? agent.browseDir : undefined} />
-            ) : state.homeTab === "build" ? (
-              <div className="launch-panel">
-                <label htmlFor="intent">Hi, 今天想创造点什么？</label>
-                <div className="launch-panel-mode-row">
-                  <div className="dashboard-mode-switcher">
-                    <button
-                      className={`dashboard-mode-btn ${dashboardMode === "local" ? "active" : ""}`}
-                      type="button"
-                      onClick={() => setDashboardMode("local")}
-                    >
-                      <Monitor size={13} />
-                      本地
-                      {dashboardMode === "local" && <Check size={11} className="dashboard-mode-check" />}
-                    </button>
-                    <button
-                      className={`dashboard-mode-btn ${dashboardMode === "cloud" ? "active" : ""}`}
-                      type="button"
-                      onClick={() => setDashboardMode("cloud")}
-                    >
-                      <Cloud size={13} />
-                      云端
-                      {dashboardMode === "cloud" && <Check size={11} className="dashboard-mode-check" />}
-                    </button>
-                  </div>
-                </div>
-                <textarea
-                  id="intent"
-                  value={state.intent}
-                  onChange={(event) => patchState({ intent: event.target.value })}
-                  rows={4}
-                />
-                <div className="launch-actions">
-                  <button
-                    className="primary-action"
-                    type="button"
-                    onClick={startTaskFromIntent}
-                  >
-                    <Play size={17} />
-                    开始
-                  </button>
-                  <span>状态会自动保存到浏览器 storage</span>
-                </div>
-              </div>
+            {state.homeTab !== "history" ? (
+              <UnifiedDeliveryWorkspace
+                state={state}
+                onPatch={patchState}
+                onStart={startTaskFromIntent}
+                onOpenWorkspace={() => {
+                  setWorkspacePickerPurpose("configure");
+                  setShowWorkspacePicker(true);
+                }}
+                workspaceLabel={workspaceLabel}
+              />
             ) : (
               <SessionHistoryPanel
                 records={sessionRecords.records}
@@ -422,7 +428,8 @@ export function DashboardPage() {
             onBrowse={agent.browseDirForMode}
             onListBranches={agent.listGitBranches}
             initialPath={state.workspacePath || "~"}
-            mode={state.runtimeMode || dashboardMode}
+            mode={dashboardMode}
+            initialGitRepo={state.gitRepo}
           />
         </>
       )}

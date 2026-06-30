@@ -31,6 +31,7 @@ import {
   AlertTriangle,
   RefreshCw,
   RotateCcw,
+  ShieldCheck,
 } from "lucide-react";
 import type { DrawerContent, AppState, AgentSummary, KeyPoint, TodoItem, FileChange } from "../data/types";
 import { useStepKey } from "../hooks";
@@ -51,6 +52,7 @@ import type { RepoTab } from "./RepoExplorer";
 type BoardTab = "delivery" | "trajectory";
 
 type DecisionBoardProps = {
+  fixedTab?: BoardTab;
   state: AppState;
   onPatch: (patch: Partial<AppState>) => void;
   onContinue: () => void;
@@ -108,6 +110,7 @@ type DecisionBoardProps = {
 };
 
 export function DecisionBoard({
+  fixedTab,
   state,
   onPatch,
   onContinue,
@@ -142,6 +145,7 @@ export function DecisionBoard({
   const [activeTab, setActiveTab] = useState<BoardTab>(
     hasRestoredHistory ? "trajectory" : "delivery",
   );
+  const visibleTab = fixedTab ?? activeTab;
   const [pendingAutoMessage, setPendingAutoMessage] = useState<string | null>(null);
   const [scrollToRound, setScrollToRound] = useState<number | null>(null);
 
@@ -178,7 +182,7 @@ export function DecisionBoard({
         </div>
       </div>
 
-      <div className="board-tabs">
+      {!fixedTab && <div className="board-tabs">
         <button
           className={`board-tab ${activeTab === "delivery" ? "active" : ""}`}
           type="button"
@@ -195,10 +199,10 @@ export function DecisionBoard({
           <MessageSquare size={14} />
           <span>任务轨迹</span>
         </button>
-      </div>
+      </div>}
 
       <div className="board-tab-panels">
-        {activeTab === "delivery" && (
+        {visibleTab === "delivery" && (
           <DeliveryCollabTab
             state={state}
             onPatch={onPatch}
@@ -226,7 +230,7 @@ export function DecisionBoard({
             qualitySession={agentSessions["quality"]}
           />
         )}
-        {activeTab === "trajectory" && (
+        {visibleTab === "trajectory" && (
           <TrajectoryChatTab
             trajectory={content.trajectory}
             stepIndex={state.stepIndex}
@@ -766,18 +770,24 @@ function DeliveryCollabTab({
 
       {/* quality 阶段：独立于 agent session 状态，始终展示 QA 审查 */}
       {stepId === "quality" && (
-        <QaReviewSection
-          qaReview={state.qaReview}
-          sessionId={state.sessionId}
-          workspacePath={state.workspacePath}
-          onPatch={onPatch}
-          onFixIssues={onFixIssues}
-          onContinue={onContinue}
-          agentSteer={agentSteer}
-          stepId={stepId}
-          onSwitchToTrajectory={onSwitchToTrajectory}
-          qualitySession={qualitySession}
-        />
+        <>
+          <VerificationArtifactsSection
+            state={state}
+            onPatch={onPatch}
+          />
+          <QaReviewSection
+            qaReview={state.qaReview}
+            sessionId={state.sessionId}
+            workspacePath={state.workspacePath}
+            onPatch={onPatch}
+            onFixIssues={onFixIssues}
+            onContinue={onContinue}
+            agentSteer={agentSteer}
+            stepId={stepId}
+            onSwitchToTrajectory={onSwitchToTrajectory}
+            qualitySession={qualitySession}
+          />
+        </>
       )}
     </div>
   );
@@ -814,6 +824,284 @@ function KeyPointsGrid({ keyPoints }: { keyPoints: KeyPoint[] }) {
             <p className="keypoint-summary">{kp.summary}</p>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ── v0.2 验证计划与交付报告 ───────────────────
+function VerificationArtifactsSection({
+  state,
+  onPatch,
+}: {
+  state: AppState;
+  onPatch: (patch: Partial<AppState>) => void;
+}) {
+  const [workflowRunning, setWorkflowRunning] = useState(false);
+
+  const generateVerificationPlan = useCallback(async (): Promise<boolean> => {
+    if (!state.sessionId || !state.workspacePath) return false;
+    onPatch({
+      verificationPlan: {
+        status: "running",
+        filePath: state.verificationPlan.filePath,
+        content: state.verificationPlan.content,
+      },
+    });
+    try {
+      const res = await agentFetch("/verification-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: state.sessionId,
+          taskId: state.sessionId,
+          workspacePath: state.workspacePath,
+          intent: state.intent,
+          deliveryConfig: state.deliveryConfig,
+        }),
+      });
+      const data = await res.json() as { success?: boolean; filePath?: string; content?: string; error?: string };
+      if (!res.ok || !data.success) throw new Error(data.error || "验证计划生成失败");
+      onPatch({
+        verificationPlan: {
+          status: "done",
+          filePath: data.filePath || "",
+          content: data.content || "",
+        },
+      });
+      return true;
+    } catch (err) {
+      onPatch({
+        verificationPlan: {
+          status: "error",
+          filePath: state.verificationPlan.filePath,
+          content: state.verificationPlan.content,
+          error: err instanceof Error ? err.message : "验证计划生成失败",
+        },
+      });
+      return false;
+    }
+  }, [state.sessionId, state.workspacePath, state.intent, state.deliveryConfig, state.verificationPlan, onPatch]);
+
+  const generateDeliveryReport = useCallback(async (): Promise<boolean> => {
+    if (!state.sessionId || !state.workspacePath) return false;
+    onPatch({
+      deliveryReport: {
+        status: "running",
+        filePath: state.deliveryReport.filePath,
+        content: state.deliveryReport.content,
+      },
+    });
+    try {
+      const res = await agentFetch("/delivery-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: state.sessionId,
+          taskId: state.sessionId,
+          workspacePath: state.workspacePath,
+          intent: state.intent,
+          deliveryConfig: state.deliveryConfig,
+        }),
+      });
+      const data = await res.json() as { success?: boolean; filePath?: string; content?: string; error?: string };
+      if (!res.ok || !data.success) throw new Error(data.error || "交付报告生成失败");
+      onPatch({
+        deliveryReport: {
+          status: "done",
+          filePath: data.filePath || "",
+          content: data.content || "",
+        },
+      });
+      return true;
+    } catch (err) {
+      onPatch({
+        deliveryReport: {
+          status: "error",
+          filePath: state.deliveryReport.filePath,
+          content: state.deliveryReport.content,
+          error: err instanceof Error ? err.message : "交付报告生成失败",
+        },
+      });
+      return false;
+    }
+  }, [state.sessionId, state.workspacePath, state.intent, state.deliveryConfig, state.deliveryReport, onPatch]);
+
+  const runVerification = useCallback(async (): Promise<boolean> => {
+    if (!state.sessionId || !state.workspacePath) return false;
+    onPatch({
+      verificationResult: {
+        status: "running",
+        filePath: state.verificationResult.filePath,
+        content: state.verificationResult.content,
+      },
+    });
+    try {
+      const res = await agentFetch("/verification-run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: state.sessionId,
+          taskId: state.sessionId,
+          workspacePath: state.workspacePath,
+        }),
+      });
+      const data = await res.json() as { success?: boolean; filePath?: string; content?: string; error?: string };
+      if (!res.ok || !data.success) throw new Error(data.error || "验证执行失败");
+      onPatch({
+        verificationResult: {
+          status: "done",
+          filePath: data.filePath || "",
+          content: data.content || "",
+        },
+      });
+      return true;
+    } catch (err) {
+      onPatch({
+        verificationResult: {
+          status: "error",
+          filePath: state.verificationResult.filePath,
+          content: state.verificationResult.content,
+          error: err instanceof Error ? err.message : "验证执行失败",
+        },
+      });
+      return false;
+    }
+  }, [state.sessionId, state.workspacePath, state.verificationResult, onPatch]);
+
+  const runEndToEndVerification = useCallback(async () => {
+    if (workflowRunning) return;
+    setWorkflowRunning(true);
+    try {
+      const planOk = await generateVerificationPlan();
+      if (!planOk) return;
+      const runOk = await runVerification();
+      if (!runOk) return;
+      await generateDeliveryReport();
+    } finally {
+      setWorkflowRunning(false);
+    }
+  }, [workflowRunning, generateVerificationPlan, runVerification, generateDeliveryReport]);
+
+  return (
+    <div className="summary-section verification-artifacts-section">
+      <div className="summary-section-header">
+        <ShieldCheck size={15} />
+        <span>v0.2 验证交付证据</span>
+      </div>
+      <div className="verification-workflow-cta">
+        <div>
+          <strong>一键完成测试后交付</strong>
+          <p>自动生成验证计划，执行可安全运行的验证命令，并汇总为交付报告；无法自动执行的 Web/API/业务场景会标记为待回填证据。</p>
+        </div>
+        <button
+          className="todo-submit-btn"
+          type="button"
+          onClick={runEndToEndVerification}
+          disabled={workflowRunning}
+        >
+          {workflowRunning ? <Loader2 size={14} className="spin-icon" /> : <Play size={14} />}
+          {workflowRunning ? "验证交付中..." : "一键验证并生成报告"}
+        </button>
+      </div>
+      <div className="verification-artifact-grid">
+        <ArtifactCard
+          title="验证计划"
+          description="根据交付模式、验证范围和项目特征生成 Web/API/业务场景测试矩阵。"
+          status={state.verificationPlan.status}
+          filePath={state.verificationPlan.filePath}
+          content={state.verificationPlan.content}
+          error={state.verificationPlan.error}
+          actionLabel="生成验证计划"
+          onAction={generateVerificationPlan}
+        />
+        <ArtifactCard
+          title="执行验证"
+          description="执行验证计划中安全可运行的项目脚本，并把 Web/API/业务场景缺口标成待回填证据。"
+          status={state.verificationResult.status}
+          filePath={state.verificationResult.filePath}
+          content={state.verificationResult.content}
+          error={state.verificationResult.error}
+          actionLabel="执行可自动化验证"
+          onAction={runVerification}
+          disabled={state.verificationPlan.status !== "done"}
+          disabledReason="请先生成验证计划"
+        />
+        <ArtifactCard
+          title="交付报告"
+          description="汇总验证计划、质量审查结果、残余风险和后续建议，生成 DELIVERY.md。"
+          status={state.deliveryReport.status}
+          filePath={state.deliveryReport.filePath}
+          content={state.deliveryReport.content}
+          error={state.deliveryReport.error}
+          actionLabel="生成交付报告"
+          onAction={generateDeliveryReport}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ArtifactCard({
+  title,
+  description,
+  status,
+  filePath,
+  content,
+  error,
+  actionLabel,
+  onAction,
+  disabled,
+  disabledReason,
+}: {
+  title: string;
+  description: string;
+  status: AppState["verificationPlan"]["status"];
+  filePath: string;
+  content: string;
+  error?: string;
+  actionLabel: string;
+  onAction: () => void;
+  disabled?: boolean;
+  disabledReason?: string;
+}) {
+  const isRunning = status === "running";
+  const isDone = status === "done";
+  const isError = status === "error";
+  const preview = content.trim().slice(0, 520);
+
+  return (
+    <div className={`verification-artifact-card ${status}`}>
+      <div className="verification-artifact-header">
+        <div>
+          <strong>{title}</strong>
+          <p>{description}</p>
+        </div>
+        {isRunning && <span className="build-badge build-badge-running"><Loader2 size={11} className="spin-icon" /> 生成中</span>}
+        {isDone && <span className="build-badge build-badge-success">✓ 已生成</span>}
+        {isError && <span className="build-badge build-badge-failure">✗ 失败</span>}
+      </div>
+      {filePath && (
+        <div className="build-command">
+          <span className="build-command-label">产物：</span>
+          <code>{filePath}</code>
+        </div>
+      )}
+      {error && <div className="build-status build-failure">{error}</div>}
+      {preview && (
+        <pre className="verification-artifact-preview"><code>{preview}{content.length > preview.length ? "\n..." : ""}</code></pre>
+      )}
+      <div className="build-actions">
+        <button
+          className="todo-submit-btn"
+          type="button"
+          onClick={onAction}
+          disabled={isRunning || disabled}
+        >
+          {isRunning ? <Loader2 size={14} className="spin-icon" /> : <Play size={14} />}
+          {isDone ? "重新生成" : actionLabel}
+        </button>
+        {disabled && disabledReason ? <span className="verification-artifact-disabled">{disabledReason}</span> : null}
       </div>
     </div>
   );

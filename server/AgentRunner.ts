@@ -156,6 +156,7 @@ export class AgentRunner {
     step: string,
     workspaceDir: string,
     systemPromptOverride?: string,
+    modelIdOverride?: string,
   ): Promise<AgentSession> {
     const stepConfig = STEP_CONFIGS[step] as StepConfig | undefined;
     if (!stepConfig) throw new Error(`Unknown SOP step: ${step}`);
@@ -168,16 +169,17 @@ export class AgentRunner {
       throw new Error("DEEPSEEK_API_KEY not found in environment");
     }
     this.authStorage.setRuntimeApiKey("deepseek", key);
-    const model = this.modelRegistry.find(provider, stepConfig.modelId);
+    const modelId = modelIdOverride || stepConfig.modelId;
+    const model = this.modelRegistry.find(provider, modelId);
     if (!model) {
       throw new Error(
-        `Model not found: ${provider}/${stepConfig.modelId}. ` +
+        `Model not found: ${provider}/${modelId}. ` +
         `Check server/models.json and your API key.`,
       );
     }
     console.log("[AgentRunner] Model found: %s", model.id);
 
-    const systemPrompt = systemPromptOverride ?? stepConfig.systemPrompt;
+    const systemPrompt = systemPromptOverride ?? `${stepConfig.systemPrompt}\n\n${buildStepRuntimeContract(step, stepConfig)}`;
     const loader = new DefaultResourceLoader({
       cwd: workspaceDir,
       agentDir: workspaceDir,
@@ -207,4 +209,18 @@ export class AgentRunner {
 
     return session;
   }
+}
+
+function buildStepRuntimeContract(step: string, config: StepConfig): string {
+  return `## v0.2 Runtime Contract
+
+- step: ${step}
+- capability: ${config.capability}
+- modelTierHint: ${config.modelTier}
+- thinkingLevel: ${config.thinkingLevel}
+- verificationGate: ${config.verificationGate}
+- escalationPolicy:
+${config.escalationPolicy.map((item) => `  - ${item}`).join("\n")}
+
+Follow the user's delivery policy from the task prompt. Minimize user interruptions according to the autonomy level, but always stop before irreversible high-risk changes when risk confirmation is required.`;
 }

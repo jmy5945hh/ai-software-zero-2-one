@@ -204,10 +204,261 @@
 /* ── Workspace 主网格 ────────────────────── */
 .workspace-grid {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 17fr) minmax(480px, 43fr) minmax(420px, 40fr);
   gap: 0;
+  height: 100vh;
   min-height: 0;
   overflow: hidden;
+}
+
+.workspace-grid > * {
+  min-width: 0;
+  min-height: 0;
+}
+
+.conversation-column,
+.execution-workbench {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+}
+
+.conversation-column .decision-board,
+.execution-workbench .decision-board {
+  flex: 1;
+  min-height: 0;
+}
+
+.conversation-column .board-compact-header,
+.conversation-column .board-tabs,
+.execution-workbench .board-compact-header,
+.execution-workbench .board-tabs {
+  display: none;
+}
+
+.conversation-header {
+  min-height: 54px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.conversation-header > div:first-child {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.conversation-header strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .86rem;
+}
+
+.workflow-status-pill {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--primary);
+  background: var(--primary-light);
+  font-size: .68rem;
+  font-weight: 600;
+}
+
+.conversation-header > button {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: .7rem;
+  cursor: pointer;
+}
+
+.workbench-tabs {
+  min-height: 54px;
+  display: flex;
+  align-items: stretch;
+  padding: 0 10px;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.workbench-tabs button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.workbench-tabs button.active {
+  color: var(--text);
+  border-bottom-color: var(--primary);
+}
+
+.workbench-canvas {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  color: var(--muted-warm);
+  background: var(--bg);
+}
+
+.workbench-canvas strong { color: var(--text); }
+.workbench-canvas p { margin: 0; font-size: .76rem; }
+
+.task-workflow-nav {
+  margin: 0 10px 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.task-workflow-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.task-workflow-toggle span { flex: 1; text-align: left; font-weight: 600; }
+.task-workflow-toggle small { color: var(--muted-warm); }
+.task-workflow-toggle svg { transition: transform .2s ease; }
+.task-workflow-toggle svg.open { transform: rotate(180deg); }
+
+.task-workflow-steps { display: grid; gap: 2px; }
+.task-workflow-steps button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-warm);
+  text-align: left;
+}
+.task-workflow-steps button.viewing { background: var(--primary-light); color: var(--text); }
+.task-workflow-steps button.executing svg { color: var(--primary); fill: var(--primary); }
+.task-workflow-steps button:disabled { opacity: .48; }
+.task-workflow-steps button span { display: flex; flex: 1; justify-content: space-between; gap: 4px; }
+.task-workflow-steps button strong { font-size: .74rem; }
+.task-workflow-steps button small { font-size: .62rem; color: var(--primary); }
+
+.left-panel-repo-bridge { display: none; }
+
+@media (max-width: 1180px) {
+  .workspace-grid {
+    grid-template-columns: 72px minmax(480px, 1fr) minmax(420px, .9fr);
+  }
+  .left-panel .story-resident-body,
+  .left-panel .history-tasks-section,
+  .left-panel .session-id-copy-btn,
+  .left-panel .left-card-header > span,
+  .task-workflow-toggle span,
+  .task-workflow-toggle small,
+  .task-workflow-steps button span { display: none; }
+  .task-workflow-steps button { justify-content: center; }
+}
+
+.delivery-strategy-strip {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.delivery-strategy-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 260px;
+}
+
+.delivery-strategy-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  color: var(--primary);
+  background: var(--primary-light);
+  flex-shrink: 0;
+}
+
+.delivery-strategy-main strong {
+  display: block;
+  color: var(--text);
+  font-family: var(--font-heading);
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.delivery-strategy-main span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted-warm);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.delivery-strategy-items {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(112px, 1fr));
+  gap: 8px;
+  flex: 1;
+}
+
+.delivery-strategy-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 7px;
+  align-content: center;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+}
+
+.delivery-strategy-item svg {
+  grid-row: span 2;
+  align-self: center;
+  color: var(--primary);
+}
+
+.delivery-strategy-item span {
+  color: var(--muted-warm);
+  font-size: 0.62rem;
+  line-height: 1.1;
+}
+
+.delivery-strategy-item strong {
+  color: var(--text);
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 /* ── 合并行：标题栏 + 流程节点 ────────────── */
@@ -1914,6 +2165,112 @@
   flex-wrap: wrap;
 }
 
+.verification-artifacts-section {
+  margin-bottom: 16px;
+}
+
+.verification-workflow-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid rgba(140, 154, 132, 0.36);
+  border-radius: var(--radius-md);
+  background: var(--primary-light);
+}
+
+.verification-workflow-cta strong {
+  display: block;
+  color: var(--text);
+  font-family: var(--font-heading);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.verification-workflow-cta p {
+  margin: 4px 0 0;
+  color: var(--muted-warm);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.verification-workflow-cta .todo-submit-btn {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.verification-artifact-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.verification-artifact-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.verification-artifact-card.done {
+  border-color: rgba(140, 154, 132, 0.55);
+}
+
+.verification-artifact-card.error {
+  border-color: rgba(194, 123, 102, 0.55);
+}
+
+.verification-artifact-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.verification-artifact-header strong {
+  display: block;
+  color: var(--text);
+  font-family: var(--font-heading);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.verification-artifact-header p {
+  margin: 4px 0 0;
+  color: var(--muted-warm);
+  font-size: 0.74rem;
+  line-height: 1.55;
+}
+
+.verification-artifact-preview {
+  max-height: 150px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #1e1e2e;
+  color: #cdd6f4;
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.verification-artifact-preview code {
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.verification-artifact-disabled {
+  align-self: center;
+  color: var(--muted-warm);
+  font-size: 0.72rem;
+}
+
 /* QA 审查运行中提示 */
 .qa-review-running-hint {
   display: flex;
@@ -2957,6 +3314,18 @@
 
 /* ── 响应式 ──────────────────────────────── */
 @media (max-width: 1100px) {
+  .delivery-strategy-strip {
+    display: grid;
+  }
+
+  .delivery-strategy-main {
+    min-width: 0;
+  }
+
+  .delivery-strategy-items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .workspace-grid {
     grid-template-columns: 1fr;
   }
@@ -2988,9 +3357,49 @@
   .scope-grid {
     grid-template-columns: 1fr;
   }
+
+  .verification-artifact-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 700px) {
+  .home-nav-right {
+    width: 100%;
+    min-width: 0;
+    gap: 6px;
+    justify-content: space-between;
+  }
+
+  .dual-endpoint-status {
+    gap: 4px;
+  }
+
+  .dual-endpoint-badge {
+    padding: 3px 7px;
+  }
+
+  .dual-endpoint-badge .endpoint-status-text,
+  .dual-endpoint-badge .endpoint-latency {
+    display: none;
+  }
+
+  .home-user-info {
+    padding: 6px 9px;
+  }
+
+  .verification-workflow-cta {
+    display: grid;
+  }
+
+  .delivery-strategy-strip {
+    padding: 12px 14px;
+  }
+
+  .delivery-strategy-items {
+    grid-template-columns: 1fr;
+  }
+
   .decision-board {
     padding: 16px;
   }

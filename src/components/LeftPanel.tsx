@@ -1,7 +1,7 @@
-import { Sparkles, GitBranch, Copy, Check } from "lucide-react";
+import { Sparkles, GitBranch, Copy, Check, ChevronDown, Circle, CheckCircle2 } from "lucide-react";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { useState, useCallback } from "react";
-import type { TaskCard } from "../data/types";
+import type { TaskCard, WorkflowStep } from "../data/types";
 import { categoryMeta, priorityLabel } from "../data";
 import type { SessionState } from "../agent/types";
 import { WorkspaceExplorer } from "./WorkspaceExplorer";
@@ -26,6 +26,10 @@ type LeftPanelProps = {
   repoExplorerOpen?: RepoTab | null;
   /** 关闭 repo explorer */
   onCloseRepoExplorer?: () => void;
+  workflow?: WorkflowStep[];
+  executionStepIndex?: number;
+  viewingStepIndex?: number;
+  onViewStep?: (index: number) => void;
 };
 
 /**
@@ -44,7 +48,12 @@ export function LeftPanel({
   runtimeMode,
   repoExplorerOpen,
   onCloseRepoExplorer,
+  workflow = [],
+  executionStepIndex = 0,
+  viewingStepIndex = 0,
+  onViewStep,
 }: LeftPanelProps) {
+  const [workflowOpen, setWorkflowOpen] = useState(true);
   return (
     <aside className="left-panel">
       {/* 故事卡驻留 + 当前任务 + 历史任务 */}
@@ -56,21 +65,36 @@ export function LeftPanel({
         sessionId={sessionId}
       />
 
-      {/* 工作空间模块：两个按钮 */}
-      {workspacePath && (
-        <section className="left-card workspace-explorer-card">
-          <div className="left-card-header">
-            <span>Workspace</span>
-          </div>
-          <WorkspaceExplorer
-            workspacePath={workspacePath}
-            taskId={sessionId}
-            runtimeMode={runtimeMode}
-            repoExplorerOpen={repoExplorerOpen}
-            onCloseRepoExplorer={onCloseRepoExplorer}
-          />
-        </section>
-      )}
+      <section className="task-workflow-nav">
+        <button type="button" className="task-workflow-toggle" onClick={() => setWorkflowOpen((value) => !value)}>
+          <span>Workflow</span>
+          <small>{executionStepIndex + 1}/{workflow.length}</small>
+          <ChevronDown size={14} className={workflowOpen ? "open" : ""} />
+        </button>
+        {workflowOpen && <div className="task-workflow-steps">
+          {workflow.map((step, index) => {
+            const done = index < executionStepIndex;
+            const active = index === executionStepIndex;
+            return (
+              <button
+                type="button"
+                key={step.id}
+                className={`${viewingStepIndex === index ? "viewing" : ""} ${active ? "executing" : ""}`}
+                onClick={() => index <= executionStepIndex && onViewStep?.(index)}
+                disabled={index > executionStepIndex}
+              >
+                {done ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+                <span><strong>{step.label}</strong>{active && <small>当前执行</small>}</span>
+              </button>
+            );
+          })}
+        </div>}
+      </section>
+
+      {workspacePath && <div className="left-panel-repo-bridge" aria-hidden="true">
+        <WorkspaceExplorer workspacePath={workspacePath} taskId={sessionId} runtimeMode={runtimeMode}
+          repoExplorerOpen={repoExplorerOpen} onCloseRepoExplorer={onCloseRepoExplorer} />
+      </div>}
     </aside>
   );
 }

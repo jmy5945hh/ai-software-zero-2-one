@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AppState } from "../data/types";
-import { createDefaultState, getTaskWorkflow, getWorkflowStepIndex } from "../data";
+import { createDefaultState, getTaskWorkflow, getWorkflowStepIndex, normalizeDeliveryConfig } from "../data";
 
 export const STORAGE_KEY = "zero-one-software.prototype.v4";
 
@@ -20,6 +20,7 @@ export function useStoredState() {
       return {
         ...defaults,
         ...parsed,
+        deliveryConfig: normalizeDeliveryConfig(parsed.deliveryConfig),
         activeStage,
         prototype,
         stepIndex: getWorkflowStepIndex(activeStage, parsed.stepIndex, taskWorkflow),

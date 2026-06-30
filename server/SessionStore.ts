@@ -90,6 +90,19 @@ export type SessionMeta = {
   workspacePath: string;
   /** 运行时模式：local 或 cloud */
   runtimeMode: "local" | "cloud";
+  /** v0.2 一站式交付策略 */
+  deliveryConfig?: {
+    interactionMode: "plan" | "builder" | "workflow";
+    modelId: string;
+    mode: "app" | "project-change" | "bugfix" | "verification";
+    autonomy: "fast" | "collaborative" | "strict";
+    verification: "full" | "smoke" | "api-web";
+    modelPolicy: "balanced" | "quality" | "cost";
+    skills: string[];
+    mcpServers: string[];
+    autoRepair: boolean;
+    confirmRiskyActions: boolean;
+  };
   /** Git 仓库配置（云端模式），用于 session 恢复时重建 workspace */
   gitRepo?: { url: string; branch: string; subdirectory?: string };
   /** 本地模式使用的 Git 分支配置 */
@@ -111,6 +124,27 @@ export type SessionMeta = {
   /** QA 质量审查状态（仅存简略状态，完整数据在 step-quality.json） */
   qaReview?: {
     status: "idle" | "running" | "done" | "error";
+  };
+  /** v0.2 系统级验证计划 */
+  verificationPlan?: {
+    status: "idle" | "running" | "done" | "error";
+    filePath: string;
+    content: string;
+    error?: string;
+  };
+  /** v0.2 系统级验证执行结果 */
+  verificationResult?: {
+    status: "idle" | "running" | "done" | "error";
+    filePath: string;
+    content: string;
+    error?: string;
+  };
+  /** v0.2 测试后交付报告 */
+  deliveryReport?: {
+    status: "idle" | "running" | "done" | "error";
+    filePath: string;
+    content: string;
+    error?: string;
   };
   /** 交互原型状态 */
   prototype?: {

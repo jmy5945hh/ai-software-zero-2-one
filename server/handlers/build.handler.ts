@@ -134,7 +134,14 @@ export async function handleBuildMessage(
         break;
       }
 
-      const fixSession = await runner.createSession(taskId, step, workspaceDir);
+      const configuredModelId = sessionStore.loadMeta(taskId)?.deliveryConfig?.modelId;
+      const fixSession = await runner.createSession(
+        taskId,
+        step,
+        workspaceDir,
+        undefined,
+        configuredModelId && configuredModelId !== "auto" ? configuredModelId : undefined,
+      );
 
       const unsub = fixSession.subscribe((sdkEvent) => {
         const event = mapSdkEvent(sdkEvent);
