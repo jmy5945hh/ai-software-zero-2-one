@@ -1,7 +1,7 @@
 import type { WebSocket } from "ws";
-import type { HandlerDeps } from "./utils";
-import { sendResponse } from "./utils";
-import type { WsRequestMessage } from "../protocol";
+import type { HandlerDeps } from "./utils.js";
+import { sendResponse } from "./utils.js";
+import type { WsRequestMessage } from "../protocol.js";
 
 /**
  * Workspace 相关消息处理

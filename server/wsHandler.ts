@@ -1,16 +1,16 @@
 import { type RawData, type WebSocket } from "ws";
-import { AgentRunner } from "./AgentRunner";
-import { SessionPool } from "./SessionPool";
-import { SummaryStore } from "./SummaryStore";
-import { WorkspaceManager } from "./WorkspaceManager";
-import { SessionStore } from "./SessionStore";
-import { RollbackManager } from "./RollbackManager";
-import type { WsMessage } from "./protocol";
-import type { HandlerDeps } from "./handlers/utils";
-import { handleSessionMessage } from "./handlers/session.handler";
-import { handleSummarizationMessage } from "./handlers/summarization.handler";
-import { handleBuildMessage } from "./handlers/build.handler";
-import { handleWorkspaceMessage } from "./handlers/workspace.handler";
+import { AgentRunner } from "./AgentRunner.js";
+import { SessionPool } from "./SessionPool.js";
+import { SummaryStore } from "./SummaryStore.js";
+import { WorkspaceManager } from "./WorkspaceManager.js";
+import { SessionStore } from "./SessionStore.js";
+import { RollbackManager } from "./RollbackManager.js";
+import type { WsMessage } from "./protocol.js";
+import type { HandlerDeps } from "./handlers/utils.js";
+import { handleSessionMessage } from "./handlers/session.handler.js";
+import { handleSummarizationMessage } from "./handlers/summarization.handler.js";
+import { handleBuildMessage } from "./handlers/build.handler.js";
+import { handleWorkspaceMessage } from "./handlers/workspace.handler.js";
 
 export type WsHandlerGroup = "session" | "summarization" | "build" | "workspace" | null;
 

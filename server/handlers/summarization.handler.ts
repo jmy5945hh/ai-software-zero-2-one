@@ -1,8 +1,8 @@
 import type { WebSocket } from "ws";
-import type { HandlerDeps } from "./utils";
-import { mapSdkEvent, sendResponse } from "./utils";
-import { buildSummarizationPrompt } from "../prompts";
-import type { WsRequestMessage } from "../protocol";
+import type { HandlerDeps } from "./utils.js";
+import { mapSdkEvent, sendResponse } from "./utils.js";
+import { buildSummarizationPrompt } from "../prompts/index.js";
+import type { WsRequestMessage } from "../protocol.js";
 
 /**
  * 总结相关消息处理

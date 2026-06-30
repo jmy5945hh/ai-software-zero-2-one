@@ -11,6 +11,9 @@
     "test:server": "tsx --test server/httpAuth.test.ts server/httpRoutes.test.ts server/wsHandler.test.ts server/RollbackManager.test.ts server/utils/buildCommand.test.ts",
     "typecheck:server": "tsc -p tsconfig.server.json",
     "build": "npm run typecheck:server && tsc -b && vite build",
+    "build:server": "tsc -p tsconfig.server.build.json",
+    "package:server": "npm run build:server && cp -r server/prompts server/skills dist/server/ && cd dist && tar czf server.tar.gz server/ && echo \"\\n✅ 打包完成: dist/server.tar.gz\"",
+    "start:server": "node dist/server/index.js",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

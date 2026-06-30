@@ -2,6 +2,7 @@
   "providers": {
     "deepseek": {
       "baseUrl": "https://api.deepseek.com",
+      "apiKey": "",
       "api": "openai-completions",
       "models": [
         {

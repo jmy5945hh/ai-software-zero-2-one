@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type http from "http";
-import { isHttpRequestAuthorized } from "./httpAuth";
+import { isHttpRequestAuthorized } from "./httpAuth.js";
 
 function request(url: string, authorization?: string): http.IncomingMessage {
   return { method: "GET", url, headers: { authorization } } as http.IncomingMessage;

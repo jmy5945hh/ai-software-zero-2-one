@@ -6,9 +6,9 @@ import {
   SettingsManager,
   type AgentSession,
 } from "@earendil-works/pi-coding-agent";
-import { createAuthStorage, getDefaultProvider } from "./config";
-import { STEP_CONFIGS, type StepConfig } from "./stepConfigs";
-import { createAskUserQuestionTool } from "./customTools";
+import { createAuthStorage, getDefaultProvider, getDeepSeekApiKey } from "./config.js";
+import { STEP_CONFIGS, type StepConfig } from "./stepConfigs.js";
+import { createAskUserQuestionTool } from "./customTools.js";
 
 /**
  * AgentRunner — 根据步骤配置创建 AgentSession。
@@ -38,7 +38,7 @@ export class AgentRunner {
     workspaceDir: string,
   ): Promise<AgentSession> {
     const provider = getDefaultProvider();
-    const key = process.env.DEEPSEEK_API_KEY;
+    const key = getDeepSeekApiKey();
     if (!key) throw new Error("DEEPSEEK_API_KEY not found in environment");
     this.authStorage.setRuntimeApiKey("deepseek", key);
 
@@ -77,7 +77,7 @@ export class AgentRunner {
     workspaceDir: string,
   ): Promise<AgentSession> {
     const provider = getDefaultProvider();
-    const key = process.env.DEEPSEEK_API_KEY;
+    const key = getDeepSeekApiKey();
     if (!key) throw new Error("DEEPSEEK_API_KEY not found in environment");
     this.authStorage.setRuntimeApiKey("deepseek", key);
 
@@ -116,7 +116,7 @@ export class AgentRunner {
     workspaceDir: string,
   ): Promise<AgentSession> {
     const provider = getDefaultProvider();
-    const key = process.env.DEEPSEEK_API_KEY;
+    const key = getDeepSeekApiKey();
     if (!key) throw new Error("DEEPSEEK_API_KEY not found in environment");
     this.authStorage.setRuntimeApiKey("deepseek", key);
 
@@ -164,7 +164,7 @@ export class AgentRunner {
     const provider = stepConfig.modelProvider || getDefaultProvider();
 
     // Ensure API key is set on authStorage (each createSession call)
-    const key = process.env.DEEPSEEK_API_KEY;
+    const key = getDeepSeekApiKey();
     if (!key) {
       throw new Error("DEEPSEEK_API_KEY not found in environment");
     }

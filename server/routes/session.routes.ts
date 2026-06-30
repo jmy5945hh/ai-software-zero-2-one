@@ -1,9 +1,9 @@
 import http from "http";
-import { getRepoDiff, getRepoDiffFiles } from "../utils/gitOps";
-import type { SessionStore } from "../SessionStore";
-import type { WorkspaceManager } from "../WorkspaceManager";
-import type { RollbackManager } from "../RollbackManager";
-import type { SessionPool } from "../SessionPool";
+import { getRepoDiff, getRepoDiffFiles } from "../utils/gitOps.js";
+import type { SessionStore } from "../SessionStore.js";
+import type { WorkspaceManager } from "../WorkspaceManager.js";
+import type { RollbackManager } from "../RollbackManager.js";
+import type { SessionPool } from "../SessionPool.js";
 
 const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 
@@ -75,7 +75,7 @@ export function handleSessionRoutes(
           updatedAt: now,
           status: "active",
           stepSummaries: {},
-        } satisfies import("../SessionStore").SessionMeta;
+        } satisfies import("../SessionStore.js").SessionMeta;
         sessionStore.saveMeta(meta);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ success: true }));
@@ -167,7 +167,7 @@ export function handleSessionRoutes(
     req.on("data", (chunk) => { body += chunk; });
     req.on("end", () => {
       try {
-        const meta = JSON.parse(body) as import("../SessionStore").SessionMeta;
+        const meta = JSON.parse(body) as import("../SessionStore.js").SessionMeta;
         sessionStore.saveMeta(meta);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ success: true }));
@@ -188,7 +188,7 @@ export function handleSessionRoutes(
         const { sessionId, stepId, snapshot } = JSON.parse(body) as {
           sessionId: string;
           stepId: string;
-          snapshot: import("../SessionStore").StepSessionSnapshot;
+          snapshot: import("../SessionStore.js").StepSessionSnapshot;
         };
         sessionStore.saveStep(sessionId, stepId, snapshot);
         res.writeHead(200, { "Content-Type": "application/json" });

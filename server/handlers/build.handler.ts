@@ -1,14 +1,14 @@
 import type { WebSocket } from "ws";
-import type { HandlerDeps } from "./utils";
+import type { HandlerDeps } from "./utils.js";
 import {
   resolveWorkspaceDir,
   buildStepSnapshot,
   mapSdkEvent,
   sendResponse,
   sendWorkspaceInitializing,
-} from "./utils";
-import { buildBuildPrompt, buildDetectCommandPrompt } from "../prompts";
-import type { WsRequestMessage } from "../protocol";
+} from "./utils.js";
+import { buildBuildPrompt, buildDetectCommandPrompt } from "../prompts/index.js";
+import type { WsRequestMessage } from "../protocol.js";
 
 /**
  * 编译相关消息处理
@@ -101,7 +101,7 @@ export async function handleBuildMessage(
       const { sessionId, stepId, buildResult } = msg.params as {
         sessionId: string;
         stepId: string;
-        buildResult: import("../SessionStore").StepSessionSnapshot["buildResult"];
+        buildResult: import("../SessionStore.js").StepSessionSnapshot["buildResult"];
       };
       const existing = sessionStore.loadStep(sessionId, stepId) || {
         messages: [],

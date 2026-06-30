@@ -1,8 +1,8 @@
 import http from "http";
 import path from "path";
 import os from "os";
-import { readSpecsTree, readRepoTree, readFileSafe, writeFileSafe, existsSync } from "../utils/fileOps";
-import type { WorkspaceManager } from "../WorkspaceManager";
+import { readSpecsTree, readRepoTree, readFileSafe, writeFileSafe, existsSync } from "../utils/fileOps.js";
+import type { WorkspaceManager } from "../WorkspaceManager.js";
 
 const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 

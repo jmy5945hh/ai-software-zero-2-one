@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveWsHandlerGroup } from "./wsHandler";
+import { resolveWsHandlerGroup } from "./wsHandler.js";
 
 test("WebSocket methods keep their handler modules", () => {
   assert.equal(resolveWsHandlerGroup("session.create"), "session");
