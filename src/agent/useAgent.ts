@@ -917,11 +917,15 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
             setSessions((prev) => {
               const s = prev[snapshot.step];
               if (!s) return prev;
+              // 只在尚未触发总结时设为 pending，避免覆盖 loading/done/error 状态
+              const currentStatus = s.summarizationStatus;
+              const shouldTriggerSummary = (currentStatus === "idle" || currentStatus === undefined)
+                && snapshot.step !== "quality";
               return {
                 ...prev,
                 [snapshot.step]: {
                   ...s,
-                  summarizationStatus: (snapshot.step === "quality" ? "idle" : "pending") as "pending" | "idle",
+                  summarizationStatus: shouldTriggerSummary ? "pending" : currentStatus,
                   buildStatus: (snapshot.step === "coding" ? "pending" : "idle") as "pending" | "idle",
                 },
               };
@@ -1199,7 +1203,10 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
                 streamingText: "",
                 turns: updatedTurns,
                 // quality 阶段的修复 session 不触发独立总结
-                summarizationStatus: (step === "quality" ? "idle" : "pending") as "pending" | "idle",
+                // 只在尚未触发总结时设为 pending，避免覆盖 loading/done/error 状态
+                summarizationStatus: (step === "quality" || s.summarizationStatus === "loading" || s.summarizationStatus === "done" || s.summarizationStatus === "error")
+                  ? s.summarizationStatus
+                  : "pending",
                 // coding 步骤标记待触发编译
                 buildStatus: (step === "coding" ? "pending" : "idle") as "pending" | "idle",
               },
@@ -1650,8 +1657,10 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       setSessions((prev) => {
         const existing = prev[step] || defaultSession();
         // 判断是否需要触发总结：agent 已完成但 summary 未完成
+        // 注意：只有持久化状态明确为 "pending" 时才触发（说明上次总结还没开始）
+        // "loading" 和 undefined 都不触发，避免刷新后重复调用
         const needsSummary = restored.completed === true
-          && restored.summarizationStatus !== "done"
+          && restored.summarizationStatus === "pending"
           && !!restored.summary;
         return {
           ...prev,

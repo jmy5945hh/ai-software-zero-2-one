@@ -395,7 +395,13 @@ export function useSessionRecords() {
             buildResult: session.buildResult ?? restoredStep?.buildResult ?? null,
             // 保留执行状态
             completed: session.completed ?? restoredStep?.completed ?? undefined,
-            summarizationStatus: session.summarizationStatus ?? restoredStep?.summarizationStatus ?? undefined,
+            // 只持久化最终状态（done/error），中间状态（pending/loading）不保存
+            // 避免页面刷新后恢复为 pending 导致重复触发总结
+            summarizationStatus: (session.summarizationStatus === "done" || session.summarizationStatus === "error")
+              ? session.summarizationStatus
+              : (restoredStep?.summarizationStatus === "done" || restoredStep?.summarizationStatus === "error")
+                ? restoredStep.summarizationStatus
+                : undefined,
             buildStatus: session.buildStatus ?? restoredStep?.buildStatus ?? undefined,
           };
         }
