@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 
 // ── 视图状态 ────────────────────────────────
 export type View = "home" | "workspace";
-export type HomeTab = "tasks" | "build" | "history";
+export type HomeTab = "tasks" | "build" | "history" | "scheduled" | "env";
 
 // ── v0.2 交付配置 ───────────────────────────
 export type DeliveryMode = "app" | "project-change" | "bugfix" | "verification";

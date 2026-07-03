@@ -17,10 +17,14 @@ import {
   SignalMedium,
   Loader2,
   AlertTriangle,
+  Clock,
+  Settings2,
 } from "lucide-react";
 
 import { WorkspaceSelector } from "../components/WorkspaceSelector";
 import { SessionHistoryPanel } from "../components/SessionHistoryPanel";
+import { ScheduledTasksPanel } from "../components/ScheduledTasksPanel";
+import { ProjectEnvPanel } from "../components/ProjectEnvPanel";
 import { UnifiedDeliveryWorkspace } from "../components/UnifiedDeliveryWorkspace";
 import { useAgent } from "../agent";
 import { generateId } from "../utils/id";
@@ -367,6 +371,22 @@ export function DashboardPage() {
                 交付工作台
               </button>
               <button
+                className={`home-tab ${state.homeTab === "scheduled" ? "active" : ""}`}
+                type="button"
+                onClick={() => updateHomeTab("scheduled")}
+              >
+                <Clock size={18} />
+                定时任务
+              </button>
+              <button
+                className={`home-tab ${state.homeTab === "env" ? "active" : ""}`}
+                type="button"
+                onClick={() => updateHomeTab("env")}
+              >
+                <Settings2 size={18} />
+                项目环境管理
+              </button>
+              <button
                 className={`home-tab ${state.homeTab === "history" ? "active" : ""}`}
                 type="button"
                 onClick={() => updateHomeTab("history")}
@@ -378,7 +398,11 @@ export function DashboardPage() {
           </aside>
 
           <div className="home-content">
-            {state.homeTab !== "history" ? (
+            {state.homeTab === "scheduled" ? (
+              <ScheduledTasksPanel />
+            ) : state.homeTab === "env" ? (
+              <ProjectEnvPanel />
+            ) : state.homeTab !== "history" ? (
               <UnifiedDeliveryWorkspace
                 state={state}
                 onPatch={patchState}

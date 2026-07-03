@@ -2408,6 +2408,672 @@ p {
   flex: 0 0 auto;
 }
 
+/* ── Scheduled Tasks Panel ────────────────── */
+.scheduled-tasks-panel {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.scheduled-tasks-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.scheduled-tasks-title .eyebrow {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.scheduled-tasks-title h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.scheduled-tasks-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 20px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--primary);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+  white-space: nowrap;
+}
+
+.scheduled-tasks-add-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* ── Task List ────────────────────────────── */
+.scheduled-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scheduled-tasks-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 80px 20px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  color: var(--muted);
+  text-align: center;
+}
+
+.scheduled-tasks-empty svg {
+  opacity: 0.4;
+}
+
+.scheduled-tasks-empty p {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.scheduled-tasks-empty span {
+  font-size: 0.82rem;
+  color: var(--muted-warm);
+}
+
+/* ── Task Card ────────────────────────────── */
+.scheduled-task-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.scheduled-task-card:hover {
+  border-color: var(--primary-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.scheduled-task-card-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.scheduled-task-status-badge {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.scheduled-task-status-badge.running {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.scheduled-task-status-badge.paused {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.scheduled-task-status-badge.failed {
+  background: #fbe9e7;
+  color: #c62828;
+}
+
+.scheduled-task-status-badge.completed {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.scheduled-task-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.scheduled-task-card-info strong {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.scheduled-task-card-info p {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.scheduled-task-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.scheduled-task-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--muted-warm);
+  white-space: nowrap;
+}
+
+.scheduled-task-card-meta svg {
+  flex-shrink: 0;
+}
+
+.scheduled-task-card-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.scheduled-task-status-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.scheduled-task-status-label.running {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.scheduled-task-status-label.paused {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.scheduled-task-status-label.failed {
+  background: #fbe9e7;
+  color: #c62828;
+}
+
+.scheduled-task-status-label.completed {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.scheduled-task-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.scheduled-task-action-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.scheduled-task-action-btn:hover {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.scheduled-task-action-btn.danger:hover {
+  background: #fbe9e7;
+  color: #c62828;
+}
+
+.scheduled-task-card-chevron {
+  color: var(--line);
+  flex-shrink: 0;
+}
+
+/* ── Project Env Panel ───────────────────── */
+.project-env-panel {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.project-env-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.project-env-title .eyebrow {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.project-env-title h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+/* ── Sub Tabs ─────────────────────────────── */
+.project-env-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+
+.project-env-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 120px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.project-env-tabs button:hover {
+  color: var(--text);
+  background: var(--bg-soft);
+}
+
+.project-env-tabs button.active {
+  border-bottom-color: var(--primary);
+  color: var(--text);
+}
+
+/* ── Section ──────────────────────────────── */
+.project-env-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.project-env-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.project-env-section-desc {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ── List Items (Skills / SubAgent) ───────── */
+.project-env-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-env-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.project-env-item:hover {
+  border-color: var(--primary-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.project-env-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-env-item-info strong {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.project-env-item-info span {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.project-env-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.project-env-item.editing {
+  padding: 8px 12px;
+}
+
+.project-env-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--primary-light);
+}
+
+.project-env-edit-row.inline {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.project-env-edit-row.inline .project-env-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-env-var-row.editing {
+  background: var(--primary-light);
+}
+
+.project-env-var-row.editing .project-env-input.inline {
+  width: 100%;
+  min-width: 60px;
+}
+
+/* ── Toggle Switch ────────────────────────── */
+.project-env-item-toggle {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.project-env-item-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-track {
+  display: block;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--line);
+  transition: background var(--duration-fast) var(--ease-gentle);
+  position: relative;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--duration-fast) var(--ease-gentle);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.project-env-item-toggle input:checked + .toggle-track {
+  background: var(--primary);
+}
+
+.project-env-item-toggle input:checked + .toggle-track .toggle-thumb {
+  transform: translateX(18px);
+}
+
+/* ── Env Vars ─────────────────────────────── */
+.project-env-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+  align-self: flex-start;
+}
+
+.project-env-add-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-light);
+}
+
+.project-env-new-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--primary-light);
+}
+
+.project-env-input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-gentle);
+}
+
+.project-env-input:focus {
+  border-color: var(--primary);
+}
+
+.project-env-input.inline {
+  flex: 1;
+  min-width: 80px;
+  padding: 4px 8px;
+  font-size: 0.76rem;
+}
+
+.project-env-confirm-btn,
+.project-env-cancel-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.project-env-confirm-btn:hover {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.project-env-cancel-btn:hover {
+  background: #fbe9e7;
+  color: #c62828;
+}
+
+.project-env-vars-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.project-env-vars-header {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr 80px;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.project-env-var-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr 80px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 0.8rem;
+  transition: background var(--duration-fast) var(--ease-gentle);
+}
+
+.project-env-var-row:last-child {
+  border-bottom: 0;
+}
+
+.project-env-var-row:hover {
+  background: var(--bg-soft);
+}
+
+.project-env-vars-col-name code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text);
+  background: var(--bg-soft);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.project-env-vars-col-value code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.project-env-vars-col-value code.masked {
+  color: var(--muted-warm);
+  letter-spacing: 2px;
+}
+
+.project-env-vars-col-desc {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.project-env-vars-col-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.project-env-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-gentle);
+}
+
+.project-env-icon-btn:hover {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.project-env-icon-btn.danger:hover {
+  background: #fbe9e7;
+  color: #c62828;
+}
+
 /* ── 展开更多按钮 ──────────────────────── */
 .swimlane-expand-btn {
   display: flex;
