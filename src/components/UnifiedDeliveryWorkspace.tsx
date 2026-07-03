@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   Bot,
@@ -65,6 +65,12 @@ const taskTabs: Array<{
   { value: "governance", label: "治理任务", icon: ShieldCheck, category: "governance" },
   { value: "review", label: "检视问题", icon: SearchCode },
 ];
+
+const specializedAgentLabels: Record<TaskCategory, string> = {
+  story: "故事卡开发",
+  defect: "Bugfix",
+  governance: "治理任务",
+};
 
 const modelOptions = [
   { value: "auto", label: "Auto", detail: "按节点配置和策略自动选择" },
@@ -141,11 +147,25 @@ export function UnifiedDeliveryWorkspace({
 }: UnifiedDeliveryWorkspaceProps) {
   const [activeTaskTab, setActiveTaskTab] = useState<TaskPanelTab>("story");
   const [openMenu, setOpenMenu] = useState<ComposerMenu | null>(null);
+  const composerRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const activeTab = taskTabs.find((tab) => tab.value === activeTaskTab) || taskTabs[0];
   const visibleTaskCards = activeTab.category
     ? taskCards.filter((card) => card.category === activeTab.category)
     : [];
+
+  useEffect(() => {
+    if (!openMenu) return;
+
+    const closeMenuOutsideComposer = (event: PointerEvent) => {
+      if (!composerRef.current?.contains(event.target as Node)) {
+        setOpenMenu(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeMenuOutsideComposer);
+    return () => document.removeEventListener("pointerdown", closeMenuOutsideComposer);
+  }, [openMenu]);
 
   const patchDeliveryConfig = (patch: Partial<DeliveryConfig>) => {
     onPatch({
@@ -173,7 +193,7 @@ export function UnifiedDeliveryWorkspace({
 
   return (
     <div className="unified-delivery-workspace">
-      <section className="delivery-composer" aria-label="AI 研发任务输入">
+      <section ref={composerRef} className="delivery-composer" aria-label="AI 研发任务输入">
         <div className="composer-mode-tabs" aria-label="执行模式">
           {interactionModes.map(({ value, label, icon: Icon }) => (
             <button
@@ -204,10 +224,16 @@ export function UnifiedDeliveryWorkspace({
         />
 
         {state.activeTaskCard && (
-          <div className="composer-context-notice">
-            <Check size={13} />
-            已注入任务上下文：{stripTaskTag(state.activeTaskCard.title)}
-          </div>
+          <>
+            <div className="composer-context-notice">
+              <Check size={13} />
+              已注入任务上下文：{stripTaskTag(state.activeTaskCard.title)}
+            </div>
+            <div className="composer-context-notice">
+              <Bot size={13} />
+              已为您自动配置【{specializedAgentLabels[state.activeTaskCard.category]}专精 Agent】
+            </div>
+          </>
         )}
 
         <div className="composer-toolbar">
