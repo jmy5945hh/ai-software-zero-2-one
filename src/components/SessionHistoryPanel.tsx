@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   Clock,
   RotateCcw,
@@ -14,6 +14,9 @@ import {
   MessageSquare,
   Monitor,
   Cloud,
+  Search,
+  GitBranch,
+  Filter,
 } from "lucide-react";
 import type { SessionMeta, SessionRecord } from "../hooks/useSessionRecords";
 import { createDefaultState, getTaskWorkflow, getWorkflowStepIndex, workflow } from "../data";
@@ -24,6 +27,22 @@ type SessionHistoryPanelProps = {
   onContinue: (record: SessionMeta, followUpPrompt?: string) => void;
   onDelete: (sessionId: string) => void;
   onRefresh: () => void;
+};
+
+// ── 筛选条件 ────────────────────────────────
+
+type FilterState = {
+  repo: string;
+  keyword: string;
+  mode: "" | "local" | "cloud";
+  status: "" | "active" | "completed";
+};
+
+const defaultFilter: FilterState = {
+  repo: "",
+  keyword: "",
+  mode: "",
+  status: "",
 };
 
 /**
@@ -40,6 +59,34 @@ export function SessionHistoryPanel({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [followUpInput, setFollowUpInput] = useState<string>("");
   const [continuingId, setContinuingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterState>(defaultFilter);
+  const [showFilters, setShowFilters] = useState(false);
+
+  // ── 提取所有仓库列表（用于下拉） ──
+  const repoOptions = useMemo(() => {
+    const repos = new Set<string>();
+    for (const r of records) {
+      const repo = extractRepo(r);
+      if (repo) repos.add(repo);
+    }
+    return Array.from(repos).sort();
+  }, [records]);
+
+  // ── 筛选逻辑 ──
+  const filteredRecords = useMemo(() => {
+    return records.filter((r) => {
+      if (filter.repo) {
+        const repo = extractRepo(r);
+        if (!repo || !repo.toLowerCase().includes(filter.repo.toLowerCase())) return false;
+      }
+      if (filter.keyword) {
+        if (!r.intent.toLowerCase().includes(filter.keyword.toLowerCase())) return false;
+      }
+      if (filter.mode && r.runtimeMode !== filter.mode) return false;
+      if (filter.status && r.status !== filter.status) return false;
+      return true;
+    });
+  }, [records, filter]);
 
   const handleDelete = useCallback(
     async (sessionId: string) => {
@@ -90,7 +137,15 @@ export function SessionHistoryPanel({
       <div className="session-history-header">
         <History size={16} />
         <span>历史会话</span>
-        <span className="session-history-count">{records.length}</span>
+        <span className="session-history-count">{filteredRecords.length}</span>
+        <button
+          className={`session-history-filter-toggle ${showFilters ? "active" : ""}`}
+          type="button"
+          onClick={() => setShowFilters((v) => !v)}
+          title="筛选"
+        >
+          <Filter size={13} />
+        </button>
         <button
           className="session-history-refresh"
           type="button"
@@ -101,8 +156,66 @@ export function SessionHistoryPanel({
         </button>
       </div>
 
+      {showFilters && (
+        <div className="session-history-filters">
+          <div className="session-history-filter-row">
+            <div className="session-history-filter-field">
+              <GitBranch size={13} />
+              <select
+                value={filter.repo}
+                onChange={(e) => setFilter((f) => ({ ...f, repo: e.target.value }))}
+              >
+                <option value="">全部仓库</option>
+                {repoOptions.map((repo) => (
+                  <option key={repo} value={repo}>{repo}</option>
+                ))}
+              </select>
+            </div>
+            <div className="session-history-filter-field">
+              <Search size={13} />
+              <input
+                placeholder="搜索任务名称..."
+                value={filter.keyword}
+                onChange={(e) => setFilter((f) => ({ ...f, keyword: e.target.value }))}
+              />
+            </div>
+            <div className="session-history-filter-field">
+              <Monitor size={13} />
+              <select
+                value={filter.mode}
+                onChange={(e) => setFilter((f) => ({ ...f, mode: e.target.value as FilterState["mode"] }))}
+              >
+                <option value="">全部模式</option>
+                <option value="local">本地</option>
+                <option value="cloud">云端</option>
+              </select>
+            </div>
+            <div className="session-history-filter-field">
+              <CheckCircle2 size={13} />
+              <select
+                value={filter.status}
+                onChange={(e) => setFilter((f) => ({ ...f, status: e.target.value as FilterState["status"] }))}
+              >
+                <option value="">全部状态</option>
+                <option value="active">进行中</option>
+                <option value="completed">已完成</option>
+              </select>
+            </div>
+          </div>
+          {(filter.repo || filter.keyword || filter.mode || filter.status) && (
+            <button
+              className="session-history-filter-clear"
+              type="button"
+              onClick={() => setFilter(defaultFilter)}
+            >
+              清除筛选
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="session-history-list">
-        {records.map((record) => {
+        {filteredRecords.map((record) => {
           const isExpanded = expandedId === record.sessionId;
           const stepLabel = getStepLabel(record.activeStage);
           const taskWorkflow = getTaskWorkflow(record.prototype || createDefaultState().prototype);
@@ -288,6 +401,17 @@ export function SessionHistoryPanel({
 }
 
 // ── 辅助函数 ────────────────────────────────
+
+function extractRepo(record: SessionMeta): string {
+  if (record.gitRepo?.url) {
+    const name = record.gitRepo.url.split("/").pop()?.replace(/\.git$/, "") || record.gitRepo.url;
+    return `${name} · ${record.gitRepo.branch}`;
+  }
+  if (record.workspacePath) {
+    return record.workspacePath.split("/").filter(Boolean).pop() || record.workspacePath;
+  }
+  return "";
+}
 
 function getStepLabel(stepId: string): string {
   return workflow.find((step) => step.id === stepId)?.label || stepId;
