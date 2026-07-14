@@ -3,7 +3,6 @@ import {
   Sparkles,
   ArrowRight,
   Zap,
-  UserCircle,
   Monitor,
   Cloud,
   Shield,
@@ -15,6 +14,8 @@ import {
   Users,
 } from "lucide-react";
 import { TypewriterText } from "../components/TypewriterText";
+import { UserMenu, UserConfigModal } from "../components/UserConfig";
+import { useState } from "react";
 
 /**
  * 落地页 —— "/"
@@ -23,6 +24,7 @@ import { TypewriterText } from "../components/TypewriterText";
  */
 export function LandingPage() {
   const navigate = useNavigate();
+  const [showUserConfig, setShowUserConfig] = useState(false);
 
   return (
     <>
@@ -38,13 +40,7 @@ export function LandingPage() {
             </div>
           </div>
           <div className="intro-nav-right">
-            <div className="home-user-info">
-              <UserCircle size={18} />
-              <div>
-                <strong>景梦园</strong>
-                <span>80123456</span>
-              </div>
-            </div>
+            <UserMenu onOpenConfig={() => setShowUserConfig(true)} />
           </div>
         </header>
 
@@ -280,6 +276,8 @@ export function LandingPage() {
           </div>
         </section>
       </main>
+
+      {showUserConfig && <UserConfigModal onClose={() => setShowUserConfig(false)} />}
     </>
   );
 }

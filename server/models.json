@@ -1,4 +1,6 @@
 {
+  "defaultModel": "deepseek-v4-flash",
+  "defaultProvider": "deepseek",
   "providers": {
     "deepseek": {
       "baseUrl": "https://api.deepseek.com",

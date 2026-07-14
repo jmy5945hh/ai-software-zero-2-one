@@ -15,7 +15,6 @@ type LeftPanelProps = {
   onBackToTasks: () => void;
   agentFileTree?: any[] | null;
   isAgentConnected: boolean;
-  stepSummaries?: Record<string, string>;
   agentSessions?: Record<string, SessionState>;
   intent?: string;
   workspacePath?: string;
@@ -40,7 +39,6 @@ export function LeftPanel({
   activeTaskCard,
   onBackToTasks,
   isAgentConnected,
-  stepSummaries,
   agentSessions,
   intent,
   workspacePath,
@@ -56,11 +54,9 @@ export function LeftPanel({
   const [workflowOpen, setWorkflowOpen] = useState(true);
   return (
     <aside className="left-panel">
-      {/* 故事卡驻留 + 当前任务 + 历史任务 */}
       <TaskCardResident
         taskCard={activeTaskCard}
         onBackToTasks={onBackToTasks}
-        stepSummaries={stepSummaries}
         intent={intent}
         sessionId={sessionId}
       />
@@ -106,13 +102,11 @@ export function LeftPanel({
 function TaskCardResident({
   taskCard,
   onBackToTasks,
-  stepSummaries,
   intent,
   sessionId,
 }: {
   taskCard: TaskCard | null;
   onBackToTasks: () => void;
-  stepSummaries?: Record<string, string>;
   intent?: string;
   sessionId?: string;
 }) {
@@ -182,23 +176,6 @@ function TaskCardResident({
           >
             返回任务列表
           </button>
-        </div>
-      )}
-
-      {/* 历史任务列表 */}
-      {stepSummaries && Object.keys(stepSummaries).length > 0 && (
-        <div className="history-tasks-section">
-          <div className="history-tasks-header">历史任务</div>
-          <div className="history-tasks-body">
-            {Object.entries(stepSummaries).map(([sid, brief]) => (
-              <div key={sid} className="history-task-item">
-                <div className="history-task-step-label">{sid.toUpperCase()}</div>
-                <p className="history-task-brief" title={brief}>
-                  {brief.length > 20 ? brief.slice(0, 20) + "…" : brief}
-                </p>
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </section>

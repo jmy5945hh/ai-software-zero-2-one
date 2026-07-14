@@ -7,6 +7,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 interface ModelsConfig {
+  defaultModel?: string;
+  defaultProvider?: string;
   providers: Record<string, {
     baseUrl: string;
     apiKey?: string;
@@ -46,16 +48,20 @@ export function createAuthStorage(): AuthStorage {
   return storage;
 }
 
-/** 从环境变量加载 LLM 提供商配置 */
-export function getDefaultProvider(): "deepseek" {
-  if (getDeepSeekApiKey()) return "deepseek";
-  throw new Error(
-    "No LLM API key configured. Set DEEPSEEK_API_KEY in environment.",
-  );
+/** 从 models.json 获取默认提供商 */
+export function getDefaultProvider(): string {
+  const config = getModelsConfig();
+  const provider = config.defaultProvider || "deepseek";
+  if (provider === "deepseek" && !getDeepSeekApiKey()) {
+    throw new Error(
+      "No LLM API key configured. Set DEEPSEEK_API_KEY in environment.",
+    );
+  }
+  return provider;
 }
 
+/** 从 models.json 获取默认模型 ID */
 export function getDefaultModel(): string {
-  const provider = getDefaultProvider();
-  if (provider === "deepseek") return "deepseek-v4-flash";
-  throw new Error(`No default model configured for provider ${provider}`);
+  const config = getModelsConfig();
+  return config.defaultModel || "deepseek-v4-flash";
 }

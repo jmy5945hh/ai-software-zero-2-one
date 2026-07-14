@@ -8,7 +8,6 @@ import type { SessionMeta, SessionRecord } from "../hooks/useSessionRecords";
 
 import {
   Sparkles,
-  UserCircle,
   FileText,
   History,
   Monitor,
@@ -29,6 +28,7 @@ import { UnifiedDeliveryWorkspace } from "../components/UnifiedDeliveryWorkspace
 import { useAgent } from "../agent";
 import { generateId } from "../utils/id";
 import { useRuntimeState, useRuntimeActions } from "../stores/runtimeStore";
+import { UserMenu, UserConfigModal } from "../components/UserConfig";
 
 /**
  * 控制台页 —— "/dashboard"
@@ -51,6 +51,7 @@ export function DashboardPage() {
     ? state.sessionId
     : null;
   const agent = useAgent(taskIdForPicker, undefined, undefined, runtimeState.mode);
+  const [showUserConfig, setShowUserConfig] = useState(false);
   const patchState = useCallback(
     (patch: Partial<AppState>) =>
       setState((previous) => ({ ...previous, ...patch })),
@@ -64,8 +65,13 @@ export function DashboardPage() {
     (intent: string, notes: string, activeTaskCard: AppState["activeTaskCard"]) => {
       setDocsError(null);
       const sessionId = generateId();
+      const defaultState = createDefaultState();
+      // builder 模式：跳过 intent/prototype/plan，直接进入 coding 阶段
+      const isBuilderMode = state.deliveryConfig.interactionMode === "builder";
+      const builderWorkflow = getTaskWorkflow(defaultState.prototype);
+      const builderCodingIndex = getWorkflowStepIndex("coding", undefined, builderWorkflow);
       const nextState: AppState = {
-        ...createDefaultState(),
+        ...defaultState,
         deliveryConfig: state.deliveryConfig,
         intent,
         notes,
@@ -76,6 +82,12 @@ export function DashboardPage() {
         workspacePath: dashboardMode === "local" ? state.workspacePath : "",
         localGit: dashboardMode === "local" ? state.localGit : undefined,
         gitRepo: dashboardMode === "cloud" ? state.gitRepo : undefined,
+        ...(isBuilderMode ? {
+          stepIndex: builderCodingIndex,
+          activeStage: "coding" as const,
+          codeConfirmed: true,
+          prototype: { mode: "none" as const, status: "skipped" as const, htmlPath: "", handoffPath: "" },
+        } : {}),
       };
       setState(nextState);
 
@@ -349,13 +361,7 @@ export function DashboardPage() {
                 disconnectedLabel="无信号"
               />
             </div>
-            <div className="home-user-info">
-              <UserCircle size={18} />
-              <div>
-                <strong>景梦园</strong>
-                <span>80123456</span>
-              </div>
-            </div>
+            <UserMenu onOpenConfig={() => setShowUserConfig(true)} />
           </div>
         </header>
 
@@ -363,7 +369,7 @@ export function DashboardPage() {
           <aside className="home-sidebar">
             <nav className="home-tabs">
               <button
-                className={`home-tab ${state.homeTab !== "history" ? "active" : ""}`}
+                className={`home-tab ${state.homeTab === "build" || state.homeTab === undefined ? "active" : ""}`}
                 type="button"
                 onClick={() => updateHomeTab("build")}
               >
@@ -457,6 +463,9 @@ export function DashboardPage() {
           />
         </>
       )}
+
+      {/* 用户设置弹窗 */}
+      {showUserConfig && <UserConfigModal onClose={() => setShowUserConfig(false)} />}
 
       {/* Preflight 错误提示 */}
       {preflightError && (

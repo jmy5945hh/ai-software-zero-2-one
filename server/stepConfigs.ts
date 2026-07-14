@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getDefaultModel } from "./config.js";
 import { createSyntheticSourceInfo, type Skill } from "@earendil-works/pi-coding-agent";
 
 // ── 步骤配置 ────────────────────────────────
@@ -72,7 +73,7 @@ const DEVOPS_SKILL = loadSkill("devops.md");
 
 export const STEP_CONFIGS: Record<string, StepConfig> = {
   intent: {
-    modelId: "deepseek-v4-flash",
+    modelId: getDefaultModel(),
     modelProvider: "deepseek",
     capability: "analysis",
     modelTier: "medium",
@@ -84,7 +85,7 @@ export const STEP_CONFIGS: Record<string, StepConfig> = {
     skills: [],
   },
   prototype: {
-    modelId: "deepseek-v4-flash",
+    modelId: getDefaultModel(),
     modelProvider: "deepseek",
     capability: "prototype",
     modelTier: "medium",
@@ -96,7 +97,7 @@ export const STEP_CONFIGS: Record<string, StepConfig> = {
     skills: [],
   },
   plan: {
-    modelId: "deepseek-v4-flash",
+    modelId: getDefaultModel(),
     modelProvider: "deepseek",
     capability: "architecture",
     modelTier: "large",
@@ -108,7 +109,7 @@ export const STEP_CONFIGS: Record<string, StepConfig> = {
     skills: [],
   },
   coding: {
-    modelId: "deepseek-v4-flash",
+    modelId: getDefaultModel(),
     modelProvider: "deepseek",
     capability: "implementation",
     modelTier: "large",
@@ -120,7 +121,7 @@ export const STEP_CONFIGS: Record<string, StepConfig> = {
     skills: [FRONTEND_DEV_SKILL],
   },
   quality: {
-    modelId: "deepseek-v4-flash",
+    modelId: getDefaultModel(),
     modelProvider: "deepseek",
     capability: "quality",
     modelTier: "medium",
@@ -132,7 +133,7 @@ export const STEP_CONFIGS: Record<string, StepConfig> = {
     skills: [TESTING_SKILL],
   },
   verify: {
-    modelId: "deepseek-v4-flash",
+    modelId: getDefaultModel(),
     modelProvider: "deepseek",
     capability: "verification",
     modelTier: "medium",
@@ -144,7 +145,7 @@ export const STEP_CONFIGS: Record<string, StepConfig> = {
     skills: [TESTING_SKILL],
   },
   release: {
-    modelId: "deepseek-v4-flash",
+    modelId: getDefaultModel(),
     modelProvider: "deepseek",
     capability: "release",
     modelTier: "small",

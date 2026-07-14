@@ -2,10 +2,12 @@ import http from "http";
 import https from "https";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import { spawn } from "child_process";
 import { existsSync } from "../utils/fileOps.js";
 import { executeBuildCommand } from "../utils/buildCommand.js";
 import type { WorkspaceManager } from "../WorkspaceManager.js";
+import type { SessionStore } from "../SessionStore.js";
 
 const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 
@@ -15,9 +17,9 @@ const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 export function handleBuildRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  deps: { workspace: WorkspaceManager },
+  deps: { workspace: WorkspaceManager; sessionStore?: SessionStore },
 ): boolean {
-  const { workspace } = deps;
+  const { workspace, sessionStore } = deps;
 
   if (req.method === "POST" && req.url === "/verification-plan") {
     readJsonBody(req).then(async (params) => {
@@ -31,7 +33,7 @@ export function handleBuildRoutes(
         return;
       }
 
-      const outputDir = ensureSessionOutputDir(sessionId);
+      const outputDir = ensureSessionOutputDir(sessionId, sessionStore);
       const outputFile = path.join(outputDir, "verification_plan.json");
       const plan = createVerificationPlan({
         intent,
@@ -62,7 +64,7 @@ export function handleBuildRoutes(
         return;
       }
 
-      const outputDir = ensureSessionOutputDir(sessionId);
+      const outputDir = ensureSessionOutputDir(sessionId, sessionStore);
       const outputFile = path.join(outputDir, "DELIVERY.md");
       const verificationPlanPath = path.join(outputDir, "verification_plan.json");
       const verificationResultPath = path.join(outputDir, "verification_result.json");
@@ -97,7 +99,7 @@ export function handleBuildRoutes(
         return;
       }
 
-      const outputDir = ensureSessionOutputDir(sessionId);
+      const outputDir = ensureSessionOutputDir(sessionId, sessionStore);
       const planPath = path.join(outputDir, "verification_plan.json");
       const outputFile = path.join(outputDir, "verification_result.json");
       const planContent = readOptionalFile(planPath);
@@ -195,9 +197,11 @@ export function handleBuildRoutes(
       return true;
     }
 
+    const username = sessionStore?.username;
     const outputDir = path.join(
-      process.env.HOME || process.env.USERPROFILE || "~",
+      os.homedir(),
       ".aiNativeDevPlatform",
+      ...(username ? [username] : []),
       "sessions",
       sessionId,
     );
@@ -318,10 +322,12 @@ function resolveWorkspacePath(workspace: WorkspaceManager, workspacePath: unknow
   return taskId ? workspace.getRepoDir(taskId) : "";
 }
 
-function ensureSessionOutputDir(sessionId: string): string {
+function ensureSessionOutputDir(sessionId: string, sessionStore?: SessionStore): string {
+  const username = sessionStore?.username;
   const outputDir = path.join(
-    process.env.HOME || process.env.USERPROFILE || "~",
+    os.homedir(),
     ".aiNativeDevPlatform",
+    ...(username ? [username] : []),
     "sessions",
     sessionId,
   );

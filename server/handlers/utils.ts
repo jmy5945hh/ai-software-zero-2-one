@@ -237,7 +237,7 @@ export function ensureSubscription(
 
     if (sessionStore && (event.type === "turn_end" || event.type === "agent_end")) {
       const snapshot = buildStepSnapshot(session);
-      sessionStore.saveStep((session as any).sessionId as string, step, snapshot);
+      sessionStore.saveStep(taskId, step, snapshot);
 
       // 发送 token 用量事件到前端
       if (snapshot.totalTokenUsage) {

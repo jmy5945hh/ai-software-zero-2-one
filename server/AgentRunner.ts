@@ -6,7 +6,7 @@ import {
   SettingsManager,
   type AgentSession,
 } from "@earendil-works/pi-coding-agent";
-import { createAuthStorage, getDefaultProvider, getDeepSeekApiKey } from "./config.js";
+import { createAuthStorage, getDefaultProvider, getDefaultModel, getDeepSeekApiKey } from "./config.js";
 import { STEP_CONFIGS, type StepConfig } from "./stepConfigs.js";
 import { createAskUserQuestionTool } from "./customTools.js";
 
@@ -42,8 +42,8 @@ export class AgentRunner {
     if (!key) throw new Error("DEEPSEEK_API_KEY not found in environment");
     this.authStorage.setRuntimeApiKey("deepseek", key);
 
-    const model = this.modelRegistry.find(provider, "deepseek-v4-flash");
-    if (!model) throw new Error(`Model not found: ${provider}/deepseek-v4-flash`);
+    const model = this.modelRegistry.find(provider, getDefaultModel());
+    if (!model) throw new Error(`Model not found: ${provider}/${getDefaultModel()}`);
 
     const loader = new DefaultResourceLoader({
       cwd: workspaceDir,
@@ -81,8 +81,8 @@ export class AgentRunner {
     if (!key) throw new Error("DEEPSEEK_API_KEY not found in environment");
     this.authStorage.setRuntimeApiKey("deepseek", key);
 
-    const model = this.modelRegistry.find(provider, "deepseek-v4-flash");
-    if (!model) throw new Error(`Model not found: ${provider}/deepseek-v4-flash`);
+    const model = this.modelRegistry.find(provider, getDefaultModel());
+    if (!model) throw new Error(`Model not found: ${provider}/${getDefaultModel()}`);
 
     const loader = new DefaultResourceLoader({
       cwd: workspaceDir,
@@ -120,8 +120,8 @@ export class AgentRunner {
     if (!key) throw new Error("DEEPSEEK_API_KEY not found in environment");
     this.authStorage.setRuntimeApiKey("deepseek", key);
 
-    const model = this.modelRegistry.find(provider, "deepseek-v4-flash");
-    if (!model) throw new Error(`Model not found: ${provider}/deepseek-v4-flash`);
+    const model = this.modelRegistry.find(provider, getDefaultModel());
+    if (!model) throw new Error(`Model not found: ${provider}/${getDefaultModel()}`);
 
     const loader = new DefaultResourceLoader({
       cwd: workspaceDir,

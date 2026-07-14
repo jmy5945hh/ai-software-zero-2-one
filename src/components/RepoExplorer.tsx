@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Folder,
   FileText,
@@ -11,6 +11,8 @@ import {
   History,
   RotateCcw,
   ShieldCheck,
+  Search,
+  X,
 } from "lucide-react";
 import { DiffViewer } from "./DiffViewer";
 import { agentFetch, getAgentHttpOrigin } from "../agent/config";
@@ -99,6 +101,43 @@ export function RepoExplorer({ workspacePath, taskId, runtimeMode = "local", ini
   const [rollbackLoading, setRollbackLoading] = useState(false);
   const [rollbackMessage, setRollbackMessage] = useState("");
   const [rollbackReady, setRollbackReady] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // 搜索过滤：对 tree 和 diff 文件列表做过滤
+  const filteredTree = useMemo(() => {
+    if (!searchQuery.trim()) return tree;
+    const q = searchQuery.toLowerCase();
+    const matches = (nodes: TreeNode[]): TreeNode[] => {
+      const result: TreeNode[] = [];
+      for (const node of nodes) {
+        if (node.name.toLowerCase().includes(q)) {
+          result.push(node);
+        } else if (node.type === "folder" && node.children) {
+          const filtered = matches(node.children);
+          if (filtered.length > 0) {
+            result.push({ ...node, children: filtered });
+          }
+        }
+      }
+      return result;
+    };
+    return matches(tree);
+  }, [tree, searchQuery]);
+
+  const filteredDiffFiles = useMemo(() => {
+    if (!searchQuery.trim()) return diffFiles;
+    const q = searchQuery.toLowerCase();
+    return diffFiles.filter((f) => f.path.toLowerCase().includes(q));
+  }, [diffFiles, searchQuery]);
+
+  // Build file tree from diff files
+  const diffFileTree = useRef<TreeNode[]>([]);
+  diffFileTree.current = buildFileTree(diffFiles);
+
+  const filteredDiffFileTree = useMemo(() => {
+    if (!searchQuery.trim()) return diffFileTree.current;
+    return buildFileTree(filteredDiffFiles);
+  }, [filteredDiffFiles, searchQuery]);
   const agentUrl = useCallback(
     (endpoint: string) => `${getAgentHttpOrigin(runtimeMode)}${endpoint}`,
     [runtimeMode],
@@ -255,14 +294,10 @@ export function RepoExplorer({ workspacePath, taskId, runtimeMode = "local", ini
     [workspacePath, agentUrl, runtimeMode],
   );
 
-  // Get selected diff content
+  // Get selected diff content (from filtered list)
   const selectedDiff = selectedDiffFile
-    ? diffFiles.find((f) => f.path === selectedDiffFile)
+    ? filteredDiffFiles.find((f) => f.path === selectedDiffFile)
     : null;
-
-  // Build file tree from diff files
-  const diffFileTree = useRef<TreeNode[]>([]);
-  diffFileTree.current = buildFileTree(diffFiles);
 
   return (
     <div className="repo-explorer">
@@ -294,6 +329,29 @@ export function RepoExplorer({ workspacePath, taskId, runtimeMode = "local", ini
         </button>
       </div>
 
+      {/* 搜索栏 */}
+      {tab !== "rollback" && (
+        <div className="repo-search-bar">
+          <Search size={14} className="repo-search-icon" />
+          <input
+            className="repo-search-input"
+            type="text"
+            placeholder={tab === "tree" ? "搜索文件名..." : "搜索变更文件..."}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              className="repo-search-clear"
+              type="button"
+              onClick={() => setSearchQuery("")}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
       {rollbackMessage && <div className="rollback-message">{rollbackMessage}</div>}
 
       {/* 目录树视图 */}
@@ -304,14 +362,14 @@ export function RepoExplorer({ workspacePath, taskId, runtimeMode = "local", ini
               <Loader2 size={20} className="spin-icon" />
               <span>加载仓库目录...</span>
             </div>
-          ) : tree.length === 0 ? (
+          ) : filteredTree.length === 0 ? (
             <div className="repo-explorer-empty">
-              <p>仓库目录为空</p>
+              <p>{searchQuery ? `未找到匹配 "${searchQuery}" 的文件` : "仓库目录为空"}</p>
             </div>
           ) : (
             <div className="repo-explorer-split" ref={splitRef}>
               <div className="repo-explorer-tree" style={{ width: treeWidth, flexShrink: 0 }}>
-                {tree.map((node) => (
+                {filteredTree.map((node) => (
                   <RepoTreeNode
                     key={node.name}
                     node={node}
@@ -353,10 +411,10 @@ export function RepoExplorer({ workspacePath, taskId, runtimeMode = "local", ini
               <Loader2 size={20} className="spin-icon" />
               <span>加载 Diff...</span>
             </div>
-          ) : diffFiles.length === 0 ? (
+          ) : filteredDiffFiles.length === 0 ? (
             <div className="repo-explorer-empty">
               <FileDiff size={32} />
-              <p>工作区无变更</p>
+              <p>{searchQuery ? `未找到匹配 "${searchQuery}" 的变更文件` : "工作区无变更"}</p>
             </div>
           ) : (
             <div className="repo-diff-split">
@@ -374,13 +432,13 @@ export function RepoExplorer({ workspacePath, taskId, runtimeMode = "local", ini
                   </button>
                 </div>
                 <div className="repo-diff-tree-list">
-                  {diffFileTree.current.map((node) => (
+                  {filteredDiffFileTree.map((node) => (
                     <DiffTreeNode
                       key={node.name}
                       node={node}
                       path=""
                       depth={0}
-                      diffFiles={diffFiles}
+                      diffFiles={filteredDiffFiles}
                       selectedFile={selectedDiffFile}
                       onSelect={setSelectedDiffFile}
                     />

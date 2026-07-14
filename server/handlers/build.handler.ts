@@ -150,7 +150,7 @@ export async function handleBuildMessage(
 
         if (event.type === "turn_end" || event.type === "agent_end") {
           const snapshot = buildStepSnapshot(fixSession);
-          sessionStore.saveStep(fixSession.sessionId, step, snapshot);
+          sessionStore.saveStep(taskId, step, snapshot);
         }
         if (event.type === "agent_end") {
           unsub();

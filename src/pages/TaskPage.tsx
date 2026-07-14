@@ -17,13 +17,14 @@ import type { DrawerContent, AppState, DeliveryConfig, PrototypeState } from "..
 import type { ConnectionStatus } from "../agent/types";
 import { useSessionRecords } from "../hooks/useSessionRecords";
 
-import { Bot, Code2, FileText, Gauge, Globe, ShieldCheck, Sparkles, Terminal, TestTube2, WifiOff } from "lucide-react";
+import { Bot, Code2, FileText, Gauge, Globe, Maximize2, Minimize2, ShieldCheck, Sparkles, Terminal, TestTube2, WifiOff } from "lucide-react";
 
 import { SopNav } from "../components/SopNav";
 import { LeftPanel } from "../components/LeftPanel";
 import { DecisionBoard } from "../components/DecisionBoard";
 import { Drawer } from "../components/Drawer";
 import { AgentStatusBadge } from "../components/AgentStatusBadge";
+import { RepoExplorer } from "../components/RepoExplorer";
 import type { RepoTab } from "../components/RepoExplorer";
 
 /**
@@ -37,7 +38,8 @@ export function TaskPage() {
   const [drawerContent, setDrawerContent] = useState<DrawerContent>(null);
   const [repoExplorerOpen, setRepoExplorerOpen] = useState<RepoTab | null>(null);
   const [viewingStepIndex, setViewingStepIndex] = useState(state.stepIndex);
-  const [workbenchTab, setWorkbenchTab] = useState<"preview" | "code" | "terminal" | "artifacts">("preview");
+  const [workbenchTab, setWorkbenchTab] = useState<"artifacts" | "code" | "preview" | "terminal">("artifacts");
+  const [fullscreenTab, setFullscreenTab] = useState<"artifacts" | "code" | "preview" | "terminal" | null>(null);
 
   // ── URL taskId 恢复 ──
   // 如果 URL 携带 taskId 且与 localStorage 中的不一致，说明是刷新后首次加载，
@@ -270,9 +272,15 @@ export function TaskPage() {
     [state.intent],
   );
 
+  const isBuilderMode = state.deliveryConfig.interactionMode === "builder" && state.activeStage === "coding";
   const taskWorkflow = useMemo(
     () => getTaskWorkflow(state.prototype),
     [state.prototype],
+  );
+  // builder 模式：传给 LeftPanel 的 workflow 只包含编码开发阶段
+  const displayWorkflow = useMemo(
+    () => isBuilderMode ? taskWorkflow.filter((step) => step.id === "coding") : taskWorkflow,
+    [taskWorkflow, isBuilderMode],
   );
 
   const progress = useMemo(
@@ -341,56 +349,78 @@ export function TaskPage() {
 
   useEffect(() => {
     if (
-      isAgentConnected &&
-      state.stepIndex === 0 &&
-      !sessionInitRef.current &&
-      state.intent &&
-      Object.keys(state.restoredSessions).length === 0
-    ) {
-      sessionInitRef.current = true;
+      !isAgentConnected ||
+      sessionInitRef.current ||
+      !state.intent ||
+      Object.keys(state.restoredSessions).length > 0
+    ) return;
+    sessionInitRef.current = true;
 
-      const intentPrompt = getStepPrompt("intent", state.intent, taskId, undefined, state.deliveryConfig);
+    // builder 模式：stepIndex 指向 coding，直接创建 coding session
+    const isBuilderMode = state.deliveryConfig.interactionMode === "builder" && state.activeStage === "coding";
+
+    if (isBuilderMode) {
+      // builder 模式：直接用用户原始提示词作为 coding prompt
       patchState({
-        initialPrompts: { ...state.initialPrompts, intent: intentPrompt },
+        initialPrompts: { ...state.initialPrompts, coding: state.intent },
       });
 
-      const startIntent = async () => {
-        // 云端模式：先检查 workspace 初始化状态
-        if (state.runtimeMode === "cloud" && agent.getWorkspaceInitStatus) {
-          const status = await agent.getWorkspaceInitStatus();
-          if (status?.stage === "cloning") {
-            // 正在克隆中，轮询等待
-            const pollInterval = setInterval(async () => {
-              const s = await agent.getWorkspaceInitStatus();
-              if (!s || s.stage === "ready" || s.stage === "error") {
-                clearInterval(pollInterval);
-                if (s?.stage === "ready") {
-                  // 创建 session
-                  await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId);
-                  if (taskId && state.intent) {
-                    sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
-                  }
-                  await agent.prompt("intent", intentPrompt);
-                  agent.getFileTree();
-                }
-              }
-            }, 2000);
-            return;
-          }
-        }
-
-        // 本地模式或云端已就绪
-        await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId);
-        // 首次 session 创建后立即保存，确保初始状态不丢失
+      const startCoding = async () => {
+        await agent.createSession("coding", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId);
         if (taskId && state.intent) {
           sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
         }
-        await agent.prompt("intent", intentPrompt);
+        await agent.prompt("coding", state.intent);
         agent.getFileTree();
       };
-      startIntent();
+      startCoding();
+      return;
     }
-  }, [isAgentConnected, state.stepIndex, state.intent, state.initialPrompts, state.deliveryConfig, patchState, state.runtimeMode]);
+
+    // 非 builder 模式：从 intent 阶段开始
+    if (state.stepIndex !== 0) return;
+
+    const intentPrompt = getStepPrompt("intent", state.intent, taskId, undefined, state.deliveryConfig);
+    patchState({
+      initialPrompts: { ...state.initialPrompts, intent: intentPrompt },
+    });
+
+    const startIntent = async () => {
+      // 云端模式：先检查 workspace 初始化状态
+      if (state.runtimeMode === "cloud" && agent.getWorkspaceInitStatus) {
+        const status = await agent.getWorkspaceInitStatus();
+        if (status?.stage === "cloning") {
+          // 正在克隆中，轮询等待
+          const pollInterval = setInterval(async () => {
+            const s = await agent.getWorkspaceInitStatus();
+            if (!s || s.stage === "ready" || s.stage === "error") {
+              clearInterval(pollInterval);
+              if (s?.stage === "ready") {
+                // 创建 session
+                await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId);
+                if (taskId && state.intent) {
+                  sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
+                }
+                await agent.prompt("intent", intentPrompt);
+                agent.getFileTree();
+              }
+            }
+          }, 2000);
+          return;
+        }
+      }
+
+      // 本地模式或云端已就绪
+      await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId);
+      // 首次 session 创建后立即保存，确保初始状态不丢失
+      if (taskId && state.intent) {
+        sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
+      }
+      await agent.prompt("intent", intentPrompt);
+      agent.getFileTree();
+    };
+    startIntent();
+  }, [isAgentConnected, state.stepIndex, state.intent, state.initialPrompts, state.deliveryConfig, patchState, state.runtimeMode, state.activeStage]);
 
   // 需求分析完成后读取 UI 变化决策，据此决定任务工作流是否包含交互原型。
   useEffect(() => {
@@ -547,7 +577,6 @@ export function TaskPage() {
               onBackToTasks={goHome}
               agentFileTree={agent.fileTree}
               isAgentConnected={isAgentConnected}
-              stepSummaries={stepSummaries}
               agentSessions={agent.sessions}
               intent={state.intent}
               workspacePath={state.workspacePath}
@@ -555,14 +584,14 @@ export function TaskPage() {
               runtimeMode={state.runtimeMode}
               repoExplorerOpen={repoExplorerOpen}
               onCloseRepoExplorer={() => setRepoExplorerOpen(null)}
-              workflow={taskWorkflow}
-              executionStepIndex={state.stepIndex}
+              workflow={displayWorkflow}
+              executionStepIndex={isBuilderMode ? 0 : state.stepIndex}
               viewingStepIndex={viewingStepIndex}
               onViewStep={handleStepClick}
             />
             <section className="conversation-column">
               <header className="conversation-header">
-                <div><strong>{taskTitle}</strong><span className="workflow-status-pill">Workflow · {taskWorkflow[state.stepIndex].label} {state.stepIndex + 1}/{taskWorkflow.length}</span></div>
+                <div><strong>{taskTitle}</strong><span className="workflow-status-pill">{isBuilderMode ? "Builder · 编码开发" : `Workflow · ${taskWorkflow[state.stepIndex].label} ${state.stepIndex + 1}/${taskWorkflow.length}`}</span></div>
                 {viewingStepIndex !== state.stepIndex && <button type="button" onClick={() => setViewingStepIndex(state.stepIndex)}>历史产出 · 返回当前</button>}
                 <AgentStatusBadge status={connectionStatus} quality={connectionQuality} />
               </header>
@@ -610,18 +639,18 @@ export function TaskPage() {
             </section>
             <section className="execution-workbench">
               <header className="workbench-tabs">
-                {[
-                  ["preview", Globe, "预览"],
-                  ["code", Code2, "代码"],
-                  ["terminal", Terminal, "终端"],
+                {([
                   ["artifacts", FileText, "产出"],
-                ].map(([id, Icon, label]) => <button key={id as string} type="button"
+                  ["code", Code2, "代码"],
+                  ["preview", Globe, "预览"],
+                  ["terminal", Terminal, "终端"],
+                ] as const).map(([id, Icon, label]) => <button key={id} type="button"
                   className={workbenchTab === id ? "active" : ""}
-                  onClick={() => {
-                    setWorkbenchTab(id as typeof workbenchTab);
-                    if (id === "code") setRepoExplorerOpen("tree");
-                  }}>
-                  <Icon size={14} />{label as string}
+                  onClick={() => setWorkbenchTab(id)}>
+                  <Icon size={14} />{label}
+                  <span className="workbench-fullscreen-btn" onClick={(e) => { e.stopPropagation(); setFullscreenTab(id); }} title="全屏">
+                    <Maximize2 size={11} />
+                  </span>
                 </button>)}
               </header>
               {workbenchTab === "artifacts" ? <DecisionBoard
@@ -639,9 +668,57 @@ export function TaskPage() {
                 onRetryClone={() => agent.retryWorkspaceInit(state.gitRepo)}
               /> : <div className="workbench-canvas">
                 {workbenchTab === "preview" && <><Globe size={28}/><strong>应用预览</strong><p>运行中的 Web 应用将在这里保持可见。</p></>}
-                {workbenchTab === "code" && <><Code2 size={28}/><strong>代码工作区已打开</strong><p>查看文件、Diff 与回退操作。</p></>}
+                {workbenchTab === "code" && state.workspacePath && (
+                  <RepoExplorer
+                    workspacePath={state.workspacePath}
+                    taskId={taskId || undefined}
+                    runtimeMode={state.runtimeMode}
+                    initialTab={repoExplorerOpen || "tree"}
+                  />
+                )}
                 {workbenchTab === "terminal" && <><Terminal size={28}/><strong>Terminal</strong><p>构建、测试与验证输出将在这里汇总。</p></>}
               </div>}
+
+              {/* ── 全屏浮层 ── */}
+              {fullscreenTab && (
+                <div className="workbench-fullscreen-overlay" onClick={() => setFullscreenTab(null)}>
+                  <div className="workbench-fullscreen-content" onClick={(e) => e.stopPropagation()}>
+                    <header className="workbench-fullscreen-header">
+                      <span>{fullscreenTab === "artifacts" ? "产出" : fullscreenTab === "code" ? "代码" : fullscreenTab === "preview" ? "预览" : "终端"}</span>
+                      <button type="button" onClick={() => setFullscreenTab(null)} title="退出全屏">
+                        <Minimize2 size={14} />
+                      </button>
+                    </header>
+                    <div className="workbench-fullscreen-body">
+                      {fullscreenTab === "artifacts" ? <DecisionBoard
+                        fixedTab="delivery"
+                        state={{ ...state, stepIndex: viewingStepIndex }}
+                        onPatch={patchState} onContinue={continueTask} onPreview={openDrawer}
+                        agentSessions={agent.sessions} restoredSessions={state.restoredSessions}
+                        stepSummaries={stepSummaries} agentSteer={agent.steer} agentAbort={agent.abort}
+                        agentPrompt={agent.prompt} agentAnswerQuestion={agent.answerQuestion}
+                        agentContinueQuestion={agent.continueQuestion} agentResumeQuestion={agent.resumeQuestion}
+                        isAgentConnected={isAgentConnected} triggerBuild={agent.triggerBuild}
+                        detectBuildCommand={agent.detectBuildCommand} taskId={taskId}
+                        onOpenRepoExplorer={(tab) => setRepoExplorerOpen(tab)}
+                        onFixIssues={handleFixQaIssues} workspaceInitStatus={agent.workspaceInitStatus}
+                        onRetryClone={() => agent.retryWorkspaceInit(state.gitRepo)}
+                      /> : <div className="workbench-canvas">
+                        {fullscreenTab === "preview" && <><Globe size={28}/><strong>应用预览</strong><p>运行中的 Web 应用将在这里保持可见。</p></>}
+                        {fullscreenTab === "code" && state.workspacePath && (
+                          <RepoExplorer
+                            workspacePath={state.workspacePath}
+                            taskId={taskId || undefined}
+                            runtimeMode={state.runtimeMode}
+                            initialTab={repoExplorerOpen || "tree"}
+                          />
+                        )}
+                        {fullscreenTab === "terminal" && <><Terminal size={28}/><strong>Terminal</strong><p>构建、测试与验证输出将在这里汇总。</p></>}
+                      </div>}
+                    </div>
+                  </div>
+                </div>
+              )}
             </section>
           </div>
 

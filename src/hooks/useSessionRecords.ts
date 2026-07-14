@@ -184,7 +184,14 @@ export function useSessionRecords() {
       cloudReadyRef.current = false;
     });
 
+    // 监听用户名 warmup 完成事件，重新拉取会话列表
+    const handleUserReady = () => {
+      refreshRecords();
+    };
+    window.addEventListener("user:ready", handleUserReady);
+
     return () => {
+      window.removeEventListener("user:ready", handleUserReady);
       localWs.close();
       cloudWs.close();
       wsLocalRef.current = null;

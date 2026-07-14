@@ -13,7 +13,10 @@
     "build": "npm run typecheck:server && tsc -b && vite build",
     "build:server": "tsc -p tsconfig.server.build.json",
     "package:server": "npm run build:server && cp -r server/prompts server/skills dist/server/ && cd dist && tar czf server.tar.gz server/ && echo \"\\n✅ 打包完成: dist/server.tar.gz\"",
+    "package:server:zip": "npm run build:server && cp -r server/prompts server/skills dist/server/ && cp server/models.json dist/server/ && cp package.json dist/server/ && cd dist && cp -r ../node_modules node_modules && tar czf server.tar.gz server/ node_modules/ && rm -rf node_modules && echo \"\\n✅ 离线部署包完成: dist/server.tar.gz (含 node_modules)\"",
+    "package:full:zip": "npm run build && npm run build:server && cp -r server/prompts server/skills dist/server/ && cp server/models.json dist/server/ && cp package.json dist/ && cd dist && cp -r ../node_modules node_modules && tar czf full.tar.gz . && rm -rf node_modules && echo \"\\n✅ 全量离线部署包完成: dist/full.tar.gz (含前后端 + node_modules)\"",
     "start:server": "node dist/server/index.js",
+    "start:full": "concurrently -n server,ui -c blue,green \"node dist/server/index.js\" \"vite preview --host 0.0.0.0 --port 4173\"",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

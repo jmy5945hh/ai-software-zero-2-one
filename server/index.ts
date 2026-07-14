@@ -1,5 +1,7 @@
 import "dotenv/config";
 import http from "http";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import { AgentRunner } from "./AgentRunner.js";
 import { SessionPool } from "./SessionPool.js";
@@ -11,10 +13,13 @@ import { handleHttpRequest } from "./httpRoutes.js";
 import { handleWsMessage } from "./wsHandler.js";
 import { isHttpRequestAuthorized, rejectUnauthorizedRequest } from "./httpAuth.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 
 // ── 初始化核心组件 ──────────────────────────
-const runner = new AgentRunner("./server/models.json");
+const runner = new AgentRunner(join(__dirname, "models.json"));
 const pool = new SessionPool();
 const summaryStore = new SummaryStore();
 const workspace = new WorkspaceManager(WorkspaceManager.defaultRoot());

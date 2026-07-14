@@ -3,6 +3,7 @@ import path from "path";
 import os from "os";
 import { readSpecsTree, readRepoTree, readFileSafe, writeFileSafe, existsSync } from "../utils/fileOps.js";
 import type { WorkspaceManager } from "../WorkspaceManager.js";
+import type { SessionStore } from "../SessionStore.js";
 
 const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 
@@ -12,9 +13,9 @@ const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
 export function handleWorkspaceRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  deps: { workspace: WorkspaceManager },
+  deps: { workspace: WorkspaceManager; sessionStore?: SessionStore },
 ): boolean {
-  const { workspace } = deps;
+  const { workspace, sessionStore } = deps;
 
   // 读取指定项目路径下的 specs 目录内容
   if (req.method === "GET" && req.url?.startsWith("/specs-tree")) {
@@ -112,7 +113,14 @@ export function handleWorkspaceRoutes(
       return true;
     }
     try {
-      const sessionDir = path.join(os.homedir(), ".aiNativeDevPlatform", "sessions", taskId);
+      const username = sessionStore?.username;
+      const sessionDir = path.join(
+        os.homedir(),
+        ".aiNativeDevPlatform",
+        ...(username ? [username] : []),
+        "sessions",
+        taskId,
+      );
       const content = readFileSafe(sessionDir, filePath);
       const isMarkdown = /\.md$/i.test(filePath);
       res.writeHead(200, { "Content-Type": "application/json" });

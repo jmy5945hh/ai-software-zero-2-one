@@ -238,9 +238,14 @@ export function handleSessionRoutes(
     }
     try {
       const rollbackStatus = taskId ? rollback.getStatus(taskId) : null;
-      const result = taskId && rollbackStatus?.ready
-        ? { files: rollback.getDiffFiles(taskId) }
-        : getRepoDiffFiles(resolvedPath);
+      let result;
+      if (taskId && rollbackStatus?.ready) {
+        const files = rollback.getDiffFiles(taskId);
+        // RollbackManager 的 diff 可能因快照时序问题为空，降级到直接 git diff 兜底
+        result = files.length > 0 ? { files } : getRepoDiffFiles(resolvedPath);
+      } else {
+        result = getRepoDiffFiles(resolvedPath);
+      }
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(result));
     } catch (err) {

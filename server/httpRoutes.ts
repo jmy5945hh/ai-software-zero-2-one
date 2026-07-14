@@ -7,10 +7,12 @@ import { handleWorkspaceRoutes } from "./routes/workspace.routes.js";
 import { handleSessionRoutes } from "./routes/session.routes.js";
 import { handleBuildRoutes } from "./routes/build.routes.js";
 import { handleApiRoutes } from "./routes/api.routes.js";
+import { handleUserRoutes } from "./routes/user.routes.js";
 
-export type HttpRouteGroup = "api" | "session" | "build" | "workspace" | null;
+export type HttpRouteGroup = "api" | "user" | "session" | "build" | "workspace" | null;
 
 export function resolveHttpRouteGroup(url: string | undefined): HttpRouteGroup {
+  if (url?.startsWith("/api/user/")) return "user";
   if (url?.startsWith("/api/")) return "api";
   if (url?.startsWith("/session/") || url === "/task/init" ||
       url?.startsWith("/repo-diff") || url?.startsWith("/step-snapshot") ||
@@ -52,6 +54,7 @@ export function handleHttpRequest(
 
   switch (resolveHttpRouteGroup(req.url)) {
     case "api": return handleApiRoutes(req, res, deps);
+    case "user": return handleUserRoutes(req, res, deps.sessionStore);
     case "session": return handleSessionRoutes(req, res, deps);
     case "build": return handleBuildRoutes(req, res, deps);
     case "workspace": return handleWorkspaceRoutes(req, res, deps);

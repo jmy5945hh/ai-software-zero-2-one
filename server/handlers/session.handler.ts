@@ -75,7 +75,7 @@ export async function handleSessionMessage(
 
         if (event.type === "turn_end" || event.type === "agent_end") {
           const snapshot = buildStepSnapshot(session);
-          sessionStore.saveStep(session.sessionId, step, snapshot);
+          sessionStore.saveStep(taskId, step, snapshot);
 
           // 发送 token 用量事件到前端
           if (snapshot.totalTokenUsage) {
@@ -273,7 +273,7 @@ export async function handleSessionMessage(
 
         if (event.type === "turn_end" || event.type === "agent_end") {
           const snapshot = buildStepSnapshot(session);
-          sessionStore.saveStep(session.sessionId, step, snapshot);
+          sessionStore.saveStep(taskId, step, snapshot);
 
           // 发送 token 用量事件到前端
           if (snapshot.totalTokenUsage) {
@@ -378,7 +378,7 @@ export async function handleSessionMessage(
 
         if (event.type === "turn_end" || event.type === "agent_end") {
           const snapshot = buildStepSnapshot(session);
-          sessionStore.saveStep(session.sessionId, step, snapshot);
+          sessionStore.saveStep(taskId, step, snapshot);
 
           // 发送 token 用量事件到前端
           if (snapshot.totalTokenUsage) {

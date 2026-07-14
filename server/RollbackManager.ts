@@ -108,6 +108,17 @@ export class RollbackManager {
   getDiffFiles(taskId: string): TaskDiffFile[] {
     const state = this.requireState(taskId);
     const currentCommit = this.capture(taskId, state.workspacePath, "temporary diff source");
+    const baselineTree = execFileSync("git", [
+      `--git-dir=${this.gitDir(taskId)}`,
+      "rev-parse", `${state.baselineCommit}^{tree}`,
+    ], { encoding: "utf8" }).trim();
+    const currentTree = execFileSync("git", [
+      `--git-dir=${this.gitDir(taskId)}`,
+      "rev-parse", `${currentCommit}^{tree}`,
+    ], { encoding: "utf8" }).trim();
+    console.log("[rollback] getDiffFiles baseline=%s current=%s baselineTree=%s currentTree=%s",
+      state.baselineCommit.slice(0, 8), currentCommit.slice(0, 8),
+      baselineTree.slice(0, 8), currentTree.slice(0, 8));
     const output = execFileSync("git", [
       `--git-dir=${this.gitDir(taskId)}`,
       "diff", "--name-status", "--no-renames", "-z", state.baselineCommit, currentCommit,

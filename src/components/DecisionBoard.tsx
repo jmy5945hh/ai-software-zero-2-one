@@ -2641,8 +2641,6 @@ function TrajectoryChatTab({
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
   const [modalContent, setModalContent] = useState<ModalContent | null>(null);
   const [descExpanded, setDescExpanded] = useState(false);
-  // final round 在最后一轮完成时自动展开
-  const lastExpandedRef = useRef<string | null>(null);
   const roundsContainerRef = useRef<HTMLDivElement>(null);
 
   // 构建展示用的轮次列表
@@ -2653,19 +2651,6 @@ function TrajectoryChatTab({
 
   // 将事件按轮次分组
   const roundGroups = useRoundGroups(timeline);
-
-  // 最后一轮 running 时自动展开，完成后自动折叠
-  useEffect(() => {
-    if (roundGroups.length > 0) {
-      const lastGroup = roundGroups[roundGroups.length - 1];
-      if (lastGroup.status === "running" && lastGroup.id !== lastExpandedRef.current) {
-        setExpandedRoundIds((prev) => new Set([...prev, lastGroup.id]));
-        lastExpandedRef.current = lastGroup.id;
-      } else if (lastGroup.status === "done" && lastGroup.id === lastExpandedRef.current) {
-        // 完成后保持展开，不自动折叠
-      }
-    }
-  }, [roundGroups]);
 
   // 自动发送 pendingAutoMessage（来自"继续对话"按钮）
   useEffect(() => {

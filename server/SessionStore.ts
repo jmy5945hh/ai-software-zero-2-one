@@ -4,7 +4,7 @@ import os from "os";
 import crypto from "crypto";
 
 // ── 会话记录持久化存储 ──────────────────────
-// 存储位置：~/.aiNativeDevPlatform/sessions/
+// 存储位置：~/.aiNativeDevPlatform/{username}/sessions/
 //
 // 每个会话一个目录，目录名 = sessionId
 // 目录结构：
@@ -162,12 +162,23 @@ export type SessionRecord = SessionMeta & {
 };
 
 export class SessionStore {
-  private baseDir: string;
+  private baseDir!: string;
+  private _username!: string;
 
-  constructor() {
-    this.baseDir = path.join(os.homedir(), ".aiNativeDevPlatform", "sessions");
+  constructor(username?: string) {
+    this.setUser(username || "default");
+  }
+
+  /** 设置当前用户，切换 baseDir 到 ~/.aiNativeDevPlatform/{username}/sessions/ */
+  setUser(username: string): void {
+    this._username = username;
+    this.baseDir = path.join(os.homedir(), ".aiNativeDevPlatform", username, "sessions");
     fs.mkdirSync(this.baseDir, { recursive: true });
-    console.log(`[SessionStore] sessions dir: ${this.baseDir}`);
+    console.log(`[SessionStore] switched to user: ${username}, dir: ${this.baseDir}`);
+  }
+
+  get username(): string {
+    return this._username;
   }
 
   /** 生成 32 位 sessionId */
@@ -272,7 +283,7 @@ export class SessionStore {
   list(): SessionMeta[] {
     const metas: SessionMeta[] = [];
 
-    // 仅以主存储 ~/.aiNativeDevPlatform/sessions/ 为准
+    // 扫描 baseDir (~/.aiNativeDevPlatform/{username}/sessions/) 下的目录
     try {
       const entries = fs.readdirSync(this.baseDir);
       console.log(`[SessionStore] list() → scanning ${entries.length} entries in ${this.baseDir}`);
