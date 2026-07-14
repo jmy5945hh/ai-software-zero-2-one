@@ -21,6 +21,8 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "latest",
+    "@fontsource/playfair-display": "^5.2.8",
+    "@fontsource/source-sans-3": "^5.2.9",
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.0.0",
     "dotenv": "^17.4.2",

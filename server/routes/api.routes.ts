@@ -1,12 +1,7 @@
 import http from "http";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { SessionPool } from "../SessionPool.js";
 import type { SessionStore } from "../SessionStore.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { getModelsConfig } from "../config.js";
 
 /**
  * Cloud Runtime REST API 路由
@@ -19,26 +14,30 @@ export function handleApiRoutes(
   const { pool, sessionStore } = deps;
 
   if (req.method === "GET" && req.url === "/api/models") {
-    const modelsPath = join(__dirname, "..", "models.json");
-    const raw = readFileSync(modelsPath, "utf-8");
-    const config = JSON.parse(raw);
+    try {
+      const config = getModelsConfig();
 
-    // 只返回有 API Key 配置的 provider（环境变量或 models.json 中的 apiKey 字段）
-    const filteredProviders: Record<string, unknown> = {};
-    for (const [providerKey, provider] of Object.entries(config.providers as Record<string, { apiKey?: string }>)) {
-      const envKey = `${providerKey.toUpperCase()}_API_KEY`;
-      const hasApiKey = process.env[envKey] || provider.apiKey;
-      if (hasApiKey) {
-        filteredProviders[providerKey] = provider;
+      // 只返回有 API Key 配置的 provider（环境变量或 models.json 中的 apiKey 字段）
+      const filteredProviders: Record<string, unknown> = {};
+      for (const [providerKey, provider] of Object.entries(config.providers as Record<string, { apiKey?: string }>)) {
+        const envKey = `${providerKey.toUpperCase()}_API_KEY`;
+        const hasApiKey = process.env[envKey] || provider.apiKey;
+        if (hasApiKey) {
+          filteredProviders[providerKey] = provider;
+        }
       }
-    }
 
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({
-      defaultModel: config.defaultModel,
-      defaultProvider: config.defaultProvider,
-      providers: filteredProviders,
-    }));
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        defaultModel: config.defaultModel,
+        defaultProvider: config.defaultProvider,
+        providers: filteredProviders,
+      }));
+    } catch (err) {
+      console.error("[api/models] Error:", err);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: String(err) }));
+    }
     return true;
   }
 

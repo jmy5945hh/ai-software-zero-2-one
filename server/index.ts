@@ -29,14 +29,20 @@ const AGENT_SECRET = process.env.AGENT_SECRET;
 
 // ── HTTP 服务 ───────────────────────────────
 const server = http.createServer((req, res) => {
-  if (!isHttpRequestAuthorized(req, AGENT_SECRET)) {
-    rejectUnauthorizedRequest(res);
-    return;
-  }
-  const handled = handleHttpRequest(req, res, { pool, sessionStore, workspace, rollback });
-  if (!handled) {
-    res.writeHead(404);
-    res.end();
+  try {
+    if (!isHttpRequestAuthorized(req, AGENT_SECRET)) {
+      rejectUnauthorizedRequest(res);
+      return;
+    }
+    const handled = handleHttpRequest(req, res, { pool, sessionStore, workspace, rollback });
+    if (!handled) {
+      res.writeHead(404);
+      res.end();
+    }
+  } catch (err) {
+    console.error("[http] Unhandled error:", err);
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: String(err) }));
   }
 });
 
@@ -76,11 +82,20 @@ wss.on("connection", (ws: WebSocket, req) => {
 
   console.log("[ws] Client connected");
 
+  // ── 传输层心跳保活 ──
+  // 每 25 秒发一次 ws.ping()，防止浏览器/中间件因空闲断开连接。
+  // ws 库的 ping 是 WebSocket 协议帧（非应用层消息），浏览器会自动回复 pong。
+  const HEARTBEAT_INTERVAL = 25000;
+  const heartbeatTimer = setInterval(() => {
+    ws.ping();
+  }, HEARTBEAT_INTERVAL);
+
   ws.on("message", async (raw) => {
     await handleWsMessage(ws, raw, { runner, pool, summaryStore, workspace, sessionStore, rollback });
   });
 
   ws.on("close", () => {
+    clearInterval(heartbeatTimer);
     console.log("[ws] Client disconnected");
   });
 });
