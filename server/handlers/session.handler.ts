@@ -21,6 +21,15 @@ function selectedModelId(
   return modelId && modelId !== "auto" ? modelId : undefined;
 }
 
+function selectedModelProvider(
+  sessionStore: HandlerDeps["sessionStore"],
+  taskId: string,
+  requestedProvider?: string,
+): string | undefined {
+  return requestedProvider
+    || sessionStore.loadMeta(taskId)?.deliveryConfig?.modelProvider;
+}
+
 /**
  * Session 相关消息处理
  */
@@ -33,10 +42,11 @@ export async function handleSessionMessage(
 
   switch (msg.method as string) {
     case "session.create": {
-      const { taskId, step, modelId } = msg.params as {
+      const { taskId, step, modelId, modelProvider } = msg.params as {
         taskId: string;
         step: string;
         modelId?: string;
+        modelProvider?: string;
         intent?: string;
         workspacePath?: string;
         gitRepo?: { url: string; branch: string };
@@ -55,12 +65,18 @@ export async function handleSessionMessage(
         break;
       }
 
+      console.log("[session.create] raw params: modelId=%s modelProvider=%s taskId=%s step=%s",
+        modelId, modelProvider, taskId, step);
+      const resolvedModelId = selectedModelId(sessionStore, taskId, modelId);
+      const resolvedProvider = selectedModelProvider(sessionStore, taskId, modelProvider);
+      console.log("[session.create] resolved: modelId=%s modelProvider=%s", resolvedModelId, resolvedProvider);
       const session = await runner.createSession(
         taskId,
         step,
         workspaceDir,
         undefined,
-        selectedModelId(sessionStore, taskId, modelId),
+        resolvedModelId,
+        resolvedProvider,
       );
       pool.set(taskId, step, session);
       try { rollback.ensureBaseline(taskId, workspaceDir); } catch { /* 快照不可用不阻断任务 */ }
@@ -133,6 +149,7 @@ export async function handleSessionMessage(
           workspaceDir,
           undefined,
           selectedModelId(sessionStore, taskId),
+          selectedModelProvider(sessionStore, taskId),
         );
         pool.set(taskId, step, session);
       }
@@ -262,6 +279,7 @@ export async function handleSessionMessage(
         workspaceDir,
         undefined,
         selectedModelId(sessionStore, taskId),
+        selectedModelProvider(sessionStore, taskId),
       );
       pool.set(taskId, step, session);
       try { rollback.ensureBaseline(taskId, workspaceDir); } catch { /* 快照不可用不阻断任务 */ }
@@ -364,6 +382,7 @@ export async function handleSessionMessage(
         workspaceDir,
         undefined,
         selectedModelId(sessionStore, taskId),
+        selectedModelProvider(sessionStore, taskId),
       );
       pool.set(taskId, step, session);
       try { rollback.ensureBaseline(taskId, workspaceDir); } catch { /* 快照不可用不阻断任务 */ }

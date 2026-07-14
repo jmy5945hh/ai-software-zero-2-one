@@ -276,6 +276,7 @@ export function statusLabel(
 const defaultDeliveryConfig: DeliveryConfig = {
   interactionMode: "builder",
   modelId: "auto",
+  modelProvider: "deepseek",
   mode: "project-change",
   autonomy: "collaborative",
   verification: "full",

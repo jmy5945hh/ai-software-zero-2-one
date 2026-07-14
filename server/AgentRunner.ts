@@ -6,7 +6,7 @@ import {
   SettingsManager,
   type AgentSession,
 } from "@earendil-works/pi-coding-agent";
-import { createAuthStorage, getDefaultProvider, getDefaultModel, getDeepSeekApiKey } from "./config.js";
+import { createAuthStorage, getDefaultProvider, getDefaultModel, getDeepSeekApiKey, getModelsConfig, getProviderApiKey } from "./config.js";
 import { STEP_CONFIGS, type StepConfig } from "./stepConfigs.js";
 import { createAskUserQuestionTool } from "./customTools.js";
 
@@ -157,26 +157,55 @@ export class AgentRunner {
     workspaceDir: string,
     systemPromptOverride?: string,
     modelIdOverride?: string,
+    modelProviderOverride?: string,
   ): Promise<AgentSession> {
     const stepConfig = STEP_CONFIGS[step] as StepConfig | undefined;
     if (!stepConfig) throw new Error(`Unknown SOP step: ${step}`);
 
-    const provider = stepConfig.modelProvider || getDefaultProvider();
-
-    // Ensure API key is set on authStorage (each createSession call)
-    const key = getDeepSeekApiKey();
-    if (!key) {
-      throw new Error("DEEPSEEK_API_KEY not found in environment");
-    }
-    this.authStorage.setRuntimeApiKey("deepseek", key);
     const modelId = modelIdOverride || stepConfig.modelId;
-    const model = this.modelRegistry.find(provider, modelId);
+    let provider = modelProviderOverride || stepConfig.modelProvider || getDefaultProvider();
+
+    console.log("[AgentRunner] createSession step=%s modelIdOverride=%s modelProviderOverride=%s stepConfig.modelId=%s stepConfig.modelProvider=%s → resolved provider=%s modelId=%s",
+      step, modelIdOverride, modelProviderOverride, stepConfig.modelId, stepConfig.modelProvider, provider, modelId);
+
+    console.log("[AgentRunner] modelRegistry loadError=%s", this.modelRegistry.getError() || "none");
+
+    // If modelId is not found under the resolved provider,
+    // search across all providers to find the correct one.
+    let model = this.modelRegistry.find(provider, modelId);
+    console.log("[AgentRunner] modelRegistry.find(%s, %s) = %s", provider, modelId, model ? model.id : "undefined");
+    if (!model) {
+      const allProviders = Object.keys(getModelsConfig().providers);
+      console.log("[AgentRunner] Searching across all providers: %j", allProviders);
+      for (const p of allProviders) {
+        if (p === provider) continue;
+        const m = this.modelRegistry.find(p, modelId);
+        console.log("[AgentRunner]   check provider=%s modelId=%s → %s", p, modelId, m ? m.id : "undefined");
+        if (m) {
+          console.log("[AgentRunner] Auto-resolved provider: %s → %s for model %s", provider, p, modelId);
+          provider = p;
+          model = m;
+          break;
+        }
+      }
+    }
+
     if (!model) {
       throw new Error(
         `Model not found: ${provider}/${modelId}. ` +
         `Check server/models.json and your API key.`,
       );
     }
+
+    // Ensure API key is set on authStorage (each createSession call)
+    const key = getProviderApiKey(provider);
+    if (!key) {
+      throw new Error(
+        `API key not found for provider "${provider}". ` +
+        `Set ${provider.toUpperCase()}_API_KEY in environment.`,
+      );
+    }
+    this.authStorage.setRuntimeApiKey(provider, key);
     console.log("[AgentRunner] Model found: %s", model.id);
 
     const systemPrompt = systemPromptOverride ?? `${stepConfig.systemPrompt}\n\n${buildStepRuntimeContract(step, stepConfig)}`;

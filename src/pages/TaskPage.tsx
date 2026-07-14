@@ -337,7 +337,7 @@ export function TaskPage() {
       });
       // 在 quality 阶段内执行修复，不推进到下一阶段
       const fixPrompt = `${buildDeliveryPolicyPrompt(state.deliveryConfig)}\n\n请根据以下质量审查报告修复代码中的问题。修复后按本任务的验证范围说明需要复测哪些 Web/API/业务场景路径：\n\n${report}`;
-      agent.createSession("quality", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId).then(() => {
+      agent.createSession("quality", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId, state.deliveryConfig.modelProvider).then(() => {
         agent.prompt("quality", fixPrompt);
       });
     },
@@ -366,7 +366,7 @@ export function TaskPage() {
       });
 
       const startCoding = async () => {
-        await agent.createSession("coding", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId);
+        await agent.createSession("coding", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId, state.deliveryConfig.modelProvider);
         if (taskId && state.intent) {
           sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
         }
@@ -397,7 +397,7 @@ export function TaskPage() {
               clearInterval(pollInterval);
               if (s?.stage === "ready") {
                 // 创建 session
-                await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId);
+                await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId, state.deliveryConfig.modelProvider);
                 if (taskId && state.intent) {
                   sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
                 }
@@ -411,7 +411,7 @@ export function TaskPage() {
       }
 
       // 本地模式或云端已就绪
-      await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId);
+      await agent.createSession("intent", state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId, state.deliveryConfig.modelProvider);
       // 首次 session 创建后立即保存，确保初始状态不丢失
       if (taskId && state.intent) {
         sessionRecords.saveRecord(state, taskId, stepSummaries, agent.sessions, state.restoredSessions);
@@ -473,7 +473,7 @@ export function TaskPage() {
         initialPrompts: { ...state.initialPrompts, [nextStep.id]: promptText },
         ...(nextStep.id === "prototype" ? { prototype } : {}),
       });
-      agent.createSession(nextStep.id, state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId).then(() => {
+      agent.createSession(nextStep.id, state.intent, state.workspacePath, state.gitRepo, state.deliveryConfig.modelId, state.deliveryConfig.modelProvider).then(() => {
         agent.prompt(nextStep.id, promptText);
         agent.getFileTree();
       });

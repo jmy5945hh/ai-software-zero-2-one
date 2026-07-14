@@ -25,6 +25,7 @@ import type {
   TaskCategory,
 } from "../data/types";
 import { priorityLabel, taskCards } from "../data";
+import { useModels } from "../agent/useModels";
 
 type TaskPanelTab = TaskCategory | "review";
 type ComposerMenu = "model" | "skills" | "mcp" | "settings";
@@ -72,10 +73,7 @@ const specializedAgentLabels: Record<TaskCategory, string> = {
   governance: "治理任务",
 };
 
-const modelOptions = [
-  { value: "auto", label: "Auto", detail: "按节点配置和策略自动选择" },
-  { value: "deepseek-v4-flash", label: "DeepSeek V4 Flash", detail: "当前运行时已配置模型" },
-] as const;
+const AUTO_MODEL_OPTION = { value: "auto", label: "Auto", detail: "按节点配置和策略自动选择" } as const;
 
 const skillOptions = ["Web E2E", "API Contract", "Code Review", "Release Check"] as const;
 const mcpOptions = ["GitHub", "Browser", "Database"] as const;
@@ -149,6 +147,18 @@ export function UnifiedDeliveryWorkspace({
   const [openMenu, setOpenMenu] = useState<ComposerMenu | null>(null);
   const composerRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { flatModels, loading: modelsLoading } = useModels();
+
+  const modelOptions = [
+    { ...AUTO_MODEL_OPTION, provider: "", modelInfo: null },
+    ...flatModels.map((m) => ({
+      value: m.modelId,
+      label: m.label,
+      detail: m.detail,
+      provider: m.provider,
+      modelInfo: m.modelInfo,
+    })),
+  ];
   const activeTab = taskTabs.find((tab) => tab.value === activeTaskTab) || taskTabs[0];
   const visibleTaskCards = activeTab.category
     ? taskCards.filter((card) => card.category === activeTab.category)
@@ -244,28 +254,49 @@ export function UnifiedDeliveryWorkspace({
                 setOpenMenu((current) => current === "model" ? null : "model");
               }}>
                 <Bot size={15} />
-                {modelOptions.find((option) => option.value === state.deliveryConfig.modelId)?.label || state.deliveryConfig.modelId}
+                {modelsLoading
+                  ? "加载中..."
+                  : modelOptions.find((option) => option.value === state.deliveryConfig.modelId)?.label || state.deliveryConfig.modelId}
                 <ChevronDown size={13} />
               </summary>
               <div className="composer-popover">
-                <span className="composer-popover-title">模型策略</span>
-                {modelOptions.map((option) => (
-                  <button
-                    type="button"
-                    key={option.value}
-                    className={state.deliveryConfig.modelId === option.value ? "selected" : ""}
-                    onClick={() => {
-                      patchDeliveryConfig({ modelId: option.value });
-                      setOpenMenu(null);
-                    }}
-                  >
-                    <span>
-                      <strong>{option.label}</strong>
-                      <small>{option.detail}</small>
-                    </span>
-                    {state.deliveryConfig.modelId === option.value && <Check size={14} />}
-                  </button>
-                ))}
+                <span className="composer-popover-title">模型选择</span>
+                {modelOptions.map((option) => {
+                  const info = option.modelInfo;
+                  return (
+                    <button
+                      type="button"
+                      key={option.value}
+                      className={state.deliveryConfig.modelId === option.value ? "selected" : ""}
+                      onClick={() => {
+                        patchDeliveryConfig({
+                          modelId: option.value,
+                          modelProvider: option.provider || state.deliveryConfig.modelProvider,
+                        });
+                        setOpenMenu(null);
+                      }}
+                    >
+                      <span className="model-option-label">
+                        <strong>{option.label}</strong>
+                        <small>{option.detail}</small>
+                      </span>
+                      {info && (
+                        <span className="model-option-meta">
+                          {info.reasoning && <span className="model-tag reasoning">思考</span>}
+                          {info.input?.map((t) => (
+                            <span key={t} className="model-tag input">{t}</span>
+                          ))}
+                          <span className="model-tag tokens">ctx {info.contextWindow?.toLocaleString()}</span>
+                          <span className="model-tag tokens">max {info.maxTokens?.toLocaleString()}</span>
+                          {info.compat?.thinkingFormat && (
+                            <span className="model-tag compat">{info.compat.thinkingFormat}</span>
+                          )}
+                        </span>
+                      )}
+                      {state.deliveryConfig.modelId === option.value && <Check size={14} />}
+                    </button>
+                  );
+                })}
               </div>
             </details>
 

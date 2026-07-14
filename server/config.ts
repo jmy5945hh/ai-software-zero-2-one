@@ -19,7 +19,7 @@ interface ModelsConfig {
 
 let _modelsConfig: ModelsConfig | null = null;
 
-function getModelsConfig(): ModelsConfig {
+export function getModelsConfig(): ModelsConfig {
   if (!_modelsConfig) {
     const filePath = join(__dirname, "models.json");
     _modelsConfig = JSON.parse(readFileSync(filePath, "utf-8")) as ModelsConfig;
@@ -38,12 +38,27 @@ export function getDeepSeekApiKey(): string {
   return config.providers.deepseek?.apiKey || "";
 }
 
-/** 初始化 AuthStorage，从环境变量注入 API Key */
+/**
+ * 获取指定 provider 的 API Key，优先级：
+ * 1. {PROVIDER}_API_KEY 环境变量（大写，如 ZHIPU_API_KEY）
+ * 2. models.json 中对应 provider 的 apiKey 字段
+ */
+export function getProviderApiKey(provider: string): string {
+  const envKey = `${provider.toUpperCase()}_API_KEY`;
+  if (process.env[envKey]) return process.env[envKey]!;
+  const config = getModelsConfig();
+  return config.providers[provider]?.apiKey || "";
+}
+
+/** 初始化 AuthStorage，从环境变量注入所有已配置的 API Key */
 export function createAuthStorage(): AuthStorage {
   const storage = AuthStorage.create();
-  const key = getDeepSeekApiKey();
-  if (key) {
-    storage.setRuntimeApiKey("deepseek", key);
+  const config = getModelsConfig();
+  for (const provider of Object.keys(config.providers)) {
+    const key = getProviderApiKey(provider);
+    if (key) {
+      storage.setRuntimeApiKey(provider, key);
+    }
   }
   return storage;
 }

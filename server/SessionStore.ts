@@ -94,6 +94,7 @@ export type SessionMeta = {
   deliveryConfig?: {
     interactionMode: "plan" | "builder" | "workflow";
     modelId: string;
+    modelProvider: string;
     mode: "app" | "project-change" | "bugfix" | "verification";
     autonomy: "fast" | "collaborative" | "strict";
     verification: "full" | "smoke" | "api-web";

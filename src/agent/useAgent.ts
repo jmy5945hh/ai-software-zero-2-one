@@ -253,6 +253,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       workspacePath?: string,
       gitRepo?: { url: string; branch: string },
       modelId?: string,
+      modelProvider?: string,
     ) => {
       if (!taskId || !wsRef.current) return;
       activeStepRef.current = step;
@@ -263,6 +264,9 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       };
       if (modelId && modelId !== "auto") {
         params.modelId = modelId;
+      }
+      if (modelProvider) {
+        params.modelProvider = modelProvider;
       }
       if (workspacePath) {
         params.workspacePath = workspacePath;

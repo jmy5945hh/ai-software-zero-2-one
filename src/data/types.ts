@@ -14,6 +14,7 @@ export type DeliveryInteractionMode = "plan" | "builder" | "workflow";
 export type DeliveryConfig = {
   interactionMode: DeliveryInteractionMode;
   modelId: "auto" | string;
+  modelProvider: string;
   mode: DeliveryMode;
   autonomy: AutonomyMode;
   verification: VerificationProfile;
@@ -22,6 +23,31 @@ export type DeliveryConfig = {
   mcpServers: string[];
   autoRepair: boolean;
   confirmRiskyActions: boolean;
+};
+
+/** 服务端 models.json 暴露的模型信息 */
+export type ModelInfo = {
+  id: string;
+  name: string;
+  reasoning?: boolean;
+  input?: string[];
+  contextWindow?: number;
+  maxTokens?: number;
+  compat?: Record<string, unknown>;
+};
+
+/** 服务端 models.json 暴露的提供商信息 */
+export type ProviderInfo = {
+  baseUrl: string;
+  api: string;
+  models: ModelInfo[];
+};
+
+/** GET /api/models 响应 */
+export type ModelsConfigResponse = {
+  defaultModel: string;
+  defaultProvider: string;
+  providers: Record<string, ProviderInfo>;
 };
 
 // ── 任务卡片 ────────────────────────────────

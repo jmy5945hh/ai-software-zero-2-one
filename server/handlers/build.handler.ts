@@ -135,12 +135,14 @@ export async function handleBuildMessage(
       }
 
       const configuredModelId = sessionStore.loadMeta(taskId)?.deliveryConfig?.modelId;
+      const configuredModelProvider = sessionStore.loadMeta(taskId)?.deliveryConfig?.modelProvider;
       const fixSession = await runner.createSession(
         taskId,
         step,
         workspaceDir,
         undefined,
         configuredModelId && configuredModelId !== "auto" ? configuredModelId : undefined,
+        configuredModelProvider,
       );
 
       const unsub = fixSession.subscribe((sdkEvent) => {

@@ -26,8 +26,9 @@
   --secondary-light: rgba(220, 207, 194, 0.28);
 
   /* Typography */
-  --font-heading: "Playfair Display", "Georgia", ui-serif, serif;
-  --font-body: "Source Sans 3", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Playfair Display", "Georgia", "Noto Serif SC", "Source Han Serif SC", "STSong", ui-serif, serif;
+  --font-body: "Source Sans 3", "Inter", "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", "JetBrains Mono", "Consolas", "Source Han Sans SC", "Microsoft YaHei Mono", ui-monospace, monospace;
 
   /* Radii — highly rounded, organic */
   --radius-sm: 10px;
@@ -718,7 +719,7 @@ p {
   left: 0;
   display: grid;
   gap: 4px;
-  width: 248px;
+  width: 320px;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -758,6 +759,50 @@ p {
 .composer-popover > button > span {
   display: grid;
   gap: 2px;
+}
+
+.composer-popover > button > .model-option-label {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.composer-popover > button > .model-option-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.model-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.6rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.model-tag.reasoning {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.model-tag.input {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.model-tag.tokens {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.model-tag.compat {
+  background: #fff3e0;
+  color: #e65100;
 }
 
 .composer-popover strong {
