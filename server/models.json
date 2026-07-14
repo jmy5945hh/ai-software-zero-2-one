@@ -1,14 +1,13 @@
 {
-  "defaultModel": "deepseek-v4-flash-284b-a13b-w8a8",
+  "defaultModel": "deepseek-v4-flash",
   "defaultProvider": "deepseek",
   "providers": {
     "deepseek": {
-      "baseUrl": "http://open-llm.uat.cmbchina.cn/llm/deepseek-v4-flash-284b-a13b-w8a8/v1",
-      "apiKey": "sk-3c90f264e4cb4f35f3ec72a1d62a4a50",
+      "baseUrl": "https://api.deepseek.com",
       "api": "openai-completions",
       "models": [
         {
-          "id": "deepseek-v4-flash-284b-a13b-w8a8",
+          "id": "deepseek-v4-flash",
           "name": "DeepSeek V4 Flash",
           "reasoning": true,
           "input": ["text"],
@@ -21,8 +20,8 @@
       ]
     },
     "zhipu": {
-      "baseUrl": "http://open-llm.uat.cmbchina.cn/llm/glm-5/v1",
-      "apiKey": "sk-2c5204b7a22c423e0af14ec5190b41df",
+      "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+      "apiKey": "139ff8ca8fac4253b2e7a657f98f1573.MIIBVQIBADANBgkqhkiG9w0BAQEFAASCAT8wggE7AgEAAkEAteOOQkkR92PjaJ/edfdJyzBeD7DF9g6JLUtf8M8hsS8N59YN6ykhfpYK/1LhaW1TAHh9VzmeyvV141ejwqo/CwIDAQABAkEAjTAuZVXDFH39MGGolXl3VrocyaE2iWGPKhGwT4T5akcFIhnbCV/XYyoIRAMlu+bOCUOB+u8399v5brUNTUz3gQIhAN6LGf5aZoSLUOC3P84oJdKAIJnQ7jCRHpkQRYuLLg7zAiEA0TvPCWPHE/AAjGZfHRUsj0aQwcGMWhoEBoSn6hHAhYkCIHKyPI5kJywu5Vs79u2YsY2hLaw5C1oKoTuAMGewLufTAiEAqVeQv3bD/zz2FKweOvmSMPvZ2Rd/MsVvkJ75EBcCDJECID88jkOFxO2UYNMdiy97g+HFSXheuRNcxRM2Cxvb8wpK",
       "api": "openai-completions",
       "models": [
         {
