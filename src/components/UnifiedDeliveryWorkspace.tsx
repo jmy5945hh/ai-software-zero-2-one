@@ -288,8 +288,8 @@ export function UnifiedDeliveryWorkspace({
                           ))}
                           <span className="model-tag tokens">ctx {info.contextWindow?.toLocaleString()}</span>
                           <span className="model-tag tokens">max {info.maxTokens?.toLocaleString()}</span>
-                          {info.compat?.thinkingFormat && (
-                            <span className="model-tag compat">{info.compat.thinkingFormat}</span>
+                          {!!info.compat?.thinkingFormat && (
+                            <span className="model-tag compat">{String(info.compat.thinkingFormat)}</span>
                           )}
                         </span>
                       )}
