@@ -11,7 +11,7 @@ import {
   createDefaultState,
   normalizeDeliveryConfig,
 } from "../data";
-import { agentFetch } from "../agent/config";
+import { agentFetch, getBaseUrl } from "../agent/config";
 
 import type { DrawerContent, AppState, DeliveryConfig, PrototypeState } from "../data/types";
 import type { ConnectionStatus } from "../agent/types";
@@ -307,7 +307,7 @@ export function TaskPage() {
         taskId,
         file: paths.manifestPath,
       });
-      const res = await agentFetch(`/server/session-file?${params.toString()}`);
+      const res = await agentFetch(`${getBaseUrl("local")}/session-file?${params.toString()}`);
       if (!res.ok) return null;
       const data = await res.json() as { content?: string };
       return parsePrototypeManifest(data.content, taskId);

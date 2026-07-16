@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
+import { getBaseUrl } from "../agent/config";
 
 const USER_STORAGE_KEY = "ai-native-dev-user";
 
@@ -30,7 +31,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     if (!stored) return;
     try {
       const info = JSON.parse(stored) as UserInfo;
-      fetch(`/api/user/me?username=${encodeURIComponent(info.username)}`, { method: "GET" })
+      fetch(`${getBaseUrl("local")}/api/user/me?username=${encodeURIComponent(info.username)}`, { method: "GET" })
         .then((r) => {
           if (!r.ok) throw new Error("warmup failed");
           // warmup 成功后通知其他组件（如 useSessionRecords）重新拉取数据
@@ -46,7 +47,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (username: string) => {
     // 调用后端 API 创建用户目录并切换 session store
-    const res = await fetch("/api/user/login", {
+    const res = await fetch(`${getBaseUrl("local")}/api/user/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username }),

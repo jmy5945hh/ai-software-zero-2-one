@@ -14,12 +14,13 @@ export function handleWorkspaceRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   deps: { workspace: WorkspaceManager; sessionStore?: SessionStore },
+  reqPath: string | undefined
 ): boolean {
   const { workspace, sessionStore } = deps;
 
   // 读取指定项目路径下的 specs 目录内容
-  if (req.method === "GET" && req.url?.startsWith("/specs-tree")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/specs-tree")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
     const taskId = url.searchParams.get("taskId");
     let resolvedPath = projectPath;
@@ -44,8 +45,8 @@ export function handleWorkspaceRoutes(
   }
 
   // 读取 specs 目录下某个文件的内容
-  if (req.method === "GET" && req.url?.startsWith("/specs-file")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/specs-file")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
     const filePath = url.searchParams.get("file");
     const taskId = url.searchParams.get("taskId");
@@ -71,7 +72,7 @@ export function handleWorkspaceRoutes(
   }
 
   // 保存 specs 目录下某个文件的内容（支持 Markdown 编辑）
-  if (req.method === "POST" && req.url === "/specs-save") {
+  if (req.method === "POST" && reqPath === "/specs-save") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
     req.on("end", () => {
@@ -103,8 +104,8 @@ export function handleWorkspaceRoutes(
   }
 
   // 读取 ~/.aiNativeDevPlatform/sessions/{taskId}/ 目录下的文件
-  if (req.method === "GET" && req.url?.startsWith("/session-file")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/session-file")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const taskId = url.searchParams.get("taskId");
     const filePath = url.searchParams.get("file");
     if (!taskId || !filePath) {
@@ -133,8 +134,8 @@ export function handleWorkspaceRoutes(
   }
 
   // 获取 workspace 文件树
-  if (req.method === "GET" && req.url?.startsWith("/workspace-tree")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/workspace-tree")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const taskId = url.searchParams.get("taskId");
     if (!taskId) {
       res.writeHead(400, { "Content-Type": "application/json" });
@@ -153,8 +154,8 @@ export function handleWorkspaceRoutes(
   }
 
   // 读取 workspace 文件
-  if (req.method === "GET" && req.url?.startsWith("/workspace-read-file")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/workspace-read-file")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const taskId = url.searchParams.get("taskId");
     const filePath = url.searchParams.get("filePath");
     if (!taskId || !filePath) {
@@ -174,8 +175,8 @@ export function handleWorkspaceRoutes(
   }
 
   // 浏览 workspace 目录
-  if (req.method === "GET" && req.url?.startsWith("/workspace-browse")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/workspace-browse")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const dirPath = url.searchParams.get("dirPath") || "/";
     try {
       const entries = workspace.browseDir(dirPath);
@@ -189,8 +190,8 @@ export function handleWorkspaceRoutes(
   }
 
   // 列出指定目录的 Git 分支
-  if (req.method === "GET" && req.url?.startsWith("/git-branches")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/git-branches")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const dirPath = url.searchParams.get("dirPath");
     if (!dirPath) {
       res.writeHead(400, { "Content-Type": "application/json" });
@@ -209,7 +210,7 @@ export function handleWorkspaceRoutes(
   }
 
   // Git preflight: checkout + pull
-  if (req.method === "POST" && req.url === "/git-preflight") {
+  if (req.method === "POST" && reqPath === "/git-preflight") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
     req.on("end", () => {
@@ -232,8 +233,8 @@ export function handleWorkspaceRoutes(
   }
 
   // 读取项目仓库目录树
-  if (req.method === "GET" && req.url?.startsWith("/repo-tree")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/repo-tree")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
     const taskId = url.searchParams.get("taskId");
     let resolvedPath = projectPath;
@@ -263,8 +264,8 @@ export function handleWorkspaceRoutes(
   }
 
   // 读取仓库中某个文件的内容
-  if (req.method === "GET" && req.url?.startsWith("/repo-file")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/repo-file")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
     const filePath = url.searchParams.get("file");
     const taskId = url.searchParams.get("taskId");

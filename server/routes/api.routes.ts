@@ -10,10 +10,11 @@ export function handleApiRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   deps: { pool: SessionPool; sessionStore: SessionStore },
+  reqPath: string | undefined
 ): boolean {
   const { pool, sessionStore } = deps;
 
-  if (req.method === "GET" && req.url === "/api/models") {
+  if (req.method === "GET" && reqPath === "/api/models") {
     try {
       const config = getModelsConfig();
 
@@ -41,7 +42,7 @@ export function handleApiRoutes(
     return true;
   }
 
-  if (req.method === "GET" && req.url === "/api/resources") {
+  if (req.method === "GET" && reqPath === "/api/resources") {
     const memUsage = process.memoryUsage();
     const memPercent = Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100);
     const activeSessions = pool.getActiveCount();
@@ -56,7 +57,7 @@ export function handleApiRoutes(
     return true;
   }
 
-  if (req.method === "GET" && req.url === "/api/projects") {
+  if (req.method === "GET" && reqPath === "/api/projects") {
     const records = sessionStore.list();
     const projects = records.map((meta) => {
       const includesPrototype = meta.activeStage === "prototype" || (
@@ -85,7 +86,7 @@ export function handleApiRoutes(
     return true;
   }
 
-  if (req.method === "POST" && req.url === "/api/projects") {
+  if (req.method === "POST" && reqPath === "/api/projects") {
     const MAX_BODY_SIZE = 1024 * 1024;
     let body = "";
     req.on("data", (chunk) => {
@@ -124,7 +125,7 @@ export function handleApiRoutes(
     return true;
   }
 
-  const deleteMatch = req.url?.match(/^\/api\/projects\/([^/]+)$/);
+  const deleteMatch = reqPath?.match(/^\/api\/projects\/([^/]+)$/);
   if (req.method === "DELETE" && deleteMatch) {
     const projectId = decodeURIComponent(deleteMatch[1]);
     try {
@@ -139,14 +140,14 @@ export function handleApiRoutes(
     return true;
   }
 
-  const startMatch = req.url?.match(/^\/api\/projects\/([^/]+)\/start$/);
+  const startMatch = reqPath?.match(/^\/api\/projects\/([^/]+)\/start$/);
   if (req.method === "POST" && startMatch) {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ success: true }));
     return true;
   }
 
-  const pauseMatch = req.url?.match(/^\/api\/projects\/([^/]+)\/pause$/);
+  const pauseMatch = reqPath?.match(/^\/api\/projects\/([^/]+)\/pause$/);
   if (req.method === "POST" && pauseMatch) {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ success: true }));

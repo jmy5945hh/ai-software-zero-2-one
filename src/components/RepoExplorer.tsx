@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { DiffViewer } from "./DiffViewer";
-import { agentFetch, getAgentHttpOrigin } from "../agent/config";
+import { agentFetch, getBaseUrl } from "../agent/config";
 import type { RuntimeMode } from "../types/runtime";
 
 type TreeNode = {
@@ -139,7 +139,7 @@ export function RepoExplorer({ workspacePath, taskId, runtimeMode = "local", ini
     return buildFileTree(filteredDiffFiles);
   }, [filteredDiffFiles, searchQuery]);
   const agentUrl = useCallback(
-    (endpoint: string) => `${getAgentHttpOrigin(runtimeMode)}/server${endpoint}`,
+    (endpoint: string) => `${getBaseUrl(runtimeMode)}${endpoint}`,
     [runtimeMode],
   );
 

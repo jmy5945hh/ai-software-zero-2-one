@@ -1,20 +1,21 @@
 import { RUNTIME_MODE_KEY, type RuntimeMode } from "../types/runtime";
 
 /**
- * Agent WebSocket URL 构造。
- * - 云端模式：读取 VITE_CLOUD_AGENT_WS_URL + VITE_CLOUD_AGENT_SECRET
- * - 本地模式：读取 VITE_LOCAL_AGENT_WS_URL（fallback ws://localhost:3100/agent）+ VITE_LOCAL_AGENT_SECRET
+ * 统一的 HTTP base URL，以 /server 结尾。
+ * 所有前端对后端的 HTTP 调用都基于此路径拼接。
  *
- * Token 认证参数自动附加到 URL query 中。
+ * 示例返回值：http://localhost:3100/server
  */
-
-/** 将 ws://xxx/agent 格式转为 http://xxx（用于 REST API 调用） */
-export function getAgentWsOrigin(mode: RuntimeMode): string {
+export function getBaseUrl(mode: RuntimeMode): string {
   const wsUrl = getWsUrl(mode);
-  return wsUrl.replace(/^ws/, "http").replace(/\/agent$/, "").replace(/\/server\/agent$/, "/server");
+  // ws://xxx/server/agent → http://xxx/server
+  return wsUrl.replace(/^ws/, "http").replace(/\/agent$/, "");
 }
 
-/** 构建指定模式的 WebSocket URL（含 token） */
+/**
+ * 构建 WebSocket URL（含 token 认证参数）。
+ * 在 base URL 基础上追加 /agent。
+ */
 export function buildAgentWsUrl(mode: RuntimeMode): string {
   const base = getWsUrl(mode);
   const token = getSecret(mode);
@@ -25,12 +26,11 @@ export function buildAgentWsUrl(mode: RuntimeMode): string {
   return base;
 }
 
-/** 获取指定模式的 HTTP API origin（用于 REST 调用） */
-export function getAgentHttpOrigin(mode: RuntimeMode): string {
-  return getAgentWsOrigin(mode);
-}
-
-/** 调用 Agent HTTP API，并自动附加与 WebSocket 相同的认证 token。 */
+/**
+ * 调用 Agent HTTP API，自动附加认证 token。
+ * input 应为绝对路径（以 / 开头），例如 /api/models。
+ * 调用方自行拼接 base URL，例如 getBaseUrl("local") + "/api/models"。
+ */
 export function agentFetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
@@ -48,7 +48,7 @@ function getWsUrl(mode: RuntimeMode): string {
   if (mode === "cloud") {
     const url = import.meta.env.VITE_CLOUD_AGENT_WS_URL as string | undefined;
     if (url) return url;
-    // 云端未配置时 fallback 到旧有逻辑（开发环境用 localhost）
+    // 云端未配置时 fallback
     if (import.meta.env.DEV) {
       return `ws://${window.location.hostname}:3100/server/agent`;
     }
@@ -59,7 +59,7 @@ function getWsUrl(mode: RuntimeMode): string {
   const url = import.meta.env.VITE_LOCAL_AGENT_WS_URL as string | undefined;
   if (url) {
     // 远程部署场景：浏览器从公网访问 VM，但 env 变量仍指向 localhost
-    // 此时自动替换为浏览器实际访问的主机名，确保请求能到达 VM 上的 agent server
+    // 此时自动替换为浏览器实际访问的主机名
     try {
       const parsed = new URL(url);
       const targetIsLocal = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";

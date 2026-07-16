@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { AppState, PrototypeState } from "../data/types";
 import { AgentWebSocket } from "../agent/ws";
-import { agentFetch, buildAgentWsUrl, getAgentWsOrigin } from "../agent/config";
+import { agentFetch, buildAgentWsUrl, getBaseUrl } from "../agent/config";
 import type { RuntimeMode } from "../types/runtime";
 
 // ── 会话记录类型（与服务端 SessionStore 对齐） ──
@@ -489,9 +489,9 @@ export function useSessionRecords() {
       // 串行化保存：先保存 meta，再逐个保存 step
       saveQueueRef.current = saveQueueRef.current.then(async () => {
         try {
-          const origin = getAgentWsOrigin(meta.runtimeMode || "local");
+          const baseUrl = getBaseUrl(meta.runtimeMode || "local");
           // 保存元信息（HTTP）
-          await agentFetch(`${origin}/server/session/save-meta`, {
+          await agentFetch(`${baseUrl}/session/save-meta`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(meta),
@@ -547,8 +547,8 @@ export function useSessionRecords() {
 
       try {
         // 1. 通过 HTTP 加载 meta（不依赖 WebSocket，页面刷新后立即可用）
-        const origin = getAgentWsOrigin(targetMode);
-        const metaRes = await agentFetch(`${origin}/server/session/meta?sessionId=${encodeURIComponent(sessionId)}`, {}, targetMode);
+        const baseUrl = getBaseUrl(targetMode);
+        const metaRes = await agentFetch(`${baseUrl}/session/meta?sessionId=${encodeURIComponent(sessionId)}`, {}, targetMode);
         if (!metaRes.ok) {
           console.error("[useSessionRecords] loadRecord meta HTTP failed:", metaRes.status);
           return null;
@@ -603,8 +603,8 @@ export function useSessionRecords() {
       try {
         const existing = records.find((r) => r.sessionId === sessionId);
         const targetMode = mode || existing?.runtimeMode || "local";
-        const origin = getAgentWsOrigin(targetMode);
-        const url = `${origin}/server/step-snapshot?sessionId=${encodeURIComponent(sessionId)}&stepId=${encodeURIComponent(stepId)}`;
+        const baseUrl = getBaseUrl(targetMode);
+        const url = `${baseUrl}/step-snapshot?sessionId=${encodeURIComponent(sessionId)}&stepId=${encodeURIComponent(stepId)}`;
         const res = await agentFetch(url, {}, targetMode);
         if (!res.ok) {
           console.error("[useSessionRecords] loadStep HTTP failed:", res.status);

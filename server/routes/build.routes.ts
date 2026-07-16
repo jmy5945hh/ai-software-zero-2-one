@@ -18,10 +18,11 @@ export function handleBuildRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   deps: { workspace: WorkspaceManager; sessionStore?: SessionStore },
+  reqPath: string | undefined
 ): boolean {
   const { workspace, sessionStore } = deps;
 
-  if (req.method === "POST" && req.url === "/verification-plan") {
+  if (req.method === "POST" && reqPath === "/verification-plan") {
     readJsonBody(req).then(async (params) => {
       const sessionId = stringParam(params.sessionId);
       const taskId = stringParam(params.taskId);
@@ -52,7 +53,7 @@ export function handleBuildRoutes(
     return true;
   }
 
-  if (req.method === "POST" && req.url === "/delivery-report") {
+  if (req.method === "POST" && reqPath === "/delivery-report") {
     readJsonBody(req).then(async (params) => {
       const sessionId = stringParam(params.sessionId);
       const taskId = stringParam(params.taskId);
@@ -88,7 +89,7 @@ export function handleBuildRoutes(
     return true;
   }
 
-  if (req.method === "POST" && req.url === "/verification-run") {
+  if (req.method === "POST" && reqPath === "/verification-run") {
     readJsonBody(req).then(async (params) => {
       const sessionId = stringParam(params.sessionId);
       const taskId = stringParam(params.taskId);
@@ -118,8 +119,8 @@ export function handleBuildRoutes(
   }
 
   // 项目编译
-  if (req.method === "GET" && req.url?.startsWith("/project-build")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/project-build")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
     const customCommand = url.searchParams.get("command");
     const taskId = url.searchParams.get("taskId");
@@ -165,8 +166,8 @@ export function handleBuildRoutes(
   }
 
   // 读取文件内容
-  if (req.method === "GET" && req.url?.startsWith("/read-file")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/read-file")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const filePath = url.searchParams.get("file") || "";
     const resolvedPath = filePath.replace(/^~/, process.env.HOME || process.env.USERPROFILE || "");
     try {
@@ -181,8 +182,8 @@ export function handleBuildRoutes(
   }
 
   // QA 质量审查
-  if (req.method === "GET" && req.url?.startsWith("/qa-review")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/qa-review")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
     const sessionId = url.searchParams.get("sessionId");
     const taskId = url.searchParams.get("taskId");

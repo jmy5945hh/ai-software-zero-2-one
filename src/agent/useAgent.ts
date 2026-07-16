@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory, Turn, ConnectionQuality, SessionSnapshot, WorkspaceInitStatus } from "./types";
 import type { FileChange, AgentSummary } from "../data/types";
 import { AgentWebSocket } from "./ws";
-import { agentFetch, buildAgentWsUrl, getAgentWsOrigin, getAgentHttpOrigin } from "./config";
+import { agentFetch, buildAgentWsUrl, getBaseUrl } from "./config";
 import type { RuntimeMode } from "../types/runtime";
 
 // ── 工具函数 ─────────────────────────────────
@@ -228,9 +228,9 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     }) => {
       const effectiveTaskId = params.taskId || taskId;
       if (!effectiveTaskId) return;
-      const origin = getAgentWsOrigin(params.runtimeMode);
+      const baseUrl = getBaseUrl(params.runtimeMode);
       try {
-        const res = await agentFetch(`${origin}/server/task/init`, {
+        const res = await agentFetch(`${baseUrl}/task/init`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...params, taskId: effectiveTaskId }),
@@ -618,8 +618,8 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   const getFileTree = useCallback(async () => {
     if (!taskId) return;
     try {
-      const origin = getAgentWsOrigin(mode || "local");
-      const res = await agentFetch(`${origin}/server/workspace-tree?taskId=${encodeURIComponent(taskId)}`, {}, mode || "local");
+      const baseUrl = getBaseUrl(mode || "local");
+      const res = await agentFetch(`${baseUrl}/workspace-tree?taskId=${encodeURIComponent(taskId)}`, {}, mode || "local");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { tree: FileNode[] };
       setFileTree(data.tree);
@@ -633,8 +633,8 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     async (filePath: string): Promise<string> => {
       if (!taskId) return "";
       try {
-        const origin = getAgentWsOrigin(mode || "local");
-        const res = await agentFetch(`${origin}/server/workspace-read-file?taskId=${encodeURIComponent(taskId)}&filePath=${encodeURIComponent(filePath)}`, {}, mode || "local");
+        const baseUrl = getBaseUrl(mode || "local");
+        const res = await agentFetch(`${baseUrl}/workspace-read-file?taskId=${encodeURIComponent(taskId)}&filePath=${encodeURIComponent(filePath)}`, {}, mode || "local");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { content: string };
         return data.content;
@@ -651,8 +651,8 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
     async (dirPath: string, browseMode?: RuntimeMode): Promise<{ name: string; type: "dir" | "file"; path: string }[]> => {
       const effectiveMode = browseMode || mode || "local";
       try {
-        const origin = getAgentWsOrigin(effectiveMode);
-        const res = await agentFetch(`${origin}/server/workspace-browse?dirPath=${encodeURIComponent(dirPath)}`, {}, effectiveMode);
+        const baseUrl = getBaseUrl(effectiveMode);
+        const res = await agentFetch(`${baseUrl}/workspace-browse?dirPath=${encodeURIComponent(dirPath)}`, {}, effectiveMode);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { entries: { name: string; type: "dir" | "file"; path: string }[] };
         return data.entries;
@@ -673,8 +673,8 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   const listGitBranches = useCallback(
     async (dirPath: string): Promise<{ branches: string[]; current: string | null; isRepo: boolean }> => {
       try {
-        const origin = getAgentWsOrigin("local");
-        const res = await agentFetch(`${origin}/server/git-branches?dirPath=${encodeURIComponent(dirPath)}`, {}, "local");
+        const baseUrl = getBaseUrl("local");
+        const res = await agentFetch(`${baseUrl}/git-branches?dirPath=${encodeURIComponent(dirPath)}`, {}, "local");
         if (!res.ok) {
           const data = await res.json().catch(() => null) as { error?: string } | null;
           throw new Error(data?.error || `Git 检测失败（HTTP ${res.status}）`);
@@ -691,8 +691,8 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   const gitPreflight = useCallback(
     async (dirPath: string, branch: string, shouldPull: boolean): Promise<{ success: boolean; error?: string; output?: string; errorType?: string }> => {
       try {
-        const origin = getAgentWsOrigin("local");
-        const res = await agentFetch(`${origin}/server/git-preflight`, {
+        const baseUrl = getBaseUrl("local");
+        const res = await agentFetch(`${baseUrl}/git-preflight`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ dirPath, branch, shouldPull }),
@@ -1454,7 +1454,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
       const effectiveMode = mode || hookModeRef.current || "local";
       try {
         // 云端模式使用绝对 URL（绕过 Vite 代理），本地模式使用相对 URL（经过 Vite 代理）
-        const baseUrl = effectiveMode === "cloud" ? `${getAgentHttpOrigin("cloud")}/server` : "/server";
+        const baseUrl = effectiveMode === "cloud" ? getBaseUrl("cloud") : "";
         const taskIdParam = taskId ? `&taskId=${encodeURIComponent(taskId)}` : "";
         const url = `${baseUrl}/project-build?path=${encodeURIComponent(workspacePath)}&command=${encodeURIComponent(command)}${taskIdParam}`;
         console.log("[triggerBuild] url:", url);

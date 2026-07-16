@@ -6,7 +6,7 @@ import {
   Save,
   Loader2,
 } from "lucide-react";
-import { agentFetch } from "../agent/config";
+import { agentFetch, getBaseUrl } from "../agent/config";
 
 type TreeNode = {
   name: string;
@@ -64,7 +64,7 @@ export function SpecsExplorer({ workspacePath }: SpecsExplorerProps) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    agentFetch(`/server/specs-tree?path=${encodeURIComponent(workspacePath)}`)
+    agentFetch(`${getBaseUrl("local")}/specs-tree?path=${encodeURIComponent(workspacePath)}`)
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) {
@@ -85,7 +85,7 @@ export function SpecsExplorer({ workspacePath }: SpecsExplorerProps) {
       setDirty(false);
       try {
         const res = await agentFetch(
-          `/specs-file?path=${encodeURIComponent(workspacePath)}&file=${encodeURIComponent(filePath)}`,
+          `${getBaseUrl("local")}/specs-file?path=${encodeURIComponent(workspacePath)}&file=${encodeURIComponent(filePath)}`,
         );
         const data = await res.json();
         setFileContent(data.content || "");
@@ -103,7 +103,7 @@ export function SpecsExplorer({ workspacePath }: SpecsExplorerProps) {
     if (!selectedFile) return;
     setSaving(true);
     try {
-      await agentFetch("/server/specs-save", {
+      await agentFetch(`${getBaseUrl("local")}/specs-save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

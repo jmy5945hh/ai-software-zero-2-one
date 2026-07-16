@@ -20,10 +20,11 @@ export function handleUserRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   sessionStore?: SessionStore,
+  reqPath: string | undefined
 ): boolean {
 
   // POST /api/user/login — 用户登录，创建用户目录
-  if (req.method === "POST" && req.url === "/api/user/login") {
+  if (req.method === "POST" && reqPath === "/api/user/login") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
     req.on("end", () => {
@@ -55,8 +56,8 @@ export function handleUserRoutes(
   }
 
   // GET /api/user/me?username=xxx — 设置当前用户（用于 warmup）
-  if (req.method === "GET" && req.url?.startsWith("/api/user/me")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/api/user/me")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const username = url.searchParams.get("username");
     if (!username) {
       res.writeHead(400, { "Content-Type": "application/json" });

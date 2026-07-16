@@ -46,21 +46,21 @@ export function handleHttpRequest(
     res.end();
     return true;
   }
+  const reqPath = req.url?.startsWith("/server") ? req.url.slice(7) || "/" : req.url;
 
   // 健康检查
-  const path = req.url?.startsWith("/server") ? req.url.slice(7) || "/" : req.url;
-  if (req.method === "GET" && (path === "/health" || req.url === "/health")) {
+  if (req.method === "GET" && (reqPath === "/health" || req.url === "/health")) {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ status: "ok", timestamp: Date.now() }));
     return true;
   }
 
-  switch (resolveHttpRouteGroup(req.url)) {
-    case "api": return handleApiRoutes(req, res, deps);
-    case "user": return handleUserRoutes(req, res, deps.sessionStore);
-    case "session": return handleSessionRoutes(req, res, deps);
-    case "build": return handleBuildRoutes(req, res, deps);
-    case "workspace": return handleWorkspaceRoutes(req, res, deps);
+  switch (resolveHttpRouteGroup(reqPath)) {
+    case "api": return handleApiRoutes(req, res, deps, reqPath);
+    case "user": return handleUserRoutes(req, res, deps.sessionStore, reqPath);
+    case "session": return handleSessionRoutes(req, res, deps, reqPath);
+    case "build": return handleBuildRoutes(req, res, deps, reqPath);
+    case "workspace": return handleWorkspaceRoutes(req, res, deps, reqPath);
     default: return false;
   }
 }

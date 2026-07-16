@@ -14,11 +14,12 @@ export function handleSessionRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   deps: { sessionStore: SessionStore; workspace: WorkspaceManager; rollback: RollbackManager; pool: SessionPool },
+  reqPath: string | undefined
 ): boolean {
   const { sessionStore, workspace, rollback, pool } = deps;
 
   // 初始化任务环境
-  if (req.method === "POST" && req.url === "/task/init") {
+  if (req.method === "POST" && reqPath === "/task/init") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
     req.on("end", () => {
@@ -88,8 +89,8 @@ export function handleSessionRoutes(
   }
 
   // 查询任务回退点
-  if (req.method === "GET" && req.url?.startsWith("/rollback/status")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/rollback/status")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const taskId = url.searchParams.get("taskId");
     if (!taskId) {
       res.writeHead(400, { "Content-Type": "application/json" });
@@ -102,7 +103,7 @@ export function handleSessionRoutes(
   }
 
   // 按轮次、文件或整个任务执行回退
-  if (req.method === "POST" && req.url === "/rollback/apply") {
+  if (req.method === "POST" && reqPath === "/rollback/apply") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
     req.on("end", () => {
@@ -137,8 +138,8 @@ export function handleSessionRoutes(
   }
 
   // 读取会话元信息
-  if (req.method === "GET" && req.url?.startsWith("/session/meta")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/session/meta")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const sessionId = url.searchParams.get("sessionId");
     if (!sessionId) {
       res.writeHead(400, { "Content-Type": "application/json" });
@@ -162,7 +163,7 @@ export function handleSessionRoutes(
   }
 
   // 保存会话元信息
-  if (req.method === "POST" && req.url === "/session/save-meta") {
+  if (req.method === "POST" && reqPath === "/session/save-meta") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
     req.on("end", () => {
@@ -180,7 +181,7 @@ export function handleSessionRoutes(
   }
 
   // 保存步骤会话快照
-  if (req.method === "POST" && req.url === "/session/save-step") {
+  if (req.method === "POST" && reqPath === "/session/save-step") {
     let body = "";
     req.on("data", (chunk) => { body += chunk; });
     req.on("end", () => {
@@ -202,8 +203,8 @@ export function handleSessionRoutes(
   }
 
   // 读取步骤会话快照
-  if (req.method === "GET" && req.url?.startsWith("/step-snapshot")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/step-snapshot")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const sessionId = url.searchParams.get("sessionId");
     const stepId = url.searchParams.get("stepId");
     if (!sessionId || !stepId) {
@@ -223,8 +224,8 @@ export function handleSessionRoutes(
   }
 
   // 获取按文件拆分的 git diff
-  if (req.method === "GET" && req.url?.startsWith("/repo-diff-files")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/repo-diff-files")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
     const taskId = url.searchParams.get("taskId");
     let resolvedPath = projectPath;
@@ -256,8 +257,8 @@ export function handleSessionRoutes(
   }
 
   // 获取仓库 git diff
-  if (req.method === "GET" && req.url?.startsWith("/repo-diff")) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (req.method === "GET" && reqPath?.startsWith("/repo-diff")) {
+    const url = new URL(reqPath, `http://localhost:${PORT}`);
     const projectPath = url.searchParams.get("path");
     const taskId = url.searchParams.get("taskId");
     let resolvedPath = projectPath;
