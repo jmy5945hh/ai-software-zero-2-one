@@ -81,7 +81,7 @@ export function ContentModal({ content, onClose }: ContentModalProps) {
     setSaving(true);
     setSaveError(null);
     try {
-      const res = await agentFetch("/specs-save", {
+      const res = await agentFetch("/server/specs-save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

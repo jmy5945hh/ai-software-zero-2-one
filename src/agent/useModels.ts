@@ -97,7 +97,7 @@ export function useModels(): ModelsState & { reload: () => void } {
       setState((prev) => ({ ...prev, loading: true, error: null }));
 
       const timeoutId = setTimeout(() => controller.abort(), 10_000);
-      const res = await agentFetch("/api/models", { signal: controller.signal });
+      const res = await agentFetch("/server/api/models", { signal: controller.signal });
       clearTimeout(timeoutId);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

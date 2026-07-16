@@ -64,7 +64,7 @@ export function SpecsExplorer({ workspacePath }: SpecsExplorerProps) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    agentFetch(`/specs-tree?path=${encodeURIComponent(workspacePath)}`)
+    agentFetch(`/server/specs-tree?path=${encodeURIComponent(workspacePath)}`)
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) {
@@ -103,7 +103,7 @@ export function SpecsExplorer({ workspacePath }: SpecsExplorerProps) {
     if (!selectedFile) return;
     setSaving(true);
     try {
-      await agentFetch("/specs-save", {
+      await agentFetch("/server/specs-save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

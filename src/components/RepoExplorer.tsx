@@ -139,7 +139,7 @@ export function RepoExplorer({ workspacePath, taskId, runtimeMode = "local", ini
     return buildFileTree(filteredDiffFiles);
   }, [filteredDiffFiles, searchQuery]);
   const agentUrl = useCallback(
-    (endpoint: string) => `${getAgentHttpOrigin(runtimeMode)}${endpoint}`,
+    (endpoint: string) => `${getAgentHttpOrigin(runtimeMode)}/server${endpoint}`,
     [runtimeMode],
   );
 

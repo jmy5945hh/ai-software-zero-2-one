@@ -47,7 +47,7 @@ const server = http.createServer((req, res) => {
 });
 
 // ── WebSocket 服务 ──────────────────────────
-const wss = new WebSocketServer({ server, path: "/agent" });
+const wss = new WebSocketServer({ server, path: "/server/agent" });
 
 console.log("Agent Server starting...");
 console.log(`  Model provider: DeepSeek (via DEEPSEEK_API_KEY)`);

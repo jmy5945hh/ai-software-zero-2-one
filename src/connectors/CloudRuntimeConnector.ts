@@ -27,7 +27,8 @@ import { agentFetch, buildAgentWsUrl, getAgentWsOrigin } from "../agent/config";
 function getCloudApiBase(): string {
   const origin = getAgentWsOrigin("cloud");
   // 如果设置了 VITE_CLOUD_API_URL 则优先使用，否则从 WS URL 自动推导
-  return (import.meta.env.VITE_CLOUD_API_URL as string | undefined) || origin;
+  const base = (import.meta.env.VITE_CLOUD_API_URL as string | undefined) || origin;
+  return `${base}/server`;
 }
 
 interface CloudProjectResponse {

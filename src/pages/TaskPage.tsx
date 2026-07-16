@@ -307,7 +307,7 @@ export function TaskPage() {
         taskId,
         file: paths.manifestPath,
       });
-      const res = await agentFetch(`/session-file?${params.toString()}`);
+      const res = await agentFetch(`/server/session-file?${params.toString()}`);
       if (!res.ok) return null;
       const data = await res.json() as { content?: string };
       return parsePrototypeManifest(data.content, taskId);

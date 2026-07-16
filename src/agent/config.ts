@@ -11,7 +11,7 @@ import { RUNTIME_MODE_KEY, type RuntimeMode } from "../types/runtime";
 /** 将 ws://xxx/agent 格式转为 http://xxx（用于 REST API 调用） */
 export function getAgentWsOrigin(mode: RuntimeMode): string {
   const wsUrl = getWsUrl(mode);
-  return wsUrl.replace(/^ws/, "http").replace(/\/agent$/, "");
+  return wsUrl.replace(/^ws/, "http").replace(/\/agent$/, "").replace(/\/server\/agent$/, "/server");
 }
 
 /** 构建指定模式的 WebSocket URL（含 token） */
@@ -50,9 +50,9 @@ function getWsUrl(mode: RuntimeMode): string {
     if (url) return url;
     // 云端未配置时 fallback 到旧有逻辑（开发环境用 localhost）
     if (import.meta.env.DEV) {
-      return `ws://${window.location.hostname}:3100/agent`;
+      return `ws://${window.location.hostname}:3100/server/agent`;
     }
-    return `ws://${window.location.host}/agent`;
+    return `ws://${window.location.host}/server/agent`;
   }
 
   // 本地模式
@@ -71,8 +71,8 @@ function getWsUrl(mode: RuntimeMode): string {
     } catch { /* URL 解析失败时直接返回原值 */ }
     return url;
   }
-  // 默认值：ws://localhost:3100/agent
-  return "ws://localhost:3100/agent";
+  // 默认值：ws://localhost:3100/server/agent
+  return "ws://localhost:3100/server/agent";
 }
 
 function getActiveRuntimeMode(): RuntimeMode {

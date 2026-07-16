@@ -43,7 +43,7 @@ function GuestOnly({ children }: { children: React.ReactNode }) {
  */
 export function App() {
   return (
-    <BrowserRouter basename={import.meta.env.VITE_ROUTER_BASE || ""}>
+    <BrowserRouter basename={import.meta.env.VITE_ROUTER_BASE || "/cloud"}>
       <UserProvider>
         <RuntimeProvider>
           <Routes>
