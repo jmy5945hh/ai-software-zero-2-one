@@ -20,7 +20,7 @@ export function handleUserRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   sessionStore?: SessionStore,
-  reqPath: string | undefined
+  reqPath?: string | undefined
 ): boolean {
 
   // POST /api/user/login — 用户登录，创建用户目录

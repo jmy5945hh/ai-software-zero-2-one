@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import type { AgentEvent, FileNode, SessionState, ConnectionStatus, ToolCallCategory, Turn, ConnectionQuality, SessionSnapshot, WorkspaceInitStatus } from "./types";
 import type { FileChange, AgentSummary } from "../data/types";
 import { AgentWebSocket } from "./ws";
-import { agentFetch, buildAgentWsUrl, getBaseUrl } from "./config";
+import { agentFetch, buildAgentWsUrl, getBaseUrl, getLocalApiBase } from "./config";
 import type { RuntimeMode } from "../types/runtime";
 
 // ── 工具函数 ─────────────────────────────────
@@ -673,7 +673,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   const listGitBranches = useCallback(
     async (dirPath: string): Promise<{ branches: string[]; current: string | null; isRepo: boolean }> => {
       try {
-        const baseUrl = getBaseUrl("local");
+        const baseUrl = getLocalApiBase();
         const res = await agentFetch(`${baseUrl}/git-branches?dirPath=${encodeURIComponent(dirPath)}`, {}, "local");
         if (!res.ok) {
           const data = await res.json().catch(() => null) as { error?: string } | null;
@@ -691,7 +691,7 @@ export function useAgent(taskId: string | null, workspacePath?: string, hookGitR
   const gitPreflight = useCallback(
     async (dirPath: string, branch: string, shouldPull: boolean): Promise<{ success: boolean; error?: string; output?: string; errorType?: string }> => {
       try {
-        const baseUrl = getBaseUrl("local");
+        const baseUrl = getLocalApiBase();
         const res = await agentFetch(`${baseUrl}/git-preflight`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

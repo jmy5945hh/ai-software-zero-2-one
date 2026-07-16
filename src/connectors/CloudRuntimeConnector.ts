@@ -22,12 +22,7 @@ import type {
   ResourceHandler,
 } from "../types/runtime";
 import { AgentWebSocket } from "../agent/ws";
-import { agentFetch, buildAgentWsUrl, getBaseUrl } from "../agent/config";
-
-function getCloudApiBase(): string {
-  // 如果设置了 VITE_CLOUD_API_URL 则优先使用，否则从 base URL 自动推导
-  return (import.meta.env.VITE_CLOUD_API_URL as string | undefined) || getBaseUrl("cloud");
-}
+import { agentFetch, buildAgentWsUrl, getCloudApiBase } from "../agent/config";
 
 interface CloudProjectResponse {
   id: string;

@@ -7,6 +7,28 @@ import { RUNTIME_MODE_KEY, type RuntimeMode } from "../types/runtime";
  * 示例返回值：http://localhost:3100/server
  */
 export function getBaseUrl(mode: RuntimeMode): string {
+  if (mode === "local") {
+    return getLocalApiBase();
+  }
+  return getCloudApiBase();
+}
+
+/**
+ * 本地模式 API base URL，优先读取 VITE_LOCAL_API_URL 环境变量。
+ * 与 CloudRuntimeConnector 中 getCloudApiBase 模式对齐。
+ */
+export function getLocalApiBase(): string {
+  return (import.meta.env.VITE_LOCAL_API_URL as string | undefined) || getBaseUrlRaw("local");
+}
+
+/**
+ * 云端模式 API base URL，优先读取 VITE_CLOUD_API_URL 环境变量。
+ */
+export function getCloudApiBase(): string {
+  return (import.meta.env.VITE_CLOUD_API_URL as string | undefined) || getBaseUrlRaw("cloud");
+}
+
+function getBaseUrlRaw(mode: RuntimeMode): string {
   const wsUrl = getWsUrl(mode);
   // ws://xxx/server/agent → http://xxx/server
   return wsUrl.replace(/^ws/, "http").replace(/\/agent$/, "");

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { agentFetch, getBaseUrl } from "../agent/config";
+import { agentFetch, getLocalApiBase } from "../agent/config";
 import {
   Bot,
   ChevronRight,
@@ -447,7 +447,7 @@ function DeliveryCollabTab({
       if (state.workspacePath) params.set("path", state.workspacePath);
       params.set("taskId", state.sessionId);
       params.set("file", filePath);
-      agentFetch(`${getBaseUrl("local")}/specs-file?${params.toString()}`)
+      agentFetch(`${getLocalApiBase()}/specs-file?${params.toString()}`)
         .then((res) => res.json())
         .then((data: { content: string; isMarkdown: boolean }) => {
           setModalContent({
@@ -849,7 +849,7 @@ function VerificationArtifactsSection({
       },
     });
     try {
-      const res = await agentFetch(`${getBaseUrl("local")}/verification-plan`, {
+      const res = await agentFetch(`${getLocalApiBase()}/verification-plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -893,7 +893,7 @@ function VerificationArtifactsSection({
       },
     });
     try {
-      const res = await agentFetch(`${getBaseUrl("local")}/delivery-report`, {
+      const res = await agentFetch(`${getLocalApiBase()}/delivery-report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -937,7 +937,7 @@ function VerificationArtifactsSection({
       },
     });
     try {
-      const res = await agentFetch(`${getBaseUrl("local")}/verification-run`, {
+      const res = await agentFetch(`${getLocalApiBase()}/verification-run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1513,7 +1513,7 @@ function QaReviewSection({
     abortRef.current = controller;
 
     // 通过后端 API 执行 CLI 命令并流式返回
-    agentFetch(`${getBaseUrl("local")}/qa-review?path=${encodeURIComponent(workspacePath)}&sessionId=${encodeURIComponent(sessionId)}`, {
+    agentFetch(`${getLocalApiBase()}/qa-review?path=${encodeURIComponent(workspacePath)}&sessionId=${encodeURIComponent(sessionId)}`, {
       signal: controller.signal,
     })
       .then(async (response) => {
@@ -1889,7 +1889,7 @@ function PrototypePreview({
           taskId: sessionId,
           file: `prototype.json`,
         });
-        const res = await agentFetch(`${getBaseUrl("local")}/session-file?${params.toString()}`);
+        const res = await agentFetch(`${getLocalApiBase()}/session-file?${params.toString()}`);
         if (!res.ok) throw new Error("未找到原型产物清单");
         const data = await res.json() as { content?: string };
         const manifest = parsePrototypeManifest(data.content, sessionId);
@@ -1921,7 +1921,7 @@ function PrototypePreview({
       const params = new URLSearchParams();
       params.set("taskId", sessionId);
       params.set("file", prototype.htmlPath);
-      const res = await agentFetch(`${getBaseUrl("local")}/session-file?${params.toString()}`);
+      const res = await agentFetch(`${getLocalApiBase()}/session-file?${params.toString()}`);
       if (!res.ok) throw new Error("原型文件不存在或无法读取");
       const data = await res.json() as { content?: string };
       if (!data.content) throw new Error("原型文件内容为空");
@@ -2087,7 +2087,7 @@ function SpecsDirectory({
     const params = new URLSearchParams();
     if (workspacePath) params.set("path", workspacePath);
     if (taskId) params.set("taskId", taskId);
-    agentFetch(`${getBaseUrl("local")}/specs-tree?${params.toString()}`)
+    agentFetch(`${getLocalApiBase()}/specs-tree?${params.toString()}`)
       .then((res) => res.json())
       .then((data: SpecNode[]) => {
         setNodes(data);

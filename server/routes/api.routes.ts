@@ -10,7 +10,7 @@ export function handleApiRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   deps: { pool: SessionPool; sessionStore: SessionStore },
-  reqPath: string | undefined
+  reqPath?: string | undefined
 ): boolean {
   const { pool, sessionStore } = deps;
 

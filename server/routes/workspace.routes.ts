@@ -14,7 +14,7 @@ export function handleWorkspaceRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   deps: { workspace: WorkspaceManager; sessionStore?: SessionStore },
-  reqPath: string | undefined
+  reqPath?: string | undefined
 ): boolean {
   const { workspace, sessionStore } = deps;
 

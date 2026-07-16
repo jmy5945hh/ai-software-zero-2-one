@@ -14,7 +14,7 @@ export function handleSessionRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse,
   deps: { sessionStore: SessionStore; workspace: WorkspaceManager; rollback: RollbackManager; pool: SessionPool },
-  reqPath: string | undefined
+  reqPath?: string | undefined
 ): boolean {
   const { sessionStore, workspace, rollback, pool } = deps;
 

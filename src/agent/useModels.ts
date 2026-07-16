@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ModelsConfigResponse, ModelInfo } from "../data/types";
-import { agentFetch, getBaseUrl } from "./config";
+import { agentFetch, getLocalApiBase } from "./config";
 
 const CACHE_TTL = 30_000; // 30 秒缓存
 
@@ -97,7 +97,7 @@ export function useModels(): ModelsState & { reload: () => void } {
       setState((prev) => ({ ...prev, loading: true, error: null }));
 
       const timeoutId = setTimeout(() => controller.abort(), 10_000);
-      const res = await agentFetch(`${getBaseUrl("local")}/api/models`, { signal: controller.signal });
+      const res = await agentFetch(`${getLocalApiBase()}/api/models`, { signal: controller.signal });
       clearTimeout(timeoutId);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
