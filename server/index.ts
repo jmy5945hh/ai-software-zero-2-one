@@ -17,6 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const PORT = parseInt(process.env.AGENT_PORT || "3100", 10);
+const HOST = process.env.AGENT_HOST || "0.0.0.0";
 
 // ── 初始化核心组件 ──────────────────────────
 const runner = new AgentRunner(join(__dirname, "models.json"));
@@ -101,7 +102,7 @@ wss.on("connection", (ws: WebSocket, req) => {
 });
 
 // ── 启动服务 ────────────────────────────────
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Agent Server listening on ws://0.0.0.0:${PORT}/agent`);
-  console.log(`  Health check: http://0.0.0.0:${PORT}/health`);
+server.listen(PORT, HOST, () => {
+  console.log(`Agent Server listening on ws://${HOST}:${PORT}/agent`);
+  console.log(`  Health check: http://${HOST}:${PORT}/health`);
 });

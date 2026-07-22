@@ -1,26 +1,77 @@
-name: Deploy to ALIBABA VM 47.108.128.71
+name: Deploy zero-one-software to ALIBABA VM
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: zero-one-production
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  verify-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: ⬇️ 拉取代码
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🚀 部署到 VM
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build subpath application
+        run: npm run build
+        env:
+          VITE_BASE_PATH: /zero-one/
+          VITE_ROUTER_BASE: /zero-one
+
+      - name: Deploy to VM
         uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
+          username: deploy
           key: ${{ secrets.KEY }}
           port: ${{ secrets.PORT }}
           script: |
+            set -euo pipefail
+            export PATH="/home/deploy/.nvm/versions/node/v24.16.0/bin:$PATH"
             cd /home/deploy/code/ai-software-zero-2-one
-            git pull origin master
-            npm install
-            npm run build
-            pm2 restart agent-app
+            git fetch origin master
+            git reset --hard origin/master
+            npm ci
+            node <<'NODE'
+            const fs = require("node:fs");
+            const file = ".env";
+            const updates = {
+              AGENT_HOST: "127.0.0.1",
+              VITE_CLOUD_AGENT_WS_URL: "ws://47.108.128.71/zero-one/agent",
+              VITE_LOCAL_AGENT_WS_URL: "ws://47.108.128.71/zero-one/agent",
+            };
+            let lines = fs.existsSync(file) ? fs.readFileSync(file, "utf8").split(/\r?\n/) : [];
+            for (const [key, value] of Object.entries(updates)) {
+              const index = lines.findIndex((line) => line.startsWith(`${key}=`));
+              if (index >= 0) lines[index] = `${key}=${value}`;
+              else lines.push(`${key}=${value}`);
+            }
+            fs.writeFileSync(file, `${lines.filter(Boolean).join("\n")}\n`, { mode: 0o600 });
+            NODE
+            VITE_BASE_PATH=/zero-one/ VITE_ROUTER_BASE=/zero-one npm run build
+            pm2 restart agent-app --update-env
+            pm2 save
+            for attempt in $(seq 1 30); do
+              if curl --fail --silent --show-error http://127.0.0.1:3100/health; then
+                break
+              fi
+              if [ "$attempt" -eq 30 ]; then
+                pm2 logs agent-app --lines 80 --nostream
+                exit 1
+              fi
+              sleep 2
+            done
+            curl --fail --silent --show-error http://127.0.0.1/zero-one/health
